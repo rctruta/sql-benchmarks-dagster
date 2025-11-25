@@ -6,7 +6,7 @@ __pycache__/
 .DS_Store
 venv/
 .dagster/
-tmp_dagster*/
+.tmp_dagster*/
 *.egg-info/
 
 # Data (Too big for git)
