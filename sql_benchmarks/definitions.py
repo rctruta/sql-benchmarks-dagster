@@ -1,7 +1,7 @@
 import os
 from dagster import Definitions, load_assets_from_modules
 
-from .assets import data_gen, benchmarks
+from .assets import data_gen, ingestion, query_factory 
 from .resources.database import DuckDBResource
 
 # 1. CALCULATE PATHS DYNAMICALLY
@@ -15,10 +15,12 @@ project_root = os.path.dirname(os.path.dirname(current_dir))
 db_path = os.path.join(project_root, "data", "benchmark.duckdb")
 
 # 3. LOAD ASSETS
-all_assets = load_assets_from_modules([data_gen, benchmarks])
+ingest_assets = ingestion.ingestion_assets 
+benchmark_assets = query_factory.benchmark_assets
+data_gen_assets = load_assets_from_modules([data_gen])
 
 defs = Definitions(
-    assets=[*all_assets],
+    assets=[*data_gen_assets, *ingest_assets, *benchmark_assets],
     resources={
         # We pass the absolute path to the resource
         "database": DuckDBResource(database_path=db_path)
