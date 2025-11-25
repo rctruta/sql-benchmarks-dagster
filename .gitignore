@@ -1,0 +1,13 @@
+# Python & Dagster junk
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.DS_Store
+venv/
+.dagster/
+tmp_dagster*/
+*.egg-info/
+
+# Data (Too big for git)
+data/
