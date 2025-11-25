@@ -1,0 +1,27 @@
+[project]
+name = "sql_benchmarks"
+version = "0.1.0"
+description = "SQL Benchmarks"
+readme = "README.md"
+requires-python = ">=3.9,<3.14"
+dependencies = [
+    "dagster",
+    "dagster-cloud",
+]
+
+[project.optional-dependencies]
+dev = [
+    "dagster-webserver",
+    "pytest",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.dagster]
+module_name = "sql_benchmarks.definitions"
+code_location_name = "sql_benchmarks"
+
+[tool.setuptools.packages.find]
+exclude=["sql_benchmarks_tests"]
