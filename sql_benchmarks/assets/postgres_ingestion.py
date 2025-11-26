@@ -14,9 +14,11 @@ def build_postgres_ingest(table_name):
     @asset(
         name=f"pg_{table_name}_table", 
         partitions_def=size_partitions,
-        group_name="postgres_benchmarks",
-        deps=[f"{table_name}_parquet"] 
-    )
+        group_name="postgres_ingestion",
+        deps=[f"{table_name}_parquet"], 
+        tags={"layer": "ingestion", "engine": "postgres"},        
+        description=f"Loads `{table_name}.parquet` into a native Postgres table for querying."
+    )    
     def _ingest_asset(context: AssetExecutionContext, pg: PostgresResource):
         partition_key = context.partition_key
         file_path = get_parquet_path(partition_key, table_name)

@@ -14,12 +14,24 @@ sql_files = glob.glob(os.path.join(SQL_FOLDER, "*.sql"))
 def make_benchmark_asset(name, sql_path):
     with open(sql_path, "r") as f:
         raw_template = f.read()
+    
+    # Calculate the relative path for display (e.g. scripts/sql/duckdb/join.sql)
+    # This shows the user exactly where to edit the SQL.
+    rel_path = os.path.relpath(sql_path, start=PROJECT_ROOT)
 
     @asset(
-        name=f"duckdb_{name}",
+        name=name,
         partitions_def=size_partitions,
-        group_name="duckdb_benchmarks",
-        deps=["duckdb_orders_table", "duckdb_customers_table"] 
+        group_name="dynamic_duckdb_benchmarks", # This groups them visually
+        deps=["duckdb_orders_table", "duckdb_customers_table"],
+        tags={"source": "sql_factory", "engine": "duckdb"},
+        description=f"""
+        **Auto-Generated Benchmark**
+        
+        * **Source File**: `{rel_path}`
+        * **Engine**: DuckDB (Sequential Mode)
+        * **Logic**: Runs the raw SQL file inside the timer.
+        """
     )
     def _dynamic_asset(context: AssetExecutionContext, database: DuckDBResource):
         partition_key = context.partition_key
@@ -44,11 +56,11 @@ def make_benchmark_asset(name, sql_path):
             }
         )
     
-    _dynamic_asset.__name__ = f"duckdb_fn_{name}"
+    _dynamic_asset.__name__ = f"fn_{name}"
     return _dynamic_asset
 
 benchmark_assets = []
 for sql_file in sql_files:
     base_name = os.path.basename(sql_file).replace(".sql", "")
-    asset_name = f"benchmark_{base_name}"
+    asset_name = f"duckdb_benchmark_{base_name}"
     benchmark_assets.append(make_benchmark_asset(asset_name, sql_file))

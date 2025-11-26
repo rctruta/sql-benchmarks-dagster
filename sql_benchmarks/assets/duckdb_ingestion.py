@@ -13,9 +13,11 @@ def build_ingestion_asset(table_name):
     @asset(
         name=f"duckdb_{table_name}_table", 
         partitions_def=size_partitions,
-        group_name="duckdb_ingestion", # CHANGED: Specific group
-        deps=[f"{table_name}_parquet"] # Depends on the SHARED parquet files
-    )
+        group_name="duckdb_ingestion", 
+        deps=[f"{table_name}_parquet"], # Depends on the SHARED parquet files
+        tags={"role": "staging", "engine": "duckdb"},        
+        description=f"Loads `{table_name}.parquet` into a native DuckDB table for querying."
+    )    
     def _ingest_asset(context: AssetExecutionContext, database: DuckDBResource):
         partition_key = context.partition_key
         file_path = get_parquet_path(partition_key, table_name)

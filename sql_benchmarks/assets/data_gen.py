@@ -13,7 +13,7 @@ ORPHAN_PERCENTAGE = 0.10
 @asset(
     partitions_def=size_partitions,
     group_name="data_generation",
-    description="The Parent Table. Contains valid Customer IDs."
+    description="**Parent Table.** Generates a list of valid Customers with IDs 1..N."
 )
 def customers_parquet(context: AssetExecutionContext) -> str:
     partition_key = context.partition_key
@@ -41,7 +41,12 @@ def customers_parquet(context: AssetExecutionContext) -> str:
     partitions_def=size_partitions,
     group_name="data_generation",
     deps=["customers_parquet"], # Explicit dependency
-    description="The Child Table. Contains Orders, some of which are orphans."
+    description="""
+    **Child Table.** Generates Orders linking to Customers.
+    
+    **Key Feature:** Injects 'Orphan Records' (IDs that do not exist in Customers) 
+    based on the configured percentage (currently 10%).
+    """
 )
 def orders_parquet(context: AssetExecutionContext) -> str:
     partition_key = context.partition_key

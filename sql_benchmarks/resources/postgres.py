@@ -5,7 +5,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 
 class PostgresResource(ConfigurableResource):
-    connection_string: str = "postgresql://postgres:password@localhost:5432/postgres"
+    connection_string: str
     container_name: str = "benchmark_postgres" # Matches your docker-compose.yaml
 
     def get_engine(self):

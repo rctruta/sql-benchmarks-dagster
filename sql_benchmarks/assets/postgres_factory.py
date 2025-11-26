@@ -15,12 +15,24 @@ def make_postgres_benchmark(name, sql_path):
     with open(sql_path, "r") as f:
         raw_template = f.read()
 
+    # Calculate the relative path for display (e.g. scripts/sql/duckdb/join.sql)
+    # This shows the user exactly where to edit the SQL.
+    rel_path = os.path.relpath(sql_path, start=PROJECT_ROOT)
+
     @asset(
         name=name,
         partitions_def=size_partitions,
-        group_name="postgres_benchmarks",
+        group_name="dynamic_postgres_benchmarks",
         # Depend on the PG tables, not the DuckDB tables
-        deps=["pg_orders_table", "pg_customers_table"] 
+        deps=["pg_orders_table", "pg_customers_table"], 
+        tags={"source": "sql_factory", "engine": "postgres"},
+        description=f"""
+        **Auto-Generated Benchmark**
+        
+        * **Source File**: `{rel_path}`
+        * **Engine**: Postgres
+        * **Logic**: Runs the raw SQL file inside the timer.
+        """        
     )
     def _pg_asset(context: AssetExecutionContext, pg: PostgresResource):
         partition_key = context.partition_key
