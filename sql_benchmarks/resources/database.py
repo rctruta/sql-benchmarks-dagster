@@ -1,27 +1,20 @@
 import duckdb
-import os
 from dagster import ConfigurableResource
 
 class DuckDBResource(ConfigurableResource):
-    """
-    Manages the connection to a local DuckDB instance.
-    """
-    database_path: str = "data/benchmark.duckdb"
+    database_path: str
 
     def execute_query(self, sql: str):
-        """
-        Executes a SQL query against the DuckDB database.
-        """
-        # Ensure the folder exists
-        os.makedirs(os.path.dirname(self.database_path), exist_ok=True)
-        
-        # Connect, run, and close (Context Manager)
+        """Standard execution (lazy)"""
         with duckdb.connect(self.database_path) as con:
             con.execute(sql)
-            
-    def query_as_df(self, sql: str):
+
+    def benchmark_query(self, sql: str):
         """
-        Runs a query and returns the result as a Pandas DataFrame (good for checking results).
+        Executes AND fetches results to force the DB to finish work 
+        before stopping the timer.
         """
         with duckdb.connect(self.database_path) as con:
-            return con.execute(sql).df()
+            # .fetchall() forces the engine to materialize the result set
+            # This moves the execution time INSIDE the measurement window.
+            con.execute(sql).fetchall()
