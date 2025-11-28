@@ -1,7 +1,7 @@
 import os
 from dagster import asset, AssetExecutionContext
 from ..resources.database import DuckDBResource
-from ..partitions import size_partitions
+from ..partitions import partitions_def
 
 TARGET_TABLES = ["customers", "orders"]
 
@@ -12,7 +12,7 @@ def get_parquet_path(partition_key, table_name):
 def build_ingestion_asset(table_name):
     @asset(
         name=f"duckdb_{table_name}_table", 
-        partitions_def=size_partitions,
+        partitions_def=partitions_def,
         group_name="duckdb_ingestion", 
         deps=[f"{table_name}_parquet"], # Depends on the SHARED parquet files
         tags={"role": "staging", "engine": "duckdb"},        

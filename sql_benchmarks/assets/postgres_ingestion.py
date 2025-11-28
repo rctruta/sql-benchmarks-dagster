@@ -2,7 +2,7 @@ import os
 import pandas as pd
 from dagster import asset, AssetExecutionContext
 from ..resources.postgres import PostgresResource
-from ..partitions import size_partitions
+from ..partitions import partitions_def
 
 TARGET_TABLES = ["customers", "orders"]
 
@@ -13,7 +13,7 @@ def get_parquet_path(partition_key, table_name):
 def build_postgres_ingest(table_name):
     @asset(
         name=f"pg_{table_name}_table", 
-        partitions_def=size_partitions,
+        partitions_def=partitions_def,
         group_name="postgres_ingestion",
         deps=[f"{table_name}_parquet"], 
         tags={"layer": "ingestion", "engine": "postgres"},        

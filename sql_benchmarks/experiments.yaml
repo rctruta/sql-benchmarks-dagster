@@ -1,0 +1,22 @@
+definitions:
+  constants:
+    orders_per_customer: 10
+  rows:
+    small: 100_000
+    medium: 1_000_000
+  orphan_labels:
+    0.00: "clean"
+    0.10: "skew10"
+
+dimensions:
+  size:
+    - small
+    - medium
+  
+  orphan_rate:
+    - 0.00
+    - 0.10
+  
+exclude:
+  - size: medium
+    orphan_rate: 0.10

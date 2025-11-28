@@ -3,7 +3,7 @@ import glob
 import time
 import jinja2
 from dagster import asset, AssetExecutionContext, MaterializeResult, MetadataValue
-from ..partitions import size_partitions
+from ..partitions import partitions_def, SCENARIO_CONFIG
 from ..resources.database import DuckDBResource 
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -21,7 +21,7 @@ def make_benchmark_asset(name, sql_path):
 
     @asset(
         name=name,
-        partitions_def=size_partitions,
+        partitions_def=partitions_def,
         group_name="dynamic_duckdb_benchmarks", # This groups them visually
         deps=["duckdb_orders_table", "duckdb_customers_table"],
         tags={"source": "sql_factory", "engine": "duckdb"},
@@ -35,6 +35,7 @@ def make_benchmark_asset(name, sql_path):
     )
     def _dynamic_asset(context: AssetExecutionContext, database: DuckDBResource):
         partition_key = context.partition_key
+        params = SCENARIO_CONFIG[partition_key]        
         
         render_context = {
             "orders_table": f"orders_{partition_key}",
@@ -51,7 +52,9 @@ def make_benchmark_asset(name, sql_path):
         return MaterializeResult(
             metadata={
                 "duration_seconds": MetadataValue.float(duration),
-                "engine": "duckdb",
+                "config_engine": "duckdb",
+                "config_rows": MetadataValue.int(params['rows']),
+                "config_orphans": MetadataValue.float(params['orphan_rate']),
                 "sql_preview": MetadataValue.md(f"```sql\n{final_query}\n```")
             }
         )

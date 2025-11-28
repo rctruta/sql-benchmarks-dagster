@@ -3,7 +3,7 @@ import glob
 import time
 import jinja2
 from dagster import asset, AssetExecutionContext, MaterializeResult, MetadataValue
-from ..partitions import size_partitions
+from ..partitions import partitions_def, SCENARIO_CONFIG
 from ..resources.postgres import PostgresResource
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -21,7 +21,7 @@ def make_postgres_benchmark(name, sql_path):
 
     @asset(
         name=name,
-        partitions_def=size_partitions,
+        partitions_def=partitions_def,
         group_name="dynamic_postgres_benchmarks",
         # Depend on the PG tables, not the DuckDB tables
         deps=["pg_orders_table", "pg_customers_table"], 
@@ -36,6 +36,7 @@ def make_postgres_benchmark(name, sql_path):
     )
     def _pg_asset(context: AssetExecutionContext, pg: PostgresResource):
         partition_key = context.partition_key
+        params = SCENARIO_CONFIG[partition_key]        
         
         render_context = {
             "orders_table": f"orders_{partition_key}",
@@ -52,7 +53,9 @@ def make_postgres_benchmark(name, sql_path):
         return MaterializeResult(
             metadata={
                 "duration_seconds": MetadataValue.float(duration),
-                "engine": "postgres",
+                "config_engine": "postgres",
+                "config_rows": MetadataValue.int(params['rows']),
+                "config_orphans": MetadataValue.float(params['orphan_rate']),
                 "sql_preview": MetadataValue.md(f"```sql\n{final_query}\n```")
             }
         )
