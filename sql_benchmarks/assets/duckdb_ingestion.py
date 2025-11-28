@@ -11,25 +11,29 @@ def get_parquet_path(partition_key, table_name):
 
 def build_ingestion_asset(table_name):
     @asset(
-        name=f"duckdb_{table_name}_table", 
+        name=f"duckdb_{table_name}_table",
         partitions_def=partitions_def,
-        group_name="duckdb_ingestion", 
-        deps=[f"{table_name}_parquet"], # Depends on the SHARED parquet files
-        tags={"role": "staging", "engine": "duckdb"},        
-        description=f"Loads `{table_name}.parquet` into a native DuckDB table for querying."
-    )    
+        group_name="duckdb_ingestion",
+        deps=[f"{table_name}_parquet"],
+        tags={"layer": "partitioning", "engine": "duckdb"},
+        description=f"Loads `{table_name}` into a partition-specific DuckDB file."
+    )
     def _ingest_asset(context: AssetExecutionContext, database: DuckDBResource):
         partition_key = context.partition_key
         file_path = get_parquet_path(partition_key, table_name)
+        
+        # We can use simple table names because the FILE is isolated
         target_table_name = f"{table_name}_{partition_key}"
         
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Missing: {file_path}")
 
         query = f"CREATE OR REPLACE TABLE {target_table_name} AS SELECT * FROM read_parquet('{file_path}');"
-        database.execute_query(query)
         
-        context.log.info(f"Created table '{target_table_name}'")
+        # CRITICAL FIX: Pass the partition_key here
+        database.execute_query(query, partition_key=partition_key)
+        
+        context.log.info(f"Created table in benchmark_{partition_key}.duckdb")
 
     _ingest_asset.__name__ = f"duckdb_ingest_{table_name}"
     return _ingest_asset

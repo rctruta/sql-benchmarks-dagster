@@ -18,9 +18,8 @@ from .resources.postgres import PostgresResource
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(os.path.dirname(current_dir))
 
-# DuckDB Config (Calculated Path)
-duckdb_path = os.path.join(project_root, "data", "benchmark.duckdb")
-
+# DuckDB Config 
+data_folder = os.path.join(project_root, "data")
 # Postgres Config (Connection String)
 postgres_url = "postgresql://postgres:password@localhost:5432/postgres"
 
@@ -42,7 +41,7 @@ defs = Definitions(
     assets=[*data_assets, *duck_assets, *pg_assets],
     resources={
         # Now both look identical: Resource(config=variable)
-        "database": DuckDBResource(database_path=duckdb_path),
+        "database": DuckDBResource(data_folder=data_folder),
         "pg": PostgresResource(connection_string=postgres_url) 
     },
 )

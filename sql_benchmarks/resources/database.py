@@ -1,20 +1,31 @@
 import duckdb
+import os
 from dagster import ConfigurableResource
 
 class DuckDBResource(ConfigurableResource):
-    database_path: str
+    # 1. We accept the FOLDER path
+    data_folder: str
 
-    def execute_query(self, sql: str):
-        """Standard execution (lazy)"""
-        with duckdb.connect(self.database_path) as con:
+    def _get_db_path(self, partition_key: str):
+        # 2. We calculate the specific file for this partition
+        return os.path.join(self.data_folder, f"benchmark_{partition_key}.duckdb")
+
+    def execute_query(self, sql: str, partition_key: str = None):
+        """Used for Ingestion."""
+        if partition_key is None:
+            db_path = os.path.join(self.data_folder, "benchmark.duckdb")
+        else:
+            db_path = self._get_db_path(partition_key)
+        
+        with duckdb.connect(db_path) as con:
             con.execute(sql)
 
-    def benchmark_query(self, sql: str):
-        """
-        Executes AND fetches results to force the DB to finish work 
-        before stopping the timer.
-        """
-        with duckdb.connect(self.database_path) as con:
-            # .fetchall() forces the engine to materialize the result set
-            # This moves the execution time INSIDE the measurement window.
+    def benchmark_query(self, sql: str, partition_key: str = None):
+        """Used for Benchmarking. Forces fetchall for timing."""
+        if partition_key is None:
+            db_path = os.path.join(self.data_folder, "benchmark.duckdb")
+        else:
+            db_path = self._get_db_path(partition_key)
+        
+        with duckdb.connect(db_path) as con:
             con.execute(sql).fetchall()
