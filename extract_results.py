@@ -1,95 +1,101 @@
 import pandas as pd
-from dagster import DagsterInstance, DagsterEventType, DagsterRunStatus
+import yaml
+import shutil
+import os
+from dagster import DagsterInstance, DagsterRunStatus, DagsterEventType
 
-def extract_benchmark_history():
+def extract_and_snapshot():
+    # 1. Read the YAML to find the current Experiment ID
+    yaml_path = "sql_benchmarks/experiments.yaml"
+    try:
+        with open(yaml_path, "r") as f:
+            config = yaml.safe_load(f)
+    except FileNotFoundError:
+        print("❌ Could not find experiments.yaml")
+        return
+    
+    # This is the key. We trust the YAML is the source of truth.
+    target_id = config.get("meta", {}).get("experiment_id", "default")
+    print(f"🎯 Target Experiment ID: {target_id}")
+
+    # 2. Connect to Dagster
     try:
         instance = DagsterInstance.get()
     except Exception:
-        print("❌ CRITICAL: Could not find Dagster Instance.")
-        print("Did you run 'export DAGSTER_HOME=~/.dagster'?")
+        print("❌ CRITICAL: Run 'export DAGSTER_HOME=~/.dagster'")
         return
-
-    print(f"DTO: Connected to Dagster storage at {instance.root_directory}")
 
     records = []
     
-    # 1. Get the last 50 runs (The Brute Force approach)
-    # This bypasses the flaky Asset Filter API entirely.
-    runs = instance.get_runs(limit=50)
-    print(f"Scanning {len(runs)} recent runs for benchmark data...")
+    # 3. Scan Runs (Brute force recent history)
+    # We look for runs that MATCH the ID from the YAML
+    runs = instance.get_runs(limit=100)
+    print(f"Scanning {len(runs)} recent runs...")
 
+    count = 0
     for run in runs:
-        # Only look at successful runs to avoid noise
+        # Strict Tag Match: Only get runs that belong to this experiment
+        if run.tags.get("experiment") != target_id:
+            continue
+            
         if run.status != DagsterRunStatus.SUCCESS:
             continue
 
-        # 2. Get all events for this run
+        count += 1
         logs = instance.all_logs(run.run_id)
         
         for log in logs:
-            # We only care about Asset Materializations
-            if not log.is_dagster_event:
+            if not log.is_dagster_event or log.dagster_event.event_type != DagsterEventType.ASSET_MATERIALIZATION:
                 continue
-            if log.dagster_event.event_type != DagsterEventType.ASSET_MATERIALIZATION:
-                continue
-                
-            # 3. Check if it's a benchmark asset
-            # The asset key is stored in the event
+            
             mat = log.dagster_event.step_materialization_data.materialization
+            if not mat.asset_key: continue
             
-            # Asset Key is a list of strings, e.g. ['duckdb_benchmark_join...']
-            if not mat.asset_key:
-                continue
-                
             asset_name = mat.asset_key.path[-1]
-            
-            if "benchmark" not in asset_name:
-                continue
+            if "benchmark" not in asset_name: continue
 
-            # 4. Extract Metadata
             meta = mat.metadata
-            if "duration_seconds" not in meta:
-                continue
+            if "duration_seconds" not in meta: continue
 
-            # Helper to safely get value
-            def get_val(key):
-                if key in meta:
-                    return meta[key].value
-                return None
+            def get_val(key): return meta[key].value if key in meta else None
 
             row = {
                 "timestamp": pd.to_datetime(log.timestamp, unit='s'),
-                "run_id": run.run_id,
+                "experiment_id": target_id, # Validated
                 "asset": asset_name,
-                # Use partition from the run tags if available, else from event
                 "partition": run.tags.get("dagster/partition", "unknown"),
                 "duration_seconds": get_val("duration_seconds"),
                 "orphans": get_val("trace_orphans"),
                 "rows": get_val("trace_rows"),
                 "engine": get_val("config_engine")
             }
-            
-            # Engine Fallback
             if not row["engine"]:
                 if "duckdb" in asset_name: row["engine"] = "duckdb"
                 elif "pg_" in asset_name: row["engine"] = "postgres"
 
             records.append(row)
 
-    # 5. Save
+    # 4. Save Matched Artifacts
     if records:
         df = pd.DataFrame(records)
         df = df.sort_values(by=["engine", "rows", "orphans", "asset"])
         
-        print("\n--- Extracted Results (Preview) ---")
-        # Handle cases where orphans/rows might be None for older runs
-        print(df[["asset", "rows", "orphans", "duration_seconds"]].head(10))
+        # Define Filenames based on the ID
+        csv_name = f"results_{target_id}.csv"
+        yaml_snapshot_name = f"config_{target_id}.yaml"
         
-        filename = "benchmark_results_final.csv"
-        df.to_csv(filename, index=False)
-        print(f"\n✅ Saved {len(df)} records to {filename}")
+        # Save CSV
+        df.to_csv(csv_name, index=False)
+        print(f"\n✅ DATA SAVED: {csv_name}")
+        
+        # SNAPSHOT THE CONFIG
+        shutil.copy(yaml_path, yaml_snapshot_name)
+        print(f"📸 CONFIG SAVED: {yaml_snapshot_name}")
+        print("   (These two files are now permanently linked)")
+        
     else:
-        print("No benchmark metadata found in the last 50 runs.")
+        print(f"⚠️  No runs found with tag 'experiment: {target_id}'.")
+        print("Did you reload definitions and run the Backfill *after* updating the YAML?")
 
 if __name__ == "__main__":
-    extract_benchmark_history()
+    extract_and_snapshot()

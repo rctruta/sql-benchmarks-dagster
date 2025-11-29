@@ -7,7 +7,8 @@ from .assets import (
     duckdb_ingestion, 
     duckdb_factory,
     postgres_ingestion,
-    postgres_factory
+    postgres_factory,
+    reporting
 )
 
 # 2. Import Resources
@@ -38,7 +39,11 @@ pg_assets = [
 
 # 5. Definitions
 defs = Definitions(
-    assets=[*data_assets, *duck_assets, *pg_assets],
+    assets=[*data_assets, 
+            *duck_assets, 
+            *pg_assets,
+            reporting.performance_chart
+            ],
     resources={
         # Now both look identical: Resource(config=variable)
         "database": DuckDBResource(data_folder=data_folder),

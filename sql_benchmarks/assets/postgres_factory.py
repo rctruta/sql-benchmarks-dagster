@@ -3,7 +3,7 @@ import glob
 import time
 import jinja2
 from dagster import asset, AssetExecutionContext, MaterializeResult, MetadataValue
-from ..partitions import partitions_def, SCENARIO_CONFIG
+from ..partitions import partitions_def, SCENARIO_CONFIG, EXPERIMENT_META
 from ..resources.postgres import PostgresResource
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -25,7 +25,12 @@ def make_postgres_benchmark(name, sql_path):
         group_name="dynamic_postgres_benchmarks",
         # Depend on the PG tables, not the DuckDB tables
         deps=["pg_orders_table", "pg_customers_table"], 
-        tags={"source": "sql_factory", "engine": "postgres"},
+        # AUTOMATIC TAGGING
+        tags={
+            "source": "sql_factory", 
+            "engine": "postgres",
+            "experiment": EXPERIMENT_META.get("experiment_id", "default")
+        },
         description=f"""
         **Auto-Generated Benchmark**
         

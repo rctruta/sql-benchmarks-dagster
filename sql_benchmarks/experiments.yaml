@@ -1,22 +1,31 @@
+meta:
+  experiment_id: "demo_final"  # <--- CHANGE THIS for every new batch
+  description: "Testing 50% orphan skew on DuckDB vs Postgres"
+
 definitions:
   constants:
-    orders_per_customer: 10
+    orders_per_customer: 5
   rows:
+    tiny: 1_000       # Fast test
     small: 100_000
     medium: 1_000_000
   orphan_labels:
     0.00: "clean"
     0.10: "skew10"
+    0.50: "chaos"     # <--- NEW LABEL
 
 dimensions:
   size:
+    - tiny            # Enable Tiny
     - small
-    - medium
+    # - medium        # Comment out Medium to save time for this specific test
   
   orphan_rate:
     - 0.00
     - 0.10
-  
+    - 0.50            # <--- ENABLE 50% SKEW
+
 exclude:
+  # Protect against massive files
   - size: medium
-    orphan_rate: 0.10
+    orphan_rate: 0.50
