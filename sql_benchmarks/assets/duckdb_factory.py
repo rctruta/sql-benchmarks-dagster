@@ -55,11 +55,12 @@ def make_benchmark_asset(name, sql_path, dependent_asset_name=None):
         
         return MaterializeResult(
             metadata={
-                "duration_seconds": MetadataValue.float(duration),
-                "trace_orphans": MetadataValue.float(params['orphan_rate']),
-                "trace_rows": MetadataValue.int(params['rows']),
+                "experiment_id": EXPERIMENT_META.get("experiment_id", "unknown"),
                 "config_engine": "duckdb",
-                "sql_preview": MetadataValue.md(f"```sql\n{final_query}\n```")
+                "sql_preview": MetadataValue.md(f"```sql\n{final_query}\n```"),
+                "duration_seconds": MetadataValue.float(duration),
+                "config_rows": MetadataValue.int(params['rows']),
+                "config_orphans": MetadataValue.float(params['orphan_rate']),
             }
         )
     

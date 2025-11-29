@@ -3,12 +3,16 @@ import itertools
 import os
 from dagster import StaticPartitionsDefinition
 
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "experiments.yaml")
+CONFIG_DIR = os.path.join(os.path.dirname(__file__), "experiments")
+ACTIVE_CONFIG_PATH = os.path.join(CONFIG_DIR, "active.yaml")
 
-with open(CONFIG_PATH, "r") as f:
+if not os.path.exists(ACTIVE_CONFIG_PATH):
+    raise FileNotFoundError("⚠️ No active experiment. Run 'python run_experiment.py <file>'")
+
+with open(ACTIVE_CONFIG_PATH, "r") as f:
     config = yaml.safe_load(f)
 
-# 1. EXPORT METADATA (This was missing)
+# 1. EXPORT METADATA
 # This allows factories to import EXPERIMENT_META
 EXPERIMENT_META = config.get("meta", {"experiment_id": "default"})
 

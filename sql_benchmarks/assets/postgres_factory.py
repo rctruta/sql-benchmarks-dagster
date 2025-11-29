@@ -57,11 +57,12 @@ def make_postgres_benchmark(name, sql_path):
         
         return MaterializeResult(
             metadata={
-                "duration_seconds": MetadataValue.float(duration),
+                "experiment_id": EXPERIMENT_META.get("experiment_id", "unknown"),
                 "config_engine": "postgres",
+                "sql_preview": MetadataValue.md(f"```sql\n{final_query}\n```"),
+                "duration_seconds": MetadataValue.float(duration),
                 "config_rows": MetadataValue.int(params['rows']),
                 "config_orphans": MetadataValue.float(params['orphan_rate']),
-                "sql_preview": MetadataValue.md(f"```sql\n{final_query}\n```")
             }
         )
     

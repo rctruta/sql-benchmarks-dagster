@@ -2,23 +2,27 @@ import pandas as pd
 import yaml
 import shutil
 import os
-from dagster import DagsterInstance, DagsterRunStatus, DagsterEventType
+import sys
+from dagster import DagsterInstance, DagsterEventType, DagsterRunStatus
+
+from sql_benchmarks.constants import ROOT_DIR, ACTIVE_CONFIG_PATH, CONFIG_ARCHIVE_DIR, RESULTS_DIR
 
 def extract_and_snapshot():
-    # 1. Read the YAML to find the current Experiment ID
-    yaml_path = "sql_benchmarks/experiments.yaml"
+    # 1. READ ACTIVE CONFIG
     try:
-        with open(yaml_path, "r") as f:
+        with open(ACTIVE_CONFIG_PATH, "r") as f:
             config = yaml.safe_load(f)
+        target_id = config.get("meta", {}).get("experiment_id")
+        if not target_id:
+            print("❌ 'experiment_id' missing in active.yaml.")
+            return
+        print(f"🎯 Looking for Target Hash: {target_id}")
+        
     except FileNotFoundError:
-        print("❌ Could not find experiments.yaml")
+        print(f"❌ Could not find active config at: {ACTIVE_CONFIG_PATH}")
         return
-    
-    # This is the key. We trust the YAML is the source of truth.
-    target_id = config.get("meta", {}).get("experiment_id", "default")
-    print(f"🎯 Target Experiment ID: {target_id}")
 
-    # 2. Connect to Dagster
+    # 2. CONNECT
     try:
         instance = DagsterInstance.get()
     except Exception:
@@ -26,22 +30,16 @@ def extract_and_snapshot():
         return
 
     records = []
+    found_ids = set() # Debugging set
     
-    # 3. Scan Runs (Brute force recent history)
-    # We look for runs that MATCH the ID from the YAML
+    # 3. SCAN HISTORY
     runs = instance.get_runs(limit=100)
-    print(f"Scanning {len(runs)} recent runs...")
+    print(f"🔎 Scanning {len(runs)} recent runs...")
 
-    count = 0
     for run in runs:
-        # Strict Tag Match: Only get runs that belong to this experiment
-        if run.tags.get("experiment") != target_id:
-            continue
-            
         if run.status != DagsterRunStatus.SUCCESS:
             continue
 
-        count += 1
         logs = instance.all_logs(run.run_id)
         
         for log in logs:
@@ -49,25 +47,34 @@ def extract_and_snapshot():
                 continue
             
             mat = log.dagster_event.step_materialization_data.materialization
-            if not mat.asset_key: continue
-            
-            asset_name = mat.asset_key.path[-1]
-            if "benchmark" not in asset_name: continue
-
             meta = mat.metadata
-            if "duration_seconds" not in meta: continue
+            
+            # --- DEBUGGING LOGIC ---
+            # Capture whatever ID is actually there
+            stored_id = meta.get("experiment_id")
+            if stored_id:
+                found_ids.add(stored_id.value)
+            
+            # Match Logic
+            if not stored_id or stored_id.value != target_id:
+                continue
+            
+            # If match, check for duration
+            if "duration_seconds" not in meta:
+                continue
 
             def get_val(key): return meta[key].value if key in meta else None
+            asset_name = mat.asset_key.path[-1]
 
             row = {
                 "timestamp": pd.to_datetime(log.timestamp, unit='s'),
-                "experiment_id": target_id, # Validated
+                "experiment_id": stored_id.value,
                 "asset": asset_name,
                 "partition": run.tags.get("dagster/partition", "unknown"),
                 "duration_seconds": get_val("duration_seconds"),
-                "orphans": get_val("trace_orphans"),
-                "rows": get_val("trace_rows"),
-                "engine": get_val("config_engine")
+                "orphans": get_val("config_orphans"),
+                "rows": get_val("config_rows"),
+                "engine": get_val("config_engine"),
             }
             if not row["engine"]:
                 if "duckdb" in asset_name: row["engine"] = "duckdb"
@@ -75,27 +82,30 @@ def extract_and_snapshot():
 
             records.append(row)
 
-    # 4. Save Matched Artifacts
+    # 4. SAVE OR DEBUG
     if records:
         df = pd.DataFrame(records)
         df = df.sort_values(by=["engine", "rows", "orphans", "asset"])
         
-        # Define Filenames based on the ID
-        csv_name = f"results_{target_id}.csv"
-        yaml_snapshot_name = f"config_{target_id}.yaml"
+        csv_path = os.path.join(RESULTS_DIR, f"results_{target_id}.csv")
+        yaml_path = os.path.join(CONFIG_ARCHIVE_DIR, f"config_{target_id}.yaml")
         
-        # Save CSV
-        df.to_csv(csv_name, index=False)
-        print(f"\n✅ DATA SAVED: {csv_name}")
+        df.to_csv(csv_path, index=False)
+        print(f"\n✅ DATA ARCHIVED: {csv_path}")
         
-        # SNAPSHOT THE CONFIG
-        shutil.copy(yaml_path, yaml_snapshot_name)
-        print(f"📸 CONFIG SAVED: {yaml_snapshot_name}")
-        print("   (These two files are now permanently linked)")
+        shutil.copy(ACTIVE_CONFIG_PATH, yaml_path)
+        print(f"✅ CONFIG SNAPSHOT: {yaml_path}")
         
     else:
-        print(f"⚠️  No runs found with tag 'experiment: {target_id}'.")
-        print("Did you reload definitions and run the Backfill *after* updating the YAML?")
+        print(f"\n❌ FAILURE: No runs matched Target Hash '{target_id}'.")
+        print("\n🔎 DIAGNOSIS: Here are the Experiment IDs found in your database:")
+        if found_ids:
+            for fid in found_ids:
+                print(f"   - {fid}")
+            print("\n👉 ACTION: If you see the ID above, your active.yaml is out of sync with the DB.")
+            print("   Run 'python run_experiment.py ...' again to align them, OR re-run the Backfill.")
+        else:
+            print("   (No experiment_id metadata found at all. Did you Reload Definitions?)")
 
 if __name__ == "__main__":
     extract_and_snapshot()
