@@ -1,52 +1,43 @@
 import os
 from dagster import Definitions, load_assets_from_modules
 
-# 1. Import Asset Modules
+# 1. IMPORT THE FACTORIES
 from .assets import (
-    data_gen, 
-    duckdb_ingestion, 
-    duckdb_factory,
-    postgres_ingestion,
-    postgres_factory,
-    reporting
+    data_factory,       # Generates Parquet (Data Gen)
+    ingestion_factory,   # Load the factory ingestion (Ingestion)
+    benchmark_factory,  # Runs Queries (The Universal Benchmark Runner)
+    reporting           # The Dashboard
 )
 
-# 2. Import Resources
+# 2. IMPORT RESOURCES
 from .resources.database import DuckDBResource
 from .resources.postgres import PostgresResource
 
-# 3. Path & Config Logic
+# 3. CONFIGURATION (Single Source of Truth)
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(os.path.dirname(current_dir))
 
-# DuckDB Config 
+# Paths
 data_folder = os.path.join(project_root, "data")
-# Postgres Config (Connection String)
+duckdb_path = os.path.join(data_folder, "benchmark.duckdb") # Fallback path
 postgres_url = "postgresql://postgres:password@localhost:5432/postgres"
 
-# 4. Load Assets
-data_assets = load_assets_from_modules([data_gen])
+# 4. LOAD ASSET LISTS
+# The factories already produced lists of assets. We just grab them.
+data_assets = data_factory.data_assets
+ingest_assets = ingestion_factory.ingestion_assets # Single list!
+bench_assets = benchmark_factory.benchmark_assets
 
-duck_assets = [
-    *duckdb_ingestion.ingestion_assets, 
-    *duckdb_factory.benchmark_assets
-]
-
-pg_assets = [
-    *postgres_ingestion.postgres_ingest_assets, 
-    *postgres_factory.postgres_bench_assets
-]
-
-# 5. Definitions
+# 5. DEFINE THE SYSTEM
 defs = Definitions(
-    assets=[*data_assets, 
-            *duck_assets, 
-            *pg_assets,
-            reporting.performance_chart
-            ],
+    assets=[
+        *data_assets, 
+        *ingest_assets, 
+        *bench_assets, 
+        reporting.performance_dashboard
+    ],
     resources={
-        # Now both look identical: Resource(config=variable)
-        "database": DuckDBResource(data_folder=data_folder),
-        "pg": PostgresResource(connection_string=postgres_url) 
+        "duckdb": DuckDBResource(data_folder=data_folder),
+        "postgres": PostgresResource(connection_string=postgres_url) 
     },
 )

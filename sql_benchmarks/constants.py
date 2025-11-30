@@ -7,6 +7,7 @@ PACKAGE_DIR = os.path.dirname(CURRENT_FILE_PATH)
 ROOT_DIR = os.path.dirname(PACKAGE_DIR)
 
 # 2. KEY DIRECTORIES
+DATA_DIR = os.path.join(ROOT_DIR, "data")
 EXPERIMENTS_DIR = os.path.join(PACKAGE_DIR, "experiments")
 SCRIPTS_DIR = os.path.join(PACKAGE_DIR, "scripts")
 SQL_DIR = os.path.join(SCRIPTS_DIR, "sql")

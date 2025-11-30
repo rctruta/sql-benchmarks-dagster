@@ -1,0 +1,25 @@
+timestamp,experiment_id,asset,partition,duration_seconds,orphans,rows,engine
+2025-11-30 05:44:11.324168960,ccbc2f65,duckdb_benchmark_join_antipattern,small_clean,0.06896805763244629,0.0,,duckdb
+2025-11-30 05:44:29.636291072,ccbc2f65,duckdb_benchmark_join_antipattern,tiny_clean,0.02849411964416504,0.0,,duckdb
+2025-11-30 05:44:23.330964992,ccbc2f65,duckdb_benchmark_join_recommended,small_clean,0.12045907974243164,0.0,,duckdb
+2025-11-30 05:44:34.411002112,ccbc2f65,duckdb_benchmark_join_recommended,tiny_clean,0.029125213623046875,0.0,,duckdb
+2025-11-30 05:44:17.581112064,ccbc2f65,duckdb_benchmark_join_antipattern,small_skew10,0.07193398475646973,0.1,,duckdb
+2025-11-30 05:44:31.614333952,ccbc2f65,duckdb_benchmark_join_antipattern,tiny_skew10,0.02725076675415039,0.1,,duckdb
+2025-11-30 05:44:28.044228096,ccbc2f65,duckdb_benchmark_join_recommended,small_skew10,0.07879996299743652,0.1,,duckdb
+2025-11-30 05:44:35.205437952,ccbc2f65,duckdb_benchmark_join_recommended,tiny_skew10,0.012798786163330078,0.1,,duckdb
+2025-11-30 05:44:05.048539904,ccbc2f65,duckdb_benchmark_join_antipattern,small_chaos,0.0928049087524414,0.5,,duckdb
+2025-11-30 05:44:22.745459968,ccbc2f65,duckdb_benchmark_join_antipattern,tiny_chaos,0.04026293754577637,0.5,,duckdb
+2025-11-30 05:44:17.581530112,ccbc2f65,duckdb_benchmark_join_recommended,small_chaos,0.04722118377685547,0.5,,duckdb
+2025-11-30 05:44:30.952404992,ccbc2f65,duckdb_benchmark_join_recommended,tiny_chaos,0.15836405754089355,0.5,,duckdb
+2025-11-30 05:44:20.010678016,ccbc2f65,pg_benchmark_join_antipattern,small_clean,0.8770413398742676,0.0,,postgres
+2025-11-30 05:44:30.848161024,ccbc2f65,pg_benchmark_join_antipattern,tiny_clean,0.6660687923431396,0.0,,postgres
+2025-11-30 05:44:20.000390912,ccbc2f65,pg_benchmark_join_recommended,small_clean,0.86985182762146,0.0,,postgres
+2025-11-30 05:44:30.842800128,ccbc2f65,pg_benchmark_join_recommended,tiny_clean,0.7275488376617432,0.0,,postgres
+2025-11-30 05:44:25.606445056,ccbc2f65,pg_benchmark_join_antipattern,small_skew10,0.8511860370635986,0.1,,postgres
+2025-11-30 05:44:33.097356032,ccbc2f65,pg_benchmark_join_antipattern,tiny_skew10,0.6079108715057373,0.1,,postgres
+2025-11-30 05:44:25.610275072,ccbc2f65,pg_benchmark_join_recommended,small_skew10,0.7714319229125977,0.1,,postgres
+2025-11-30 05:44:33.101027072,ccbc2f65,pg_benchmark_join_recommended,tiny_skew10,0.4781770706176758,0.1,,postgres
+2025-11-30 05:44:13.300060928,ccbc2f65,pg_benchmark_join_antipattern,small_chaos,1.0674350261688232,0.5,,postgres
+2025-11-30 05:44:24.175568896,ccbc2f65,pg_benchmark_join_antipattern,tiny_chaos,0.6340751647949219,0.5,,postgres
+2025-11-30 05:44:13.302651904,ccbc2f65,pg_benchmark_join_recommended,small_chaos,1.0583229064941406,0.5,,postgres
+2025-11-30 05:44:24.170466048,ccbc2f65,pg_benchmark_join_recommended,tiny_chaos,0.6801159381866455,0.5,,postgres
