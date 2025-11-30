@@ -1,13 +1,32 @@
-# Python & Dagster junk
+# Python & Environment
 __pycache__/
 *.py[cod]
 *$py.class
 .env
 .DS_Store
 venv/
-.dagster/
-.tmp_dagster*/
-*.egg-info/
+.venv/
 
-# Data (Too big for git)
+# Distribution
+*.egg-info/
+build/
+dist/
+
+# Dagster
+.dagster/
+tmp_dagster*/
+
+# Large Data & Artifacts (Crucial)
 data/
+*.duckdb
+*.parquet
+*.wal
+*.db
+
+# Temporary Debug Scripts
+debug*.py
+dump_data.py
+
+# Catch all temporary dagster homes
+.tmp_dagster_home*/
+.*dagster_home*/
