@@ -1,9 +1,8 @@
 meta:
-  experiment_id: ccbc2f65
-  description: Testing 50% orphan skew on DuckDB vs Postgres
-engines:
-- duckdb
-- postgres
+  experiment_id: 6938cad7
+  description: Testing scheduler limits with 50x replication
+execution:
+  replication: 50
 dataset:
   source: sql_benchmarks.plugins.data_sources.synthetic_ecommerce
   tables:
@@ -14,20 +13,13 @@ definitions:
     orders_per_customer: 5
   rows:
     tiny: 1000
-    small: 100000
-    medium: 1000000
   orphan_labels:
     0.0: clean
-    0.1: skew10
-    0.5: chaos
 dimensions:
   size:
   - tiny
-  - small
   orphan_rate:
   - 0.0
-  - 0.1
-  - 0.5
-exclude:
-- size: medium
-  orphan_rate: 0.5
+engines:
+- duckdb
+- postgres

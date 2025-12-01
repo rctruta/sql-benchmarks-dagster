@@ -1,51 +1,51 @@
 import os
 import glob
 import time
-import jinja2 # Still needed for Template rendering at runtime
+import jinja2
+import yaml
 from dagster import asset, AssetExecutionContext, MaterializeResult, MetadataValue
 from ..partitions import partitions_def, SCENARIO_CONFIG
 from ..constants import SQL_DIR
-# THE FIX: Use the shared brain
 from ..utils.common import load_active_config, get_tables_used_in_sql
 
-# 1. SHARED CONFIG LOADING
-# This handles all the validation, defaults, and error raising.
+# 1. LOAD CONFIG & REPLICATION FACTOR
 try:
-    ACTIVE_ENGINES, TARGET_TABLES, EXPERIMENT_META = load_active_config()
-    # Create set for runtime checks
+    CONFIG, ACTIVE_ENGINES, TARGET_TABLES, EXPERIMENT_META = load_active_config()
     VALID_TABLES_SET = set(TARGET_TABLES)
+    
+    # NEW: Read replication factor (default to 1)
+    REPLICATION_FACTOR = CONFIG.get("execution", {}).get("replication", 1)
+    
 except Exception as e:
-    # Safety catch so Dagster doesn't crash entirely if config is broken during dev
     print(f"⚠️ Factory Init Error: {e}")
     ACTIVE_ENGINES = []
     VALID_TABLES_SET = set()
     EXPERIMENT_META = {}
+    REPLICATION_FACTOR = 1
 
-def make_benchmark_asset(name, sql_path, engine_name, dependent_asset_name=None):
+def make_benchmark_asset(name, sql_path, engine_name, replica_id=0, dependent_asset_name=None):
     
-    # 2. USE SHARED LOGIC TO PARSE SQL
-    # This returns ONLY the tables found in the SQL that match our YAML list.
     used_tables, raw_template = get_tables_used_in_sql(sql_path, VALID_TABLES_SET)
-
-    # 3. APPLY NAMING CONVENTION
-    # Match ingestion_factory: "pg_" for Postgres, "duckdb_" for DuckDB
     prefix = "pg_" if engine_name == "postgres" else f"{engine_name}_"
     
-    # Build dependencies using the correct prefix
     deps = [f"{prefix}{t}_table" for t in used_tables]
-    
     if dependent_asset_name:
         deps.append(dependent_asset_name)
 
+    # UNIQUE NAME: Append replica suffix if needed
+    suffix = f"_rep{replica_id}" if REPLICATION_FACTOR > 1 else ""
+    asset_name = f"{prefix}benchmark_{name}{suffix}"
+
     @asset(
-        name=f"{prefix}benchmark_{name}", 
+        name=asset_name, 
         partitions_def=partitions_def,
         group_name=f"dynamic_{engine_name}_benchmarks",
-        deps=deps, # <--- Correct, filtered dependencies
+        deps=deps,
         tags={
             "source": "sql_factory", 
             "engine": engine_name,
-            "experiment": EXPERIMENT_META.get("experiment_id", "default")
+            "experiment": EXPERIMENT_META.get("experiment_id", "default"),
+            "replica": str(replica_id)
         },
         required_resource_keys={engine_name}
     )
@@ -57,10 +57,8 @@ def make_benchmark_asset(name, sql_path, engine_name, dependent_asset_name=None)
         partition_key = context.partition_key
         params = SCENARIO_CONFIG[partition_key]
         
-        # 4. RENDER CONTEXT (Runtime)
-        # We inject the specific table names for the partition
         render_context = {}
-        for table in used_tables:
+        for table in VALID_TABLES_SET:
             render_context[f"{table}_table"] = f"{table}_{partition_key}"
 
         template = jinja2.Template(raw_template)
@@ -68,10 +66,8 @@ def make_benchmark_asset(name, sql_path, engine_name, dependent_asset_name=None)
         
         start_time = time.time()
         
-        if engine_name == "duckdb":
-            db_resource.benchmark_query(final_query, partition_key=partition_key)
-        else:
-            db_resource.benchmark_query(final_query)
+        # Execute (Postgres ignores key, DuckDB uses it)
+        db_resource.benchmark_query(final_query, partition_key=partition_key)
             
         duration = time.time() - start_time
         
@@ -79,16 +75,16 @@ def make_benchmark_asset(name, sql_path, engine_name, dependent_asset_name=None)
             metadata={
                 "duration_seconds": MetadataValue.float(duration),
                 "experiment_id": EXPERIMENT_META.get("experiment_id", "unknown"),
+                "replica_id": MetadataValue.int(replica_id),
                 "trace_orphans": MetadataValue.float(params.get('orphan_rate', 0)),
-                "config_engine": engine_name,
-                "sql_preview": MetadataValue.md(f"```sql\n{final_query}\n```")
+                "config_engine": engine_name
             }
         )
     
-    _benchmark_asset.__name__ = f"{engine_name}_{name}"
+    _benchmark_asset.__name__ = f"{engine_name}_{name}_rep{replica_id}"
     return _benchmark_asset
 
-# 5. MASTER LOOP
+# 4. MASTER LOOP
 benchmark_assets = []
 
 for engine in ACTIVE_ENGINES:
@@ -96,14 +92,21 @@ for engine in ACTIVE_ENGINES:
     if not os.path.exists(engine_sql_dir): continue
         
     sql_files = glob.glob(os.path.join(engine_sql_dir, "*.sql"))
-    previous_benchmark = None
     
     for sql_file in sql_files:
         base_name = os.path.basename(sql_file).replace(".sql", "")
         
-        dep_name = previous_benchmark if engine == "duckdb" else None
+        # Reset daisy chain for this SQL file
+        previous_benchmark = None
         
-        new_asset = make_benchmark_asset(base_name, sql_file, engine, dependent_asset_name=dep_name)
-        benchmark_assets.append(new_asset)
-        
-        previous_benchmark = f"{engine}_benchmark_{base_name}"
+        # --- REPLICATION LOOP ---
+        for i in range(1, REPLICATION_FACTOR + 1):
+            
+            # Daisy Chain Logic (DuckDB Only)
+            dep_name = previous_benchmark if engine == "duckdb" else None
+            
+            new_asset = make_benchmark_asset(base_name, sql_file, engine, replica_id=i, dependent_asset_name=dep_name)
+            benchmark_assets.append(new_asset)
+            
+            # Update pointer for next replica
+            previous_benchmark = new_asset.key.path[-1]

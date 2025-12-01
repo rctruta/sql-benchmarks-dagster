@@ -1,0 +1,25 @@
+meta:
+  experiment_id: "stress_test_v1"
+  description: "Testing scheduler limits with 50x replication"
+
+# NEW SECTION
+execution:
+  replication: 50  # This will generate 50 assets per SQL file!
+
+dataset:
+  source: "sql_benchmarks.plugins.data_sources.synthetic_ecommerce"
+  tables: [customers, orders]
+
+definitions:
+  constants: {orders_per_customer: 5}
+  rows:
+    tiny: 1_000 # Keep rows small so we test the Scheduler, not the Disk
+  orphan_labels: {0.00: "clean"}
+
+dimensions:
+  size: [tiny]
+  orphan_rate: [0.00]
+
+engines:
+  - duckdb
+  - postgres

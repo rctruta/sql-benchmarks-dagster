@@ -44,15 +44,13 @@ class PostgresResource(ConfigurableResource):
         
         raise Exception("Postgres failed to restart in time.")
 
-    def benchmark_query(self, sql: str):
+    def benchmark_query(self, sql: str, partition_key: str = None):
         """
         Clears cache, then runs the query.
+        partition_key is accepted for interface compatibility but ignored.
         """
-        # 1. Force Cold Start
         self.clear_cache()
         
-        # 2. Run Query
         engine = self.get_engine()
         with engine.connect() as conn:
-            # .fetchall() forces network transfer
             _ = conn.execute(text(sql)).fetchall()

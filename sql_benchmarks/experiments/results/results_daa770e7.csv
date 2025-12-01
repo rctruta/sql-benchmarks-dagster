@@ -1,7 +1,0 @@
-timestamp,experiment_id,asset,partition,duration_seconds,orphans,rows,engine
-2025-11-29 22:17:51.621724928,daa770e7,duckdb_benchmark_join_recommended,tiny_clean,0.01510000228881836,0.0,1000,duckdb
-2025-11-29 22:17:52.773582080,daa770e7,duckdb_benchmark_join_recommended,tiny_skew10,0.014879941940307617,0.1,1000,duckdb
-2025-11-29 22:17:42.165553920,daa770e7,duckdb_benchmark_join_recommended,tiny_chaos,0.014345884323120117,0.5,1000,duckdb
-2025-11-29 22:17:32.235127040,daa770e7,duckdb_benchmark_join_recommended,small_clean,0.015892982482910156,0.0,100000,duckdb
-2025-11-29 22:17:40.991482880,daa770e7,duckdb_benchmark_join_recommended,small_skew10,0.017213821411132812,0.1,100000,duckdb
-2025-11-29 22:17:31.000463104,daa770e7,duckdb_benchmark_join_recommended,small_chaos,0.016849279403686523,0.5,100000,duckdb

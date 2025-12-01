@@ -10,7 +10,7 @@ from .assets import (
 )
 
 # 2. IMPORT RESOURCES
-from .resources.database import DuckDBResource
+from .resources.duckdb import DuckDBResource
 from .resources.postgres import PostgresResource
 
 # 3. CONFIGURATION (Single Source of Truth)

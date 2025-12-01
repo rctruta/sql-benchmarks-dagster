@@ -1,70 +1,99 @@
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
+import plotly.express as px
 import os
-from dagster import asset, AssetExecutionContext
-from .duckdb_factory import benchmark_assets as duck_bench
-from .postgres_factory import postgres_bench_assets as pg_bench
+import yaml
+from dagster import asset, AssetExecutionContext, MetadataValue, MaterializeResult
 
-# Combine dependencies
-all_benchmark_assets = [k.key for k in duck_bench + pg_bench]
+# FIX: Import from the new Universal Factory
+from .benchmark_factory import benchmark_assets
+
+# Combine dependencies (It's just one list now!)
+all_benchmark_assets = [k.key for k in benchmark_assets]
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-REPORT_PATH = os.path.join(PROJECT_ROOT, "data", "benchmark_report.png")
+RESULTS_ROOT = os.path.join(PROJECT_ROOT, "sql_benchmarks", "results")
 
 @asset(
     deps=all_benchmark_assets,
     group_name="reporting",
-    description="Generates a performance comparison chart."
+    description="Generates an interactive Plotly dashboard for the active experiment."
 )
-def performance_chart(context: AssetExecutionContext):
+def performance_dashboard(context: AssetExecutionContext):
     instance = context.instance
     records = []
     
+    # 1. READ ACTIVE CONFIG
+    config_path = os.path.join(PROJECT_ROOT, "sql_benchmarks", "experiments", "active.yaml")
+    
+    # Robust Config Reading
+    try:
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+        exp_id = config.get("meta", {}).get("experiment_id", "unknown_id")
+    except Exception:
+        context.log.warning("Could not read active.yaml")
+        return
+
+    # 2. GATHER DATA
     for key in all_benchmark_assets:
         event = instance.get_latest_materialization_event(key)
         if not event: continue
+        
         meta = event.dagster_event.step_materialization_data.materialization.metadata
         
-        if "duration_seconds" in meta and "trace_orphans" in meta:
+        # Filter by Experiment ID
+        run_id = meta.get("experiment_id")
+        # Handle wrapped value or raw string
+        run_id_val = run_id.value if hasattr(run_id, 'value') else run_id
+        
+        if run_id_val != exp_id:
+            continue
+        
+        if "duration_seconds" in meta:
             records.append({
-                "asset": key.path[-1],
-                "duration": meta["duration_seconds"].value,
-                "orphans": meta["trace_orphans"].value,
-                "engine": meta.get("config_engine", {}).value if "config_engine" in meta else "unknown",
+                "Asset": key.path[-1],
+                "Duration (s)": meta["duration_seconds"].value,
+                "Orphans": meta.get("trace_orphans", {}).value if "trace_orphans" in meta else 0,
+                "Rows": meta.get("trace_rows", {}).value if "trace_rows" in meta else 0,
+                "Engine": meta.get("config_engine", {}).value if "config_engine" in meta else "Unknown",
                 "Strategy": "Antipattern" if "antipattern" in key.path[-1] else "Recommended"
             })
 
     if not records:
+        context.log.info(f"No data found for Experiment {exp_id}.")
         return
 
     df = pd.DataFrame(records)
-
-    # VISUAL UPGRADE
-    sns.set_theme(style="whitegrid", context="talk") # "talk" makes fonts larger/clearer
-    plt.figure(figsize=(12, 8))
     
-    # Create Bar Chart
-    chart = sns.barplot(
-        data=df,
-        x="orphans",
-        y="duration",
-        hue="Strategy",
-        palette={"Antipattern": "#e74c3c", "Recommended": "#2ecc71"}, # Red/Green logic
-        edgecolor=".2" # Add borders to bars
+    # 3. PLOTLY CHART
+    fig = px.bar(
+        df, 
+        x="Strategy", 
+        y="Duration (s)", 
+        color="Engine", 
+        barmode="group",
+        facet_col="Rows", 
+        title=f"Benchmark Results: {exp_id}",
+        text_auto='.3s',
+        hover_data=["Orphans", "Asset"]
     )
-    
-    # Add Values on top of bars (The "Professional" Touch)
-    for container in chart.containers:
-        chart.bar_label(container, fmt='%.2fs', padding=3, fontsize=10)
+    fig.update_layout(margin=dict(t=50, b=0, l=0, r=0))
 
-    plt.title("Impact of Orphan Records on Query Latency", fontsize=20, pad=20)
-    plt.xlabel("Orphan Percentage", fontsize=14)
-    plt.ylabel("Execution Time (Seconds)", fontsize=14)
-    plt.legend(title="SQL Strategy", bbox_to_anchor=(1.05, 1), loc='upper left')
+    # 4. SAVE
+    exp_folder = os.path.join(RESULTS_ROOT, exp_id)
+    os.makedirs(exp_folder, exist_ok=True)
     
-    plt.tight_layout()
-    plt.savefig(REPORT_PATH, dpi=300) # High Res
+    html_path = os.path.join(exp_folder, f"dashboard_{exp_id}.html")
+    csv_path = os.path.join(exp_folder, f"data_{exp_id}.csv")
     
-    context.log.info(f"Report saved to {REPORT_PATH}")
-    return REPORT_PATH
+    fig.write_html(html_path)
+    df.to_csv(csv_path, index=False)
+    
+    context.log.info(f"Dashboard saved to: {html_path}")
+    
+    return MaterializeResult(
+        metadata={
+            "dashboard_path": MetadataValue.path(html_path),
+            "csv_path": MetadataValue.path(csv_path)
+        }
+    )
