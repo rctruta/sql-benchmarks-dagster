@@ -1,32 +1,39 @@
-# Python & Environment
+# --- Python & Environment ---
 __pycache__/
 *.py[cod]
 *$py.class
-.env
-.DS_Store
 venv/
 .venv/
+.env
+.DS_Store
+
+# --- Dagster Internals ---
+.dagster/
+tmp_dagster*/
+.tmp_dagster_home*/
+*.err
+*.out
+*.complete
 
 # Distribution
 *.egg-info/
 build/
 dist/
 
-# Dagster
-.dagster/
-tmp_dagster*/
-
-# Large Data & Artifacts (Crucial)
+# --- Heavy Data (The Blockers) ---
 data/
 *.duckdb
 *.parquet
 *.wal
 *.db
 
-# Temporary Debug Scripts
-debug*.py
-dump_data.py
+# --- Generated Results & Artifacts ---
+# Block the results folders so we don't push 100MB CSVs
+sql_benchmarks/results/
+sql_benchmarks/experiments/results/
+*.csv
+*.html
 
-# Catch all temporary dagster homes
-.tmp_dagster_home*/
-.*dagster_home*/
+# --- Temporary Scripts ---
+debug_*.py
+dump_data.py
