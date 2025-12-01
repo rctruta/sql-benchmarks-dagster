@@ -4,7 +4,7 @@ import os
 from dagster import MaterializeResult, MetadataValue
 
 # This function is the CONTRACT. The factory calls this.
-def generate(context, params, table_name, output_dir):
+def generate(context, params, table_name, output_dir, dataset_config=None):
     
     # Dispatcher: Decide which logic to run based on table name
     if table_name == "customers":

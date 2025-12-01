@@ -2,37 +2,40 @@ import os
 import glob
 import time
 import jinja2
-import yaml
 from dagster import asset, AssetExecutionContext, MaterializeResult, MetadataValue
 from ..partitions import partitions_def, SCENARIO_CONFIG
 from ..constants import SQL_DIR
 from ..utils.common import load_active_config, get_tables_used_in_sql
 
-# 1. LOAD CONFIG & REPLICATION FACTOR
+# 1. LOAD CONFIG
 try:
-    CONFIG, ACTIVE_ENGINES, TARGET_TABLES, EXPERIMENT_META = load_active_config()
-    VALID_TABLES_SET = set(TARGET_TABLES)
+    CTX = load_active_config()
+    ACTIVE_ENGINES = CTX['engines']
+    EXPERIMENT_META = CTX['meta']
+    VALID_TABLES_SET = set(CTX['table_names'])
     
-    # NEW: Read replication factor (default to 1)
-    REPLICATION_FACTOR = CONFIG.get("execution", {}).get("replication", 1)
-    
+    # Get Replication (Default 1)
+    REPLICATION_FACTOR = CTX['full_config'].get("execution", {}).get("replication", 1)
+
 except Exception as e:
-    print(f"⚠️ Factory Init Error: {e}")
+    print(f"⚠️ Benchmark Factory Init Error: {e}")
     ACTIVE_ENGINES = []
     VALID_TABLES_SET = set()
     EXPERIMENT_META = {}
     REPLICATION_FACTOR = 1
 
-def make_benchmark_asset(name, sql_path, engine_name, replica_id=0, dependent_asset_name=None):
+def make_benchmark_asset(name, sql_path, engine_name, replica_id=0):
+    # NO 'dependent_asset_name' ARGUMENT NEEDED
     
+    # 2. PARSE SQL
     used_tables, raw_template = get_tables_used_in_sql(sql_path, VALID_TABLES_SET)
+
     prefix = "pg_" if engine_name == "postgres" else f"{engine_name}_"
     
+    # 3. BUILD DEPENDENCIES
     deps = [f"{prefix}{t}_table" for t in used_tables]
-    if dependent_asset_name:
-        deps.append(dependent_asset_name)
 
-    # UNIQUE NAME: Append replica suffix if needed
+    # Unique Name for Replicas
     suffix = f"_rep{replica_id}" if REPLICATION_FACTOR > 1 else ""
     asset_name = f"{prefix}benchmark_{name}{suffix}"
 
@@ -58,7 +61,7 @@ def make_benchmark_asset(name, sql_path, engine_name, replica_id=0, dependent_as
         params = SCENARIO_CONFIG[partition_key]
         
         render_context = {}
-        for table in VALID_TABLES_SET:
+        for table in used_tables:
             render_context[f"{table}_table"] = f"{table}_{partition_key}"
 
         template = jinja2.Template(raw_template)
@@ -66,7 +69,7 @@ def make_benchmark_asset(name, sql_path, engine_name, replica_id=0, dependent_as
         
         start_time = time.time()
         
-        # Execute (Postgres ignores key, DuckDB uses it)
+        # Execute (Both support partition_key argument)
         db_resource.benchmark_query(final_query, partition_key=partition_key)
             
         duration = time.time() - start_time
@@ -77,7 +80,8 @@ def make_benchmark_asset(name, sql_path, engine_name, replica_id=0, dependent_as
                 "experiment_id": EXPERIMENT_META.get("experiment_id", "unknown"),
                 "replica_id": MetadataValue.int(replica_id),
                 "trace_orphans": MetadataValue.float(params.get('orphan_rate', 0)),
-                "config_engine": engine_name
+                "config_engine": engine_name,
+                "sql_preview": MetadataValue.md(f"```sql\n{final_query}\n```")
             }
         )
     
@@ -96,17 +100,8 @@ for engine in ACTIVE_ENGINES:
     for sql_file in sql_files:
         base_name = os.path.basename(sql_file).replace(".sql", "")
         
-        # Reset daisy chain for this SQL file
-        previous_benchmark = None
-        
-        # --- REPLICATION LOOP ---
+        # Replication Loop
         for i in range(1, REPLICATION_FACTOR + 1):
-            
-            # Daisy Chain Logic (DuckDB Only)
-            dep_name = previous_benchmark if engine == "duckdb" else None
-            
-            new_asset = make_benchmark_asset(base_name, sql_file, engine, replica_id=i, dependent_asset_name=dep_name)
+            # NO DAISY CHAIN PASSED HERE
+            new_asset = make_benchmark_asset(base_name, sql_file, engine, replica_id=i)
             benchmark_assets.append(new_asset)
-            
-            # Update pointer for next replica
-            previous_benchmark = new_asset.key.path[-1]

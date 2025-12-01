@@ -1,4 +1,5 @@
-import pandas as pd
+import polars as pl
+# import pandas as pd
 import plotly.express as px
 import os
 import yaml
@@ -63,11 +64,12 @@ def performance_dashboard(context: AssetExecutionContext):
         context.log.info(f"No data found for Experiment {exp_id}.")
         return
 
-    df = pd.DataFrame(records)
-    
+    df = pl.DataFrame(records)
+    pldf = df.to_pandas()
+
     # 3. PLOTLY CHART
     fig = px.bar(
-        df, 
+        pldf, 
         x="Strategy", 
         y="Duration (s)", 
         color="Engine", 

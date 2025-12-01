@@ -1,0 +1,53 @@
+meta:
+  experiment_id: "schema_v1"
+
+definitions:
+  rows:
+    small: 100_000
+    medium: 1_000_000
+  constants:
+    # Any global constants you want to reference
+    ratio: 10 
+  orphan_rate_labels: 
+    0.00: "clean"
+    0.10: "skew10"
+
+dimensions:
+  size: [small]
+  orphan_rate: [0.10] # This value is passed to the plugin
+
+engines:
+  - duckdb
+
+dataset:
+  # USE THE NEW GENERIC PLUGIN
+  source: "sql_benchmarks.plugins.data_sources.synthetic_generic"
+  
+  # DEFINE THE SCHEMA (dbt style)
+  tables:
+    # Table 1: Simple generation
+    users:
+      rows: "1.0 * rows" # 100% of partition size
+      columns:
+        - name: user_id
+          provider: sequence # 1, 2, 3...
+        - name: country
+          provider: choice
+          options: ["US", "CA", "DE", "FR"]
+    
+    # Table 2: Complex relationships
+    transactions:
+      rows: "1.0 * rows" 
+      columns:
+        - name: tx_id
+          provider: sequence
+        - name: amount
+          provider: uniform
+          min: 10
+          max: 1000
+        - name: user_id
+          provider: foreign_key
+          target_table: users
+          target_column: user_id
+          # We use the global 'orphan_rate' parameter here!
+          apply_orphan_rate: true

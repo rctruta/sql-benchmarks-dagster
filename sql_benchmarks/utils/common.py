@@ -6,8 +6,8 @@ from sql_benchmarks.constants import ACTIVE_CONFIG_PATH
 
 def load_active_config():
     """
-    Loads and validates the active experiment configuration.
-    Returns: (full_config, engines, tables_list, meta)
+    Centralized config loader.
+    Returns a dict with: 'engines', 'tables', 'dataset_config', 'meta', 'full_config'
     """
     if not os.path.exists(ACTIVE_CONFIG_PATH):
         raise FileNotFoundError(f"CRITICAL: Active config not found at {ACTIVE_CONFIG_PATH}")
@@ -15,21 +15,42 @@ def load_active_config():
     with open(ACTIVE_CONFIG_PATH, "r") as f:
         config = yaml.safe_load(f)
 
+    # 1. Validate Engines
     if "engines" not in config:
-        raise ValueError(f"CRITICAL: '{ACTIVE_CONFIG_PATH}' is missing 'engines' list.")
+        raise ValueError(f"CRITICAL: 'engines' list missing in active.yaml")
     
-    if 'dataset' not in config or 'tables' not in config['dataset']:
-        raise ValueError(f"CRITICAL: '{ACTIVE_CONFIG_PATH}' is missing 'dataset.tables' list.")
+    # 2. Validate Dataset
+    if 'dataset' not in config:
+        raise ValueError(f"CRITICAL: 'dataset' block missing in active.yaml")
+        
+    dataset_conf = config['dataset']
+    if 'tables' not in dataset_conf:
+        raise ValueError(f"CRITICAL: 'dataset.tables' missing in active.yaml")
+    
+    # 3. Parse Tables (Support List or Dict format)
+    raw_tables = dataset_conf['tables']
+    if isinstance(raw_tables, list):
+        # Normalize to dict: ["a", "b"] -> {"a": {}, "b": {}}
+        tables_dict = {t: {} for t in raw_tables}
+    elif isinstance(raw_tables, dict):
+        tables_dict = raw_tables
+    else:
+        raise ValueError("'dataset.tables' must be a list or dictionary.")
 
-    return (
-        config, # <--- NEW: Return the full dict
-        config["engines"], 
-        config['dataset']['tables'],
-        config.get("meta", {"experiment_id": "default"})
-    )
+    # 4. Return Structured Context
+    return {
+        "full_config": config,
+        "engines": config["engines"],
+        "tables": tables_dict,          # Dictionary of table configs
+        "table_names": list(tables_dict.keys()), # List of names
+        "dataset_config": dataset_conf,
+        "meta": config.get("meta", {"experiment_id": "default"})
+    }
 
 def get_tables_used_in_sql(sql_path, valid_tables_set):
-    # (No changes here, keep existing logic)
+    """
+    Parses Jinja to find dependencies.
+    """
     with open(sql_path, "r") as f:
         raw_template = f.read()
 

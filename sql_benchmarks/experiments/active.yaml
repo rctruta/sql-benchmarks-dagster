@@ -1,25 +1,47 @@
 meta:
-  experiment_id: 6938cad7
-  description: Testing scheduler limits with 50x replication
-execution:
-  replication: 50
-dataset:
-  source: sql_benchmarks.plugins.data_sources.synthetic_ecommerce
-  tables:
-  - customers
-  - orders
+  experiment_id: 90df7577
 definitions:
-  constants:
-    orders_per_customer: 5
   rows:
-    tiny: 1000
-  orphan_labels:
+    small: 100000
+    medium: 1000000
+  constants:
+    ratio: 10
+  orphan_rate_labels:
     0.0: clean
+    0.1: skew10
 dimensions:
   size:
-  - tiny
+  - small
   orphan_rate:
-  - 0.0
+  - 0.1
 engines:
 - duckdb
-- postgres
+dataset:
+  source: sql_benchmarks.plugins.data_sources.synthetic_generic
+  tables:
+    users:
+      rows: 1.0 * rows
+      columns:
+      - name: user_id
+        provider: sequence
+      - name: country
+        provider: choice
+        options:
+        - US
+        - CA
+        - DE
+        - FR
+    transactions:
+      rows: 1.0 * rows
+      columns:
+      - name: tx_id
+        provider: sequence
+      - name: amount
+        provider: uniform
+        min: 10
+        max: 1000
+      - name: user_id
+        provider: foreign_key
+        target_table: users
+        target_column: user_id
+        apply_orphan_rate: true

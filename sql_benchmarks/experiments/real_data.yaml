@@ -1,0 +1,30 @@
+meta:
+  experiment_id: "real_data_v1"
+
+dataset:
+  # 1. Point to the new plugin
+  source: "sql_benchmarks.plugins.data_sources.local_file_loader"
+  tables:
+    - customers
+    - orders
+  
+  # 2. Define the paths (Absolute paths are safest)
+  paths:
+    customers: "/Users/ramona/Downloads/my_real_customers.csv"
+    orders: "/Users/ramona/Downloads/my_real_orders.csv"
+
+# Definitions still needed for Partition Keys (even if ignored by loader)
+definitions:
+  rows:
+    real: 0 # Placeholder
+  constants:
+    orders_per_customer: 0
+  orphan_labels:
+    0.00: "production"
+
+dimensions:
+  size: [real]
+  orphan_rate: [0.00]
+
+engines:
+  - duckdb
