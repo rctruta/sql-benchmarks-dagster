@@ -111,8 +111,9 @@ def extract_and_snapshot():
         
         # Create dedicated folder for this ID
         result_dir = os.path.join(RESULTS_DIR, target_id)
-        os.makedirs(result_dir, exist_ok=True)
-
+        os.makedirs(result_dir, exist_ok=True) # Creates results/{hash}
+        os.makedirs(CONFIG_ARCHIVE_DIR, exist_ok=True) # Creates configs/
+        
         csv_path = os.path.join(result_dir, f"results_{target_id}.csv")
         yaml_path = os.path.join(result_dir, f"config_{target_id}.yaml")
         

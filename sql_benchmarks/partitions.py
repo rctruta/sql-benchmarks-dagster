@@ -1,11 +1,11 @@
 import itertools
 from dagster import StaticPartitionsDefinition
 # 1. USE SHARED LOADER (No more manual file reading)
-from .utils.common import load_active_config
+from .utils.common import load_context
 
 # Load Context
 try:
-    CTX = load_active_config()
+    CTX = load_context()
     CONFIG = CTX['full_config']
     
     # 2. EXTRACT SECTIONS

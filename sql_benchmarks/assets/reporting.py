@@ -89,7 +89,7 @@ def performance_dashboard(context: AssetExecutionContext):
     csv_path = os.path.join(exp_folder, f"data_{exp_id}.csv")
     
     fig.write_html(html_path)
-    df.to_csv(csv_path, index=False)
+    pldf.to_csv(csv_path, index=False)
     
     context.log.info(f"Dashboard saved to: {html_path}")
     

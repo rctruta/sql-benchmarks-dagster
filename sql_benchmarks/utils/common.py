@@ -2,55 +2,56 @@ import os
 import yaml
 import jinja2
 import jinja2.meta
-from sql_benchmarks.constants import ACTIVE_CONFIG_PATH
+from ..constants import ACTIVE_CONFIG_PATH, SQL_DIR
 
-def load_active_config():
+def load_context():
     """
-    Centralized config loader.
-    Returns a dict with: 'engines', 'tables', 'dataset_config', 'meta', 'full_config'
+    Single source of truth for the active experiment.
+    Reads YAML, validates schema, and returns a clean Context object.
     """
+    # 1. Check Existence
     if not os.path.exists(ACTIVE_CONFIG_PATH):
-        raise FileNotFoundError(f"CRITICAL: Active config not found at {ACTIVE_CONFIG_PATH}")
+        raise FileNotFoundError(f"CRITICAL: Config not found at {ACTIVE_CONFIG_PATH}. Run 'python run_experiment.py <file>'")
 
+    # 2. Read File
     with open(ACTIVE_CONFIG_PATH, "r") as f:
-        config = yaml.safe_load(f)
+        config = yaml.safe_load(f) or {}
 
-    # 1. Validate Engines
+    # 3. Validate Schema (Strict Mode)
+    # We crash immediately if keys are missing. No defaults.
     if "engines" not in config:
-        raise ValueError(f"CRITICAL: 'engines' list missing in active.yaml")
+        raise ValueError(f"Invalid Config: Missing 'engines' list.")
     
-    # 2. Validate Dataset
-    if 'dataset' not in config:
-        raise ValueError(f"CRITICAL: 'dataset' block missing in active.yaml")
-        
-    dataset_conf = config['dataset']
-    if 'tables' not in dataset_conf:
-        raise ValueError(f"CRITICAL: 'dataset.tables' missing in active.yaml")
-    
-    # 3. Parse Tables (Support List or Dict format)
-    raw_tables = dataset_conf['tables']
-    if isinstance(raw_tables, list):
-        # Normalize to dict: ["a", "b"] -> {"a": {}, "b": {}}
-        tables_dict = {t: {} for t in raw_tables}
-    elif isinstance(raw_tables, dict):
-        tables_dict = raw_tables
-    else:
-        raise ValueError("'dataset.tables' must be a list or dictionary.")
+    if "dataset" not in config:
+        raise ValueError(f"Invalid Config: Missing 'dataset' block.")
 
-    # 4. Return Structured Context
+    if "tables" not in config["dataset"]:
+        raise ValueError(f"Invalid Config: Missing 'dataset.tables'.")
+
+    # 4. Normalize Tables
+    # Supports both List ['a'] and Dict {'a': {}} formats
+    raw_tables = config['dataset']['tables']
+    if isinstance(raw_tables, list):
+        table_names = raw_tables
+        table_configs = {t: {} for t in raw_tables}
+    elif isinstance(raw_tables, dict):
+        table_names = list(raw_tables.keys())
+        table_configs = raw_tables
+    else:
+        raise ValueError("'dataset.tables' must be a List or Dictionary.")
+
+    # 5. Return The Context Bundle
     return {
         "full_config": config,
-        "engines": config["engines"],
-        "tables": tables_dict,          # Dictionary of table configs
-        "table_names": list(tables_dict.keys()), # List of names
-        "dataset_config": dataset_conf,
-        "meta": config.get("meta", {"experiment_id": "default"})
+        "engines": config["engines"], # List of active engines
+        "dataset_config": config["dataset"],
+        "tables": table_names,        # List of names ["orders", "customers"]
+        "table_defs": table_configs,  # Dict of details {"orders": {deps...}}
+        "meta": config.get("meta", {"experiment_id": "unknown"})
     }
 
 def get_tables_used_in_sql(sql_path, valid_tables_set):
-    """
-    Parses Jinja to find dependencies.
-    """
+    """Parses SQL template to find dependencies."""
     with open(sql_path, "r") as f:
         raw_template = f.read()
 
@@ -59,30 +60,47 @@ def get_tables_used_in_sql(sql_path, valid_tables_set):
         ast = env.parse(raw_template)
         required_vars = jinja2.meta.find_undeclared_variables(ast)
     except Exception as e:
-        print(f"⚠️ Error parsing Jinja in {sql_path}: {e}")
+        print(f"⚠️ Jinja Parse Error {sql_path}: {e}")
         return [], raw_template
 
     used_tables = []
     for var in required_vars:
         if var.endswith("_table"):
-            table_name = var.replace("_table", "")
-            if table_name in valid_tables_set:
-                used_tables.append(table_name)
-    
+            t_name = var.replace("_table", "")
+            if t_name in valid_tables_set:
+                used_tables.append(t_name)
+                
     return used_tables, raw_template
 
-def get_data_dependencies(table_config):
-    """
-    Scans a table configuration (from YAML) to find upstream dependencies.
-    e.g. if column uses 'foreign_key', we depend on the target table.
-    """
+def get_data_dependencies(table_name, table_configs):
+    """Returns upstream dependencies for a specific table based on schema."""
     deps = set()
-    columns = table_config.get('columns', [])
+    t_conf = table_configs.get(table_name, {})
     
+    # Look for foreign keys in columns
+    columns = t_conf.get('columns', [])
     for col in columns:
         if col.get('provider') == 'foreign_key':
             target = col.get('target_table')
             if target:
                 deps.add(target)
-    
+                
+    # Look for explicit deps (if defined in YAML)
+    explicit = t_conf.get('deps', [])
+    for d in explicit:
+        deps.add(d)
+        
     return list(deps)
+
+def get_target_sql_dir(config):
+    """
+    Determines the specific SQL folder to use based on 'test_suite' in config.
+    """
+    suite = config.get("execution", {}).get("test_suite", "")
+    
+    # If suite is defined, look in SQL_DIR/suite/ (e.g. .../sql/joins)
+    if suite:
+        return os.path.join(SQL_DIR, suite)
+    
+    # Otherwise default to SQL_DIR root (backward compatibility)
+    return SQL_DIR

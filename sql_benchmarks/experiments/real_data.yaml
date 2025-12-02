@@ -1,30 +1,34 @@
 meta:
   experiment_id: "real_data_v1"
+  description: "Benchmarking against production CSV dump"
 
 dataset:
-  # 1. Point to the new plugin
+  # SWITCH THE PLUGIN
   source: "sql_benchmarks.plugins.data_sources.local_file_loader"
+  
+  # DEFINE TABLES (Must match your SQL variables)
   tables:
     - customers
     - orders
   
-  # 2. Define the paths (Absolute paths are safest)
+  # DEFINE PATHS (Absolute paths are safest)
   paths:
-    customers: "/Users/ramona/Downloads/my_real_customers.csv"
-    orders: "/Users/ramona/Downloads/my_real_orders.csv"
+    customers: "/Users/ramona/Downloads/production_customers.csv"
+    orders: "/Users/ramona/Downloads/production_orders.csv"
 
-# Definitions still needed for Partition Keys (even if ignored by loader)
+# --- BOILERPLATE (Required for Partition Keys) ---
 definitions:
   rows:
-    real: 0 # Placeholder
+    prod: 0 # Placeholder (ignored by loader)
   constants:
-    orders_per_customer: 0
+    orders_per_customer: 1
   orphan_labels:
     0.00: "production"
 
 dimensions:
-  size: [real]
+  size: [prod]
   orphan_rate: [0.00]
 
 engines:
   - duckdb
+  # - postgres (Optional)

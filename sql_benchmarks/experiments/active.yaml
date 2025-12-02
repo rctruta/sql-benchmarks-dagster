@@ -1,5 +1,5 @@
 meta:
-  experiment_id: 077fcd90
+  experiment_id: b3552893
   description: 'Standard benchmark: Orders & Customers with 10% skew'
 dataset:
   source: sql_benchmarks.plugins.data_sources.synthetic_generic
@@ -29,6 +29,8 @@ dataset:
         target_table: customers
         target_column: customer_id
         apply_orphan_rate: true
+execution:
+  test_suite: joins
 definitions:
   rows:
     tiny: 1000
