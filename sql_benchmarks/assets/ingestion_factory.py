@@ -5,13 +5,11 @@ from ..partitions import partitions_def
 from ..constants import ROOT_DIR
 from ..utils.common import load_active_config
 
-# 1. LOAD CONFIG
 try:
     CTX = load_active_config()
     ACTIVE_ENGINES = CTX['engines']
     TARGET_TABLES = CTX['table_names']
-except Exception as e:
-    print(f"⚠️ Ingestion Factory Init Error: {e}")
+except Exception:
     ACTIVE_ENGINES = []
     TARGET_TABLES = []
 
@@ -25,8 +23,7 @@ def make_ingestion_asset(table_name, engine, dependent_asset_name=None):
 
     current_deps = [f"{table_name}_parquet"]
     
-    # --- RESTORED DAISY CHAIN (WRITE SAFETY) ---
-    # DuckDB writes must be serialized per partition.
+    # --- THE FIX: Restore Daisy Chain ---
     if dependent_asset_name:
         current_deps.append(dependent_asset_name)
 
@@ -49,37 +46,29 @@ def make_ingestion_asset(table_name, engine, dependent_asset_name=None):
         target_table = f"{table_name}_{partition_key}"
 
         if engine == "postgres":
-            # Postgres (Server) handles parallel writes fine
-            conn_str = db_resource.connection_string
+            context.log.info(f"Loading into Postgres...")
             df = pl.read_parquet(file_path)
-            df.write_database(
-                table_name=target_table,
-                connection=conn_str,
-                if_table_exists="replace",
-                engine="connectorx"
-            )
+            df.write_database(target_table, db_resource.connection_string, if_table_exists="replace", engine="sqlalchemy")
             
         elif engine == "duckdb":
-            # DuckDB (File) needs the Daisy Chain we just restored
+            context.log.info(f"Loading into DuckDB...")
             query = f"CREATE OR REPLACE TABLE {target_table} AS SELECT * FROM read_parquet('{file_path}');"
             db_resource.execute_query(query, partition_key=partition_key)
 
     _ingest_asset.__name__ = f"ingest_{engine}_{table_name}"
     return _ingest_asset
 
-# 2. GENERATION LOOP
 ingestion_assets = []
-
 for engine in ACTIVE_ENGINES:
     previous_asset_name = None
-    
     for table in TARGET_TABLES:
-        # Logic: Only DuckDB needs the chain.
+        # Only Chain DuckDB
         dep = previous_asset_name if engine == "duckdb" else None
         
         new_asset = make_ingestion_asset(table, engine, dep)
         ingestion_assets.append(new_asset)
         
-        # Update pointer
+        previous_asset_name = f"{engine}_table" if engine == "duckdb" else f"pg_{table}_table"
+        # Note: We construct the name manually to match the asset name logic
         prefix = "pg_" if engine == "postgres" else f"{engine}_"
         previous_asset_name = f"{prefix}{table}_table"

@@ -70,3 +70,19 @@ def get_tables_used_in_sql(sql_path, valid_tables_set):
                 used_tables.append(table_name)
     
     return used_tables, raw_template
+
+def get_data_dependencies(table_config):
+    """
+    Scans a table configuration (from YAML) to find upstream dependencies.
+    e.g. if column uses 'foreign_key', we depend on the target table.
+    """
+    deps = set()
+    columns = table_config.get('columns', [])
+    
+    for col in columns:
+        if col.get('provider') == 'foreign_key':
+            target = col.get('target_table')
+            if target:
+                deps.add(target)
+    
+    return list(deps)

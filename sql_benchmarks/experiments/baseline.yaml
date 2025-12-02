@@ -1,6 +1,6 @@
 meta:
-  experiment_id: "stress_test_v2"
-  description: "Testing scheduler limits with 50x replication"
+  experiment_id: "baseline_v1"
+  description: "Standard benchmark: Orders & Customers with 10% skew"
 
 # THE CONTRACT: Must match variables in your SQL files
 dataset:
@@ -35,19 +35,16 @@ definitions:
     tiny: 1_000
     small: 100_000
     medium: 1_000_000
-  orphan_labels:
+  orphan_rate_labels:
     0.00: "clean"
     0.10: "skew10"
   constants:
     ratio: 10
 
 dimensions:
-  size: [tiny]
-  orphan_rate: [0.00] # Test Clean vs Dirty
+  size: [small]
+  orphan_rate: [0.00, 0.10] # Test Clean vs Dirty
 
 engines:
   - duckdb
   - postgres
-# NEW SECTION
-execution:
-  replication: 50  # This will generate 50 assets per SQL file!

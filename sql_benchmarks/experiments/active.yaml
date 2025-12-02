@@ -1,47 +1,50 @@
 meta:
-  experiment_id: 90df7577
-definitions:
-  rows:
-    small: 100000
-    medium: 1000000
-  constants:
-    ratio: 10
-  orphan_rate_labels:
-    0.0: clean
-    0.1: skew10
-dimensions:
-  size:
-  - small
-  orphan_rate:
-  - 0.1
-engines:
-- duckdb
+  experiment_id: 077fcd90
+  description: 'Standard benchmark: Orders & Customers with 10% skew'
 dataset:
   source: sql_benchmarks.plugins.data_sources.synthetic_generic
   tables:
-    users:
-      rows: 1.0 * rows
+    customers:
+      rows: rows
       columns:
-      - name: user_id
+      - name: customer_id
         provider: sequence
-      - name: country
+      - name: region
         provider: choice
         options:
         - US
-        - CA
-        - DE
-        - FR
-    transactions:
-      rows: 1.0 * rows
+        - EU
+        - APAC
+    orders:
+      rows: rows
       columns:
-      - name: tx_id
+      - name: order_id
         provider: sequence
       - name: amount
         provider: uniform
         min: 10
-        max: 1000
-      - name: user_id
+        max: 500
+      - name: customer_id
         provider: foreign_key
-        target_table: users
-        target_column: user_id
+        target_table: customers
+        target_column: customer_id
         apply_orphan_rate: true
+definitions:
+  rows:
+    tiny: 1000
+    small: 100000
+    medium: 1000000
+  orphan_rate_labels:
+    0.0: clean
+    0.1: skew10
+  constants:
+    ratio: 10
+dimensions:
+  size:
+  - small
+  orphan_rate:
+  - 0.0
+  - 0.1
+engines:
+- duckdb
+- postgres

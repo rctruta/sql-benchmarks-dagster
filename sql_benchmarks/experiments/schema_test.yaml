@@ -1,5 +1,5 @@
 meta:
-  experiment_id: "schema_v1"
+  experiment_id: "schema_v2"
 
 definitions:
   rows:
@@ -12,12 +12,16 @@ definitions:
     0.00: "clean"
     0.10: "skew10"
 
+execution:
+  replication: 50  # This will generate 50 assets per SQL file!
+
 dimensions:
   size: [small]
   orphan_rate: [0.10] # This value is passed to the plugin
 
 engines:
   - duckdb
+  - postgres
 
 dataset:
   # USE THE NEW GENERIC PLUGIN
