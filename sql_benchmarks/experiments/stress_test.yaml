@@ -30,12 +30,16 @@ dataset:
           target_column: customer_id
           apply_orphan_rate: true # This enables the skew logic
 
+execution:
+  test_suite: "joins"
+  replication: 50
+  
 definitions:
   rows:
     tiny: 1_000
     small: 100_000
     medium: 1_000_000
-  orphan_labels:
+  orphan_rate_labels:
     0.00: "clean"
     0.10: "skew10"
   constants:
@@ -48,6 +52,4 @@ dimensions:
 engines:
   - duckdb
   - postgres
-# NEW SECTION
-execution:
-  replication: 50  # This will generate 50 assets per SQL file!
+

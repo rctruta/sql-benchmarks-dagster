@@ -27,5 +27,6 @@ class DuckDBResource(ConfigurableResource):
         else:
             db_path = self._get_db_path(partition_key)
         
-        with duckdb.connect(db_path) as con:
+        # FIX: Enable read_only=True to allow concurrent benchmarks on the same file
+        with duckdb.connect(db_path, read_only=True) as con:
             con.execute(sql).fetchall()

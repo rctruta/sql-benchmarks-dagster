@@ -1,22 +1,18 @@
-import pandas as pd
+import polars as pl
 import yaml
 import shutil
 import os
 import sys
+from datetime import datetime
 from dagster import DagsterInstance, DagsterEventType, DagsterRunStatus
 
-# Import your system constants
+# STRICT IMPORTS
 from sql_benchmarks.constants import ACTIVE_CONFIG_PATH, CONFIG_ARCHIVE_DIR, RESULTS_DIR
 
 def get_instance():
-    """
-    Connects to Dagster. Automatically defaults to ~/.dagster if env var is missing.
-    """
     if "DAGSTER_HOME" not in os.environ:
-        # Auto-fix the environment variable issue
         default_home = os.path.expanduser("~/.dagster")
         os.environ["DAGSTER_HOME"] = default_home
-        print(f"⚠️  DAGSTER_HOME not set. Defaulting to: {default_home}")
     
     try:
         return DagsterInstance.get()
@@ -43,13 +39,11 @@ def extract_and_snapshot():
     print(f"🎯 Looking for Experiment ID: {target_id}")
 
     records = []
-    found_ids = set() # Track what we actually see
     
     # 3. SCAN HISTORY
     runs = instance.get_runs(limit=50)
     
     for run in runs:
-        # Skip failed runs (unless you want partial data)
         if run.status != DagsterRunStatus.SUCCESS:
             continue
 
@@ -61,78 +55,76 @@ def extract_and_snapshot():
             mat = log.dagster_event.step_materialization_data.materialization
             meta = mat.metadata
             
-            # Check ID
+            # Check Experiment ID
             stored_id_val = meta.get("experiment_id")
-            # Handle Dagster's value wrapping
-            if hasattr(stored_id_val, 'value'):
-                stored_id = stored_id_val.value
-            else:
-                stored_id = stored_id_val
+            stored_id = stored_id_val.value if hasattr(stored_id_val, 'value') else stored_id
 
-            # Track what we found for debugging
-            if stored_id:
-                found_ids.add(stored_id)
-
-            # Strict Match
             if stored_id != target_id:
                 continue
             
-            # Logic: If we are here, we have a match.
-            def get_val(key): 
+            # --- FIX: Corrected Helper Function ---
+            def get_val(key, default=None): 
                 val = meta.get(key)
+                if val is None:
+                    return default
+                # Handle Dagster's MetadataValue wrapper
                 return val.value if hasattr(val, 'value') else val
 
-            # Only verify duration exists
+            # Skip if duration is missing
             if not get_val("duration_seconds"): continue
 
-            row = {
-                "timestamp": pd.to_datetime(log.timestamp, unit='s'),
-                "experiment_id": stored_id,
-                "asset": mat.asset_key.path[-1],
-                "partition": run.tags.get("dagster/partition", "unknown"),
-                "duration_seconds": get_val("duration_seconds"),
-                "orphans": get_val("trace_orphans"),
-                "rows": get_val("trace_rows"),
-                "engine": get_val("config_engine")
-            }
-            # Engine Fallback
+            # Build Row with Safe Defaults
+            # We explicitly cast to ensure Polars schema consistency
+            try:
+                row = {
+                    "timestamp": datetime.fromtimestamp(log.timestamp),
+                    "experiment_id": stored_id,
+                    "asset": mat.asset_key.path[-1],
+                    "partition": run.tags.get("dagster/partition", "unknown"),
+                    "duration_seconds": float(get_val("duration_seconds", 0.0)),
+                    "orphans": float(get_val("trace_orphans", 0.0)),
+                    "rows": int(get_val("trace_rows", 0)),
+                    "engine": str(get_val("config_engine", ""))
+                }
+            except (ValueError, TypeError) as e:
+                print(f"⚠️ Skipping row due to type error: {e}")
+                continue
+            
+            # Fallback for Engine Name
             if not row["engine"]:
                 if "duckdb" in row["asset"]: row["engine"] = "duckdb"
                 elif "pg_" in row["asset"]: row["engine"] = "postgres"
 
             records.append(row)
 
-    # 4. SAVE OR DIAGNOSE
+    # 4. SAVE & ARCHIVE
     if records:
-        df = pd.DataFrame(records)
-        # Deduplicate (keep latest)
-        df = df.sort_values("timestamp").drop_duplicates(subset=["asset", "partition"], keep="last")
-        df = df.sort_values(by=["engine", "rows", "orphans", "asset"])
+        df = pl.DataFrame(records)
         
-        # Create dedicated folder for this ID
+        # Deduplicate
+        df = df.sort("timestamp").unique(subset=["asset", "partition"], keep="last")
+        df = df.sort(["engine", "rows", "orphans", "asset"])
+        
+        # Prepare Folders
         result_dir = os.path.join(RESULTS_DIR, target_id)
-        os.makedirs(result_dir, exist_ok=True) # Creates results/{hash}
-        os.makedirs(CONFIG_ARCHIVE_DIR, exist_ok=True) # Creates configs/
-        
+        os.makedirs(result_dir, exist_ok=True)
+        os.makedirs(CONFIG_ARCHIVE_DIR, exist_ok=True)
+
+        # Paths
         csv_path = os.path.join(result_dir, f"results_{target_id}.csv")
-        yaml_path = os.path.join(result_dir, f"config_{target_id}.yaml")
+        results_config_path = os.path.join(result_dir, f"config_{target_id}.yaml")
+        registry_path = os.path.join(CONFIG_ARCHIVE_DIR, f"config_{target_id}.yaml")
         
-        df.to_csv(csv_path, index=False)
-        shutil.copy(ACTIVE_CONFIG_PATH, yaml_path)
-        
+        # Write
+        df.write_csv(csv_path)
+        shutil.copy(ACTIVE_CONFIG_PATH, results_config_path)
+        shutil.copy(ACTIVE_CONFIG_PATH, registry_path)
+
         print(f"\n✅ SUCCESS!")
-        print(f"   📂 Saved to: {result_dir}")
-        print(f"   📊 Rows captured: {len(df)}")
+        print(f"   📊 Data:     {csv_path}")
+        print(f"   💾 Registry: {registry_path}")
     else:
         print(f"\n❌ FAILURE: No runs matched ID '{target_id}'.")
-        print("🔎 DEBUG: Here are the Experiment IDs actually found in your DB:")
-        if found_ids:
-            for fid in found_ids:
-                print(f"   - {fid}")
-            print("\n👉 Mismatch Detected: Your 'active.yaml' has a different ID than your Database.")
-            print("   Action: Run 'python run_experiment.py ...' to sync them, then 'Reload Definitions' & 'Backfill'.")
-        else:
-            print("   (No experiment IDs found. Did the backfill run successfully?)")
 
 if __name__ == "__main__":
     extract_and_snapshot()

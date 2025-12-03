@@ -6,11 +6,10 @@ import statistics
 from dagster import asset, AssetExecutionContext, MaterializeResult, MetadataValue
 from ..partitions import partitions_def, SCENARIO_CONFIG
 
-# STRICT IMPORTS (Matching your common.py)
+# STRICT IMPORTS
 from ..utils.common import load_context, get_tables_used_in_sql, get_target_sql_dir
 
-# 1. LOAD CONTEXT
-# We use your robust loader. If config is broken, we fail fast.
+# 1. LOAD CONTEXT (Fail Fast)
 CTX = load_context()
 ACTIVE_ENGINES = CTX['engines']
 EXPERIMENT_META = CTX['meta']
@@ -57,6 +56,8 @@ def make_benchmark_asset(name, engine, used_tables, raw_template):
         durations = []
         context.log.info(f"Starting {REPLICATION_FACTOR} iterations for {asset_name}...")
 
+        params = SCENARIO_CONFIG.get(partition_key, {})
+
         for i in range(REPLICATION_FACTOR):
             iteration_start = time.time()
             
@@ -76,7 +77,16 @@ def make_benchmark_asset(name, engine, used_tables, raw_template):
 
         return MaterializeResult(
             metadata={
-                "duration_seconds": MetadataValue.float(avg_duration), # Primary metric
+                # --- CONTEXT ---
+                "experiment_id": EXPERIMENT_META.get("experiment_id"),
+                "config_engine": engine,
+                "suite": TEST_SUITE,
+                # Explicit Casting fixes the "params error"
+                "trace_orphans": MetadataValue.float(float(params.get('orphan_rate', 0.0))),
+                "trace_rows": MetadataValue.int(int(params.get('rows', 0))),
+                
+                # --- METRICS ---
+                "duration_seconds": MetadataValue.float(avg_duration), 
                 "duration_median": MetadataValue.float(median_duration),
                 "duration_stdev": MetadataValue.float(stdev),
                 "iterations": MetadataValue.int(REPLICATION_FACTOR),
@@ -96,7 +106,6 @@ if ACTIVE_ENGINES:
     target_dir = get_target_sql_dir(FULL_CONFIG)
     
     for engine in ACTIVE_ENGINES:
-        # Path: .../scripts/sql/{suite}/{engine}
         engine_path = os.path.join(target_dir, engine)
         
         if not os.path.exists(engine_path):
@@ -110,7 +119,7 @@ if ACTIVE_ENGINES:
             # Parse Dependencies
             used_tables, raw_template = get_tables_used_in_sql(sql_file, VALID_TABLES)
             
-            # Create ONE asset per SQL file
+            # Create ONE asset per SQL file (Internal Loop)
             new_asset = make_benchmark_asset(
                 name=base_name,
                 engine=engine,
