@@ -1,6 +1,6 @@
 meta:
-  experiment_id: e2e79329
-  description: Testing scheduler limits with 50x replication
+  description: 'Group By: Optimization Impact of Constraints & Column Pruning'
+  experiment_id: 0e103813
 dataset:
   source: sql_benchmarks.plugins.data_sources.synthetic_generic
   tables:
@@ -9,17 +9,31 @@ dataset:
       columns:
       - name: customer_id
         provider: sequence
+        primary_key: true
+      - name: customer_name
+        provider: text_concat
+        prefix: 'Customer '
+        source: customer_id
       - name: region
         provider: choice
         options:
         - US
         - EU
         - APAC
+      indexes:
+      - columns:
+        - region
+        name: idx_customers_region
     orders:
       rows: rows
       columns:
       - name: order_id
         provider: sequence
+        primary_key: true
+      - name: order_desc
+        provider: text_concat
+        prefix: 'Order Description '
+        source: order_id
       - name: amount
         provider: uniform
         min: 10
@@ -29,24 +43,23 @@ dataset:
         target_table: customers
         target_column: customer_id
         apply_orphan_rate: true
-execution:
-  test_suite: joins
-  replication: 50
 definitions:
   rows:
-    tiny: 1000
-    small: 100000
     medium: 1000000
+    large: 10000000
+    xlarge: 100000000
   orphan_rate_labels:
     0.0: clean
-    0.1: skew10
-  constants:
-    ratio: 10
 dimensions:
   size:
-  - tiny
+  - medium
+  - large
+  - xlarge
   orphan_rate:
   - 0.0
 engines:
 - duckdb
 - postgres
+execution:
+  test_suite: group_by
+  replication: 3

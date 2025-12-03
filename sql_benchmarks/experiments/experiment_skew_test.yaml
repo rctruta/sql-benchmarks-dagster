@@ -1,0 +1,47 @@
+meta:
+  description: "Impact of 10% Skew on 1M Rows (DuckDB vs Postgres)"
+
+dataset:
+  source: "sql_benchmarks.plugins.data_sources.synthetic_generic"
+  tables:
+    customers:
+      rows: "rows"
+      columns:
+        - name: customer_id
+          provider: sequence
+        - name: region
+          provider: choice
+          options: ["US", "EU", "APAC"]
+    orders:
+      rows: "rows"
+      columns:
+        - name: order_id
+          provider: sequence
+        - name: amount
+          provider: uniform
+          min: 10
+          max: 500
+        - name: customer_id
+          provider: foreign_key
+          target_table: customers
+          target_column: customer_id
+          apply_orphan_rate: true
+
+definitions:
+  rows:
+    medium: 1_000_000  # <--- 1 Million Rows
+  orphan_rate_labels:
+    0.00: "clean"
+    0.10: "skew10"     # <--- 10% Orphans (The Antipattern Killer)
+
+dimensions:
+  size: [medium]
+  orphan_rate: [0.00, 0.10] # Compare Clean vs Skewed
+
+engines:
+  - duckdb
+  - postgres
+
+execution:
+  test_suite: "joins"
+  replication: 5      # 5 runs is enough for statistical significance on large data
