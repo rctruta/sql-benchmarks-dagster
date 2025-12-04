@@ -21,7 +21,6 @@ class PostgresResource(ConfigurableResource):
             conn.commit()
 
     def clear_cache(self):
-        # (Keep existing clear_cache logic...)
         print(f"❄️ Restarting {self.container_name}...")
         subprocess.run(["docker", "restart", self.container_name], check=True)
         retries = 15
@@ -36,57 +35,29 @@ class PostgresResource(ConfigurableResource):
                 retries -= 1
         raise Exception("Postgres failed to restart.")
 
-    def _calculate_work_mem(self, row_count: int) -> str:
-        """
-        Dynamically determines work_mem based on dataset size.
-        Heuristic: We want enough RAM to hash/sort the dataset in memory.
-        """
-        if row_count is None or row_count == 0:
-            return "64MB"  # Safe default
-        
-        # 1. Tiny/Small (< 100k) -> 16MB is plenty
-        if row_count < 100_000:
-            return "16MB"
-        
-        # 2. Medium (100k - 1M) -> 64MB
-        if row_count < 1_000_000:
-            return "64MB"
-            
-        # 3. Large (1M - 10M) -> 256MB
-        if row_count < 10_000_000:
-            return "256MB"
-            
-        # 4. Huge (10M+) -> 1GB (Assuming host has RAM)
-        return "1GB"
-
     def benchmark_query(self, sql: str, partition_key: str = None, expected_rows: int = 0):
-        """
-        Runs the benchmark with adaptive configuration.
-        """
         self.clear_cache()
         
-        # Calculate optimal settings
-        work_mem = self._calculate_work_mem(expected_rows)
-        
+        # Adaptive Tuning
+        work_mem = "64MB"
+        if expected_rows and expected_rows > 1_000_000: work_mem = "256MB"
+        if expected_rows and expected_rows > 10_000_000: work_mem = "1GB"
+
         engine = self.get_engine()
         with engine.connect() as conn:
-            # Apply Adaptive Config
-            print(f"   ⚙️ Tuning Postgres: work_mem={work_mem} (for ~{expected_rows} rows)")
+            print(f"   ⚙️ Tuning Postgres: work_mem={work_mem}")
             conn.execute(text(f"SET work_mem = '{work_mem}';"))
-            
-            # Execute
             _ = conn.execute(text(sql)).fetchall()
 
+    # --- GENERIC BULK LOADER ---
     def bulk_load(self, parquet_path: str, table_name: str):
-        """
-        Streams data from disk -> Postgres COPY.
-        Uses PyArrow for chunking and Polars for CSV formatting.
-        """
         engine = self.get_engine()
         
-        # 1. Create Schema
-        # We scan just to infer schema, very lightweight
         print(f"   🔨 Creating schema for {table_name}...")
+        
+        # 1. Generic Schema Creation
+        # We rely on Polars' standard mapping. It works for 99% of cases.
+        # (We fix the 1% in the data plugin, not here)
         try:
             pl.scan_parquet(parquet_path).limit(0).collect().write_database(
                 table_name=table_name, 
@@ -97,7 +68,7 @@ class PostgresResource(ConfigurableResource):
         except Exception as e:
             raise Exception(f"Schema creation failed: {e}")
 
-        # 2. Stream Data
+        # 2. Stream Data (Standard Copy)
         print(f"   🚀 Streaming from {parquet_path}...")
         t_start = time.time()
         
@@ -106,23 +77,13 @@ class PostgresResource(ConfigurableResource):
         
         try:
             cursor = conn.cursor()
-            
-            # Iterate over batches (Standard Arrow API)
-            # 500k rows is a safe chunk size for memory stability
             for i, batch in enumerate(parquet_file.iter_batches(batch_size=500_000)):
-                
-                # Zero-Copy conversion: Arrow Batch -> Polars DataFrame
                 df_chunk = pl.from_arrow(batch)
-                
-                # Write to CSV Buffer using Polars
                 csv_buffer = io.BytesIO()
                 df_chunk.write_csv(csv_buffer, include_header=False)
                 csv_buffer.seek(0)
                 
-                cursor.copy_expert(
-                    f"COPY {table_name} FROM STDIN WITH (FORMAT CSV)", 
-                    csv_buffer
-                )
+                cursor.copy_expert(f"COPY {table_name} FROM STDIN WITH (FORMAT CSV)", csv_buffer)
                 print(f"      ... loaded chunk {i+1}")
             
             conn.commit()

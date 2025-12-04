@@ -30,15 +30,12 @@ def run_automated(exp_hash):
     print(f"🚀 Launching {exp_hash} (Automated)...")
     start = time.time()
     try:
-        # We use the module target defined in constants.py
-        # --select * ensures all assets in the graph are materialized
         cmd = [
             "dagster", "asset", "materialize", 
             "-m", DAGSTER_MODULE_TARGET, 
             "--select", "*"
         ]
         
-        # Capture output to keep the terminal clean, unless it fails
         subprocess.run(cmd, check=True, capture_output=True)
         print(f"✅ Success ({time.time() - start:.1f}s)")
         return True
@@ -47,9 +44,6 @@ def run_automated(exp_hash):
         print(f"❌ Failed.")
         if e.stderr:
             print(f"🔎 Error: {e.stderr.decode('utf-8')[-500:]}")
-        
-        # In auto mode, we might want to stop on failure or continue
-        # For now, we return False to signal failure but let the loop decide
         return False
 
 def process_queue(target_input, auto_mode=False):
@@ -94,6 +88,12 @@ def process_queue(target_input, auto_mode=False):
         try:
             with open(config_file, 'r') as f:
                 config = yaml.safe_load(f)
+            
+            # --- FIX: Handle Empty or Invalid Files ---
+            if not config or not isinstance(config, dict):
+                print(f"⚠️  Skipping empty or invalid YAML: {filename}")
+                continue
+                
         except Exception as e:
             print(f"❌ Invalid YAML: {e}")
             continue
@@ -113,19 +113,18 @@ def process_queue(target_input, auto_mode=False):
         with open(ACTIVE_CONFIG_PATH, 'w') as f:
             yaml.dump(config, f, sort_keys=False)
 
-        # D. Run (Strategy Selection)
+        # D. Run
         success = False
         if auto_mode:
             success = run_automated(exp_hash)
         else:
             success = run_interactive(exp_hash)
 
-        # E. Archive (Only if successful)
+        # E. Archive
         if success:
             shutil.copy(ACTIVE_CONFIG_PATH, registry_path)
             print(f"💾 Archived {exp_hash} to registry.")
         elif not auto_mode:
-            # If interactive mode returns False (Ctrl+C), we exit entirely
             sys.exit(0)
 
 if __name__ == "__main__":

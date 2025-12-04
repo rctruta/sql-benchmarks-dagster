@@ -4,7 +4,7 @@ import shutil
 import os
 import sys
 from datetime import datetime
-from dagster import DagsterInstance, DagsterEventType, DagsterRunStatus
+from dagster import DagsterInstance, DagsterEventType, DagsterRunStatus, RunsFilter
 
 # STRICT IMPORTS
 from sql_benchmarks.constants import ACTIVE_CONFIG_PATH, CONFIG_ARCHIVE_DIR, RESULTS_DIR
@@ -41,12 +41,14 @@ def extract_and_snapshot():
     records = []
     
     # 3. SCAN HISTORY
-    runs = instance.get_runs(limit=50)
+    runs = instance.get_runs(
+        filters=RunsFilter(statuses=[DagsterRunStatus.SUCCESS]), 
+        limit=100
+    )
+    
+    print(f"🔎 Scanned {len(runs)} successful runs...")
     
     for run in runs:
-        if run.status != DagsterRunStatus.SUCCESS:
-            continue
-
         logs = instance.all_logs(run.run_id)
         for log in logs:
             if not log.is_dagster_event or log.dagster_event.event_type != DagsterEventType.ASSET_MATERIALIZATION:
@@ -57,24 +59,24 @@ def extract_and_snapshot():
             
             # Check Experiment ID
             stored_id_val = meta.get("experiment_id")
-            stored_id = stored_id_val.value if hasattr(stored_id_val, 'value') else stored_id
+            
+            # --- FIX: Use stored_id_val in the else clause ---
+            if hasattr(stored_id_val, 'value'):
+                stored_id = stored_id_val.value
+            else:
+                stored_id = stored_id_val
 
             if stored_id != target_id:
                 continue
             
-            # --- FIX: Corrected Helper Function ---
+            # Helper
             def get_val(key, default=None): 
                 val = meta.get(key)
-                if val is None:
-                    return default
-                # Handle Dagster's MetadataValue wrapper
+                if val is None: return default
                 return val.value if hasattr(val, 'value') else val
 
-            # Skip if duration is missing
             if not get_val("duration_seconds"): continue
 
-            # Build Row with Safe Defaults
-            # We explicitly cast to ensure Polars schema consistency
             try:
                 row = {
                     "timestamp": datetime.fromtimestamp(log.timestamp),
@@ -86,11 +88,10 @@ def extract_and_snapshot():
                     "rows": int(get_val("trace_rows", 0)),
                     "engine": str(get_val("config_engine", ""))
                 }
-            except (ValueError, TypeError) as e:
-                print(f"⚠️ Skipping row due to type error: {e}")
+            except (ValueError, TypeError):
                 continue
-            
-            # Fallback for Engine Name
+
+            # Engine Fallback
             if not row["engine"]:
                 if "duckdb" in row["asset"]: row["engine"] = "duckdb"
                 elif "pg_" in row["asset"]: row["engine"] = "postgres"
@@ -105,24 +106,20 @@ def extract_and_snapshot():
         df = df.sort("timestamp").unique(subset=["asset", "partition"], keep="last")
         df = df.sort(["engine", "rows", "orphans", "asset"])
         
-        # Prepare Folders
+        # Save
         result_dir = os.path.join(RESULTS_DIR, target_id)
         os.makedirs(result_dir, exist_ok=True)
         os.makedirs(CONFIG_ARCHIVE_DIR, exist_ok=True)
 
-        # Paths
         csv_path = os.path.join(result_dir, f"results_{target_id}.csv")
-        results_config_path = os.path.join(result_dir, f"config_{target_id}.yaml")
         registry_path = os.path.join(CONFIG_ARCHIVE_DIR, f"config_{target_id}.yaml")
         
-        # Write
         df.write_csv(csv_path)
-        shutil.copy(ACTIVE_CONFIG_PATH, results_config_path)
         shutil.copy(ACTIVE_CONFIG_PATH, registry_path)
 
         print(f"\n✅ SUCCESS!")
-        print(f"   📊 Data:     {csv_path}")
-        print(f"   💾 Registry: {registry_path}")
+        print(f"   📊 Captured {len(df)} rows")
+        print(f"   📂 Saved to: {csv_path}")
     else:
         print(f"\n❌ FAILURE: No runs matched ID '{target_id}'.")
 
