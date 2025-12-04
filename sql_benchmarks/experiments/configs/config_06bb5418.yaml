@@ -1,6 +1,6 @@
 meta:
   description: 'Group By: Optimization Impact of Constraints & Column Pruning'
-  experiment_id: 7496ae2f
+  experiment_id: 06bb5418
 dataset:
   source: sql_benchmarks.plugins.data_sources.synthetic_generic
   tables:
@@ -51,7 +51,7 @@ definitions:
   rows:
     medium: 1000000
     large: 10000000
-    xlarge: 50000000
+    xlarge: 100000000
   orphan_rate_labels:
     0.0: clean
 dimensions:

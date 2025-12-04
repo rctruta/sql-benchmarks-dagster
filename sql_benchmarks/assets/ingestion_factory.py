@@ -12,7 +12,7 @@ try:
     CTX = load_context()
     ACTIVE_ENGINES = CTX['engines']
     TARGET_TABLES = CTX['tables']
-    TABLE_DEFS = CTX['table_defs'] # <--- We need the full definitions now
+    TABLE_DEFS = CTX['table_defs']
 except Exception:
     ACTIVE_ENGINES = []
     TARGET_TABLES = []
@@ -50,28 +50,30 @@ def make_ingestion_asset(table_name, engine, upstream_asset_key):
 
         # 1. LOAD DATA
         if engine == "postgres":
-            context.log.info(f"Loading {table_name} into Postgres...")
-            df = pl.read_parquet(file_path)
-            # Standard load (creates Heap table)
-            df.write_database(
-                table_name=target_table, 
-                connection=db_resource.connection_string, 
-                if_table_exists="replace", 
-                engine="sqlalchemy"
-            )
+            context.log.info(f"Loading {table_name} into Postgres (Stream Mode)...")
             
-            # 2. APPLY CONSTRAINTS (Postgres Only)
-            _apply_postgres_constraints(context, db_resource, table_name, target_table)
+            # --- THE FIX ---
+            # DO NOT call pl.read_parquet()!
+            # Pass the PATH string to the resource.
+            db_resource.bulk_load(file_path, target_table)
+            
+            # 2. APPLY CONSTRAINTS
+            _apply_postgres_constraints(context, db_resource, table_name, target_table, partition_key)
+
+            # 3. STATISTICS
+            context.log.info(f"Updating statistics for {target_table}...")
+            try:
+                db_resource.execute_query(f"ANALYZE {target_table};")
+            except Exception as e:
+                context.log.warning(f"Stats update warning: {e}")
 
         elif engine == "duckdb":
             context.log.info(f"Loading {table_name} into DuckDB...")
             query = f"CREATE OR REPLACE TABLE {target_table} AS SELECT * FROM read_parquet('{file_path}');"
             db_resource.execute_query(query, partition_key=partition_key)
 
-    def _apply_postgres_constraints(context, db, config_name, physical_name):
-        """
-        Dynamically applies PKs and Indexes defined in the YAML contract.
-        """
+    def _apply_postgres_constraints(context, db, config_name, physical_name, partition_key):
+        """Applies PKs, Indexes, AND Foreign Keys."""
         t_def = TABLE_DEFS.get(config_name, {})
         columns = t_def.get('columns', [])
         
@@ -79,7 +81,6 @@ def make_ingestion_asset(table_name, engine, upstream_asset_key):
         pk_cols = [c['name'] for c in columns if c.get('primary_key') is True]
         if pk_cols:
             pk_str = ", ".join(pk_cols)
-            # We use ALTER TABLE to add the constraint after loading
             sql = f"ALTER TABLE {physical_name} ADD PRIMARY KEY ({pk_str});"
             context.log.info(f"Applying PK: {sql}")
             db.execute_query(sql)
@@ -89,29 +90,45 @@ def make_ingestion_asset(table_name, engine, upstream_asset_key):
         for idx in indexes:
             cols = idx.get('columns', [])
             idx_name = idx.get('name', f"idx_{physical_name}_{'_'.join(cols)}")
-            
             if cols:
                 col_str = ", ".join(cols)
                 sql = f"CREATE INDEX IF NOT EXISTS {idx_name} ON {physical_name} ({col_str});"
                 context.log.info(f"Applying Index: {sql}")
                 db.execute_query(sql)
 
+        # C. Foreign Keys
+        for col in columns:
+            if col.get('provider') == 'foreign_key':
+                col_name = col['name']
+                target_logical = col.get('target_table')
+                target_col = col.get('target_column')
+                
+                # Calculate the physical name of the target table
+                target_physical = f"{target_logical}_{partition_key}"
+                
+                fk_name = f"fk_{physical_name}_{col_name}"
+                
+                sql = (
+                    f"ALTER TABLE {physical_name} "
+                    f"ADD CONSTRAINT {fk_name} "
+                    f"FOREIGN KEY ({col_name}) "
+                    f"REFERENCES {target_physical} ({target_col});"
+                )
+                context.log.info(f"Applying FK: {sql}")
+                try:
+                    db.execute_query(sql)
+                except Exception as e:
+                    context.log.warning(f"Failed to apply FK {fk_name}: {e}")
+
     _ingest_asset.__name__ = f"ingest_{engine}_{table_name}"
     return _ingest_asset
 
-
-# --- MAIN FACTORY LOOP ---
 ingestion_assets = []
-
 if ACTIVE_ENGINES:
     for engine in ACTIVE_ENGINES:
         previous_asset_key = None
-        
         for table in TARGET_TABLES:
-            # DuckDB Daisy Chain
             upstream_key = previous_asset_key if engine == "duckdb" else None
-            
             new_asset = make_ingestion_asset(table, engine, upstream_key)
             ingestion_assets.append(new_asset)
-            
             previous_asset_key = new_asset.key.path[-1]

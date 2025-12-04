@@ -19,3 +19,7 @@ RESULTS_DIR = os.path.join(EXPERIMENTS_DIR, "results")
 # 4. FILES
 ACTIVE_CONFIG_PATH = os.path.join(EXPERIMENTS_DIR, "active.yaml")
 CONFIG_ARCHIVE_DIR = os.path.join(EXPERIMENTS_DIR, "configs") # Also ensure this is here for the runner
+
+# 5. DAGSTER CONFIG
+_package_name = os.path.basename(PACKAGE_DIR) 
+DAGSTER_MODULE_TARGET = f"{_package_name}.definitions"

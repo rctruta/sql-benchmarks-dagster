@@ -5,9 +5,9 @@ SELECT
     c.region,
     SUM(o.amount) AS total_amount
 FROM
-    {{ orders_table }} o
+    {{ customers_table }} c
 INNER JOIN
-    {{ customers_table }} c ON o.customer_id = c.customer_id
+    {{ orders_table }} o ON c.customer_id = o.customer_id
 GROUP BY
     c.customer_id, c.customer_name, c.region;
 

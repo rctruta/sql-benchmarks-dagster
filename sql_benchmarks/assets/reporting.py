@@ -51,24 +51,36 @@ def performance_dashboard(context: AssetExecutionContext):
                 if v is None: return default
                 return v.value if hasattr(v, 'value') else v
 
-            records.append({
-                "Asset": key.path[-1],
-                "Engine": get_val("config_engine", "Unknown"),
-                "Duration (Mean)": get_val("duration_seconds"),
-                "Duration (Median)": get_val("duration_median"),
-                "StDev": get_val("duration_stdev", 0.0),
-                "Iterations": get_val("iterations", 1),
-                "Rows": get_val("trace_rows", 0),
-                "Orphans": get_val("trace_orphans", 0.0),
-                "Strategy": "Antipattern" if "antipattern" in key.path[-1] else "Recommended"
-            })
+        records.append({
+            "Asset": str(key.path[-1]),
+            "Engine": str(get_val("config_engine", "Unknown")),
+            # Force 64-bit precision
+            "Duration (Mean)": float(get_val("duration_seconds", 0.0)),
+            "Duration (Median)": float(get_val("duration_median", 0.0)),
+            "StDev": float(get_val("duration_stdev", 0.0)),
+            "Iterations": int(get_val("iterations", 1)),
+            "Rows": int(get_val("trace_rows", 0)),
+            "Orphans": float(get_val("trace_orphans", 0.0)),
+            "Strategy": "Antipattern" if "antipattern" in key.path[-1] else "Recommended"
+        })
 
     if not records:
         context.log.info(f"No matching records found for Experiment {EXP_ID}.")
         return
 
     # 4. PROCESS DATA
-    df = pl.DataFrame(records)
+    # Force Polars to respect precision
+    df = pl.DataFrame(records, schema={
+        "Asset": pl.Utf8,
+        "Engine": pl.Utf8,
+        "Duration (Mean)": pl.Float64,
+        "Duration (Median)": pl.Float64, 
+        "StDev": pl.Float64,
+        "Iterations": pl.Int64, 
+        "Rows": pl.Int64,
+        "Orphans": pl.Float64,
+        "Strategy": pl.Utf8
+    })
     # Deduplicate
     df = df.unique(subset=["Asset", "Engine", "Rows", "Orphans"], keep="last")
 

@@ -21,6 +21,17 @@ _EXEC = FULL_CONFIG.get("execution", {})
 REPLICATION_FACTOR = _EXEC.get("replication", 1) 
 TEST_SUITE = _EXEC.get("test_suite")
 
+def thrash_os_cache():
+    """
+    Allocates 1GB of random data to pressure OS Page Cache.
+    This helps simulate a 'Cold' read for DuckDB on the host.
+    """
+    try:
+        # Allocate 1GB array
+        _ = bytearray(1024 * 1024 * 1024) 
+    except Exception:
+        pass
+
 def make_benchmark_asset(name, engine, used_tables, raw_template):
     """
     Creates a SINGLE benchmark asset that runs the query N times sequentially.
@@ -52,20 +63,28 @@ def make_benchmark_asset(name, engine, used_tables, raw_template):
         render_ctx = {f"{t}_table": f"{t}_{partition_key}" for t in used_tables}
         final_query = jinja2.Template(raw_template).render(render_ctx)
         
+        # Extract row count for tuning
+        # params comes from SCENARIO_CONFIG[partition_key]
+        params = SCENARIO_CONFIG.get(partition_key, {})
+        current_rows = int(params.get('rows', 0))        
+
         # 2. Internal Sequential Loop (Lock-Safe)
         durations = []
         context.log.info(f"Starting {REPLICATION_FACTOR} iterations for {asset_name}...")
-
-        params = SCENARIO_CONFIG.get(partition_key, {})
 
         for i in range(REPLICATION_FACTOR):
             iteration_start = time.time()
             
             # The resource handles connection/disconnection per query
             if engine == "duckdb":
+                thrash_os_cache()
                 db_resource.benchmark_query(final_query, partition_key=partition_key)
             else:
-                db_resource.benchmark_query(final_query)
+                db_resource.benchmark_query(
+                    final_query, 
+                    partition_key=partition_key, 
+                    expected_rows=current_rows  
+                )
             
             duration = time.time() - iteration_start
             durations.append(duration)
@@ -78,6 +97,7 @@ def make_benchmark_asset(name, engine, used_tables, raw_template):
         return MaterializeResult(
             metadata={
                 # --- CONTEXT ---
+                "executed_sql": MetadataValue.md(f"```sql\n{final_query}\n```"),
                 "experiment_id": EXPERIMENT_META.get("experiment_id"),
                 "config_engine": engine,
                 "suite": TEST_SUITE,
