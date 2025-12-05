@@ -1,0 +1,1 @@
+SELECT count(*) FROM {{ skewed_data_table }} WHERE selectivity_code = 'sel_1';

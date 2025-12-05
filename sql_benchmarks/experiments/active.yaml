@@ -1,56 +1,54 @@
 meta:
-  description: TPC-H Standard Benchmark (Scale Factor 0.1)
-  experiment_id: 158b6072
+  description: 'Optimizer Tipping Point: Index vs Seq Scan (0.1% to 64% Selectivity)'
+  experiment_id: 64cd8dec
 dataset:
-  source: sql_benchmarks.plugins.data_sources.tpc_h
+  source: sql_benchmarks.plugins.data_sources.synthetic_generic
   tables:
-    customer:
+    skewed_data:
+      rows: rows
       columns:
-      - name: c_custkey
+      - name: id
+        provider: sequence
         primary_key: true
-      - name: c_mktsegment
-    orders:
-      columns:
-      - name: o_orderkey
-        primary_key: true
-      - name: o_custkey
-        provider: foreign_key
-        target_table: customer
-        target_column: c_custkey
-      - name: o_orderdate
+      - name: selectivity_code
+        provider: choice
+        options:
+        - sel_0_1
+        - sel_1
+        - sel_5
+        - sel_10
+        - sel_20
+        - filler
+        weights:
+        - 0.001
+        - 0.01
+        - 0.05
+        - 0.1
+        - 0.2
+        - 0.639
+      - name: payload
+        provider: text_concat
+        prefix: PADDING_DATA_TO_FORCE_DISK_READS_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA__
+        source: id
       indexes:
       - columns:
-        - o_orderdate
-        name: idx_orders_date
-      - columns:
-        - o_custkey
-        name: idx_orders_cust
-    lineitem:
-      columns:
-      - name: l_orderkey
-        provider: foreign_key
-        target_table: orders
-        target_column: o_orderkey
-      - name: l_shipdate
-      indexes:
-      - columns:
-        - l_orderkey
-        name: idx_lineitem_order
-      - columns:
-        - l_shipdate
-        name: idx_lineitem_shipdate
+        - selectivity_code
+        name: idx_selectivity
 definitions:
-  scale_factor:
-    small: 0.1
-    medium: 1.0
+  rows:
+    small: 100000
+    medium: 1000000
+    large: 10000000
 dimensions:
-  scale_factor:
+  size:
   - small
-  mode:
-  - standard
+  - medium
+  - large
+  orphan_rate:
+  - 0.0
 engines:
-- duckdb
 - postgres
+- duckdb
 execution:
-  test_suite: tpch
+  test_suite: selectivity
   replication: 3

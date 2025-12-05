@@ -51,7 +51,20 @@ def generate(context, params, table_name, output_dir, dataset_config):
             if min_v is None or max_v is None:
                 raise ValueError(f"Column '{col_name}' (uniform) missing required 'min' or 'max'.")
             data[col_name] = np.random.uniform(min_v, max_v, size=num_rows)
+        
+        elif provider == "choice":
+            if 'options' not in col:
+                raise ValueError(f"Column '{col_name}' (choice) missing required 'options' list.")
             
+            # Feature: Weighted Distribution
+            # Example YAML: weights: [0.95, 0.05]
+            weights = col.get('weights') # None by default (uniform)
+            if weights:
+                # FIX: Normalize weights to avoid "probabilities do not sum to 1" error
+                total = sum(weights)
+                weights = [w / total for w in weights]
+            data[col_name] = np.random.choice(col['options'], size=num_rows, p=weights)            
+        
         elif provider == "foreign_key":
             target_table = col['target_table']
             target_def = dataset_config['tables'].get(target_table)

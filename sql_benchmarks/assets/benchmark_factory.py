@@ -72,6 +72,37 @@ def make_benchmark_asset(name, engine, used_tables, raw_template):
         durations = []
         context.log.info(f"Starting {REPLICATION_FACTOR} iterations for {asset_name}...")
 
+        # 1. CAPTURE EXECUTION PLAN (The X-Ray)
+        # We run EXPLAIN to see what the DB *intends* to do.
+        # This is fast and tells us "Index Scan" vs "Seq Scan".
+        plan_summary = "Not Available"
+        try:
+            if engine == "postgres":
+                # Postgres JSON format is easy to parse, but TEXT is readable
+                explain_sql = f"EXPLAIN {final_query}"
+                # We need a raw connection to run this safely without affecting the benchmark txn
+                # But for simplicity, we just run it via the resource helper if available
+                # Or we skip the helper and use the resource engine directly here:
+                with db_resource.get_engine().connect() as conn:
+                    result = conn.execute(jinja2.Template(explain_sql).render(render_ctx)).fetchall()
+                    # Join lines to make it readable in Dagster UI
+                    plan_summary = "\n".join([row[0] for row in result])
+                    
+            elif engine == "duckdb":
+                explain_sql = f"EXPLAIN {final_query}"
+                # DuckDB execute_query might not return rows easily via the resource
+                # We can do a quick connect here or add explain capability to resource
+                # For now, let's skip DuckDB explain or use a raw connection:
+                import duckdb
+                # Connect read-only to the specific partition file
+                db_path = db_resource._get_db_path(partition_key) 
+                with duckdb.connect(db_path, read_only=True) as con:
+                    result = con.execute(explain_sql).fetchall()
+                    plan_summary = "\n".join([str(r) for r in result])
+
+        except Exception as e:
+            context.log.warning(f"Could not capture execution plan: {e}")
+
         for i in range(REPLICATION_FACTOR):
             iteration_start = time.time()
             
@@ -97,7 +128,6 @@ def make_benchmark_asset(name, engine, used_tables, raw_template):
         return MaterializeResult(
             metadata={
                 # --- CONTEXT ---
-                "executed_sql": MetadataValue.md(f"```sql\n{final_query}\n```"),
                 "experiment_id": EXPERIMENT_META.get("experiment_id"),
                 "config_engine": engine,
                 "suite": TEST_SUITE,
@@ -111,6 +141,9 @@ def make_benchmark_asset(name, engine, used_tables, raw_template):
                 "duration_stdev": MetadataValue.float(stdev),
                 "iterations": MetadataValue.int(REPLICATION_FACTOR),
                 "raw_durations": MetadataValue.json(durations)
+
+                "execution_plan": MetadataValue.md(f"```\n{plan_summary}\n```"),
+                "executed_sql": MetadataValue.md(f"```sql\n{final_query}\n```"),
             }
         )
     
