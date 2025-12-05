@@ -1,19 +1,30 @@
 import os
+import re
 import polars as pl
+import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from dagster import asset, AssetExecutionContext, MetadataValue, MaterializeResult, DagsterEventType, EventRecordsFilter
 
-# STRICT IMPORTS
 from ..constants import RESULTS_DIR
 from ..utils.common import load_context
 from .benchmark_factory import benchmark_assets
 
 all_benchmark_keys = [k.key for k in benchmark_assets]
 
+def parse_selectivity(asset_name):
+    if "filler" in asset_name: return 64.0
+    match = re.search(r"q_(\d+)_?(\d*)", asset_name)
+    if match:
+        whole = match.group(1)
+        decimal = match.group(2)
+        return float(f"{whole}.{decimal}") if decimal else float(whole)
+    return 0.0
+
 @asset(
     deps=all_benchmark_keys,
     group_name="reporting",
-    description="Generates an HTML report comparing Engine performance across ALL partitions."
+    description="Generates a Multi-View Dashboard (Per-Query Scaling + 3D)."
 )
 def performance_dashboard(context: AssetExecutionContext):
     instance = context.instance
@@ -22,107 +33,106 @@ def performance_dashboard(context: AssetExecutionContext):
         CTX = load_context()
         EXP_ID = CTX['meta'].get("experiment_id", "unknown")
     except Exception:
-        context.log.warning("Could not read active context. Skipping report.")
+        context.log.warning("Could not read active context.")
         return
 
     records = []
     
-    # 3. SCAN HISTORY
+    # 1. SCAN HISTORY
     for key in all_benchmark_keys:
         events = instance.get_event_records(
-            EventRecordsFilter(
-                event_type=DagsterEventType.ASSET_MATERIALIZATION,
-                asset_key=key
-            ),
-            limit=20
+            EventRecordsFilter(event_type=DagsterEventType.ASSET_MATERIALIZATION, asset_key=key),
+            limit=50
         )
-        
         for record in events:
             meta = record.event_log_entry.dagster_event.step_materialization_data.materialization.metadata
-            
             stored_id = meta.get("experiment_id")
             stored_id_val = stored_id.value if hasattr(stored_id, 'value') else stored_id
             
-            if stored_id_val != EXP_ID:
-                continue
+            if stored_id_val != EXP_ID: continue
             
-            def get_val(k, default=None):
+            def get_val(k):
                 v = meta.get(k)
-                if v is None: return default
                 return v.value if hasattr(v, 'value') else v
 
-        records.append({
-            "Asset": str(key.path[-1]),
-            "Engine": str(get_val("config_engine", "Unknown")),
-            # Force 64-bit precision
-            "Duration (Mean)": float(get_val("duration_seconds", 0.0)),
-            "Duration (Median)": float(get_val("duration_median", 0.0)),
-            "StDev": float(get_val("duration_stdev", 0.0)),
-            "Iterations": int(get_val("iterations", 1)),
-            "Rows": int(get_val("trace_rows", 0)),
-            "Orphans": float(get_val("trace_orphans", 0.0)),
-            "Strategy": "Antipattern" if "antipattern" in key.path[-1] else "Recommended"
-        })
+            partition_key = record.event_log_entry.dagster_event.partition
+            disk_type = partition_key.split("_")[-1] if partition_key and "_" in partition_key else "default"
+            asset_name = key.path[-1]
+            
+            records.append({
+                "Asset": asset_name,
+                "Selectivity": parse_selectivity(asset_name),
+                "Duration": float(get_val("duration_seconds") or 0.0),
+                "Engine": str(get_val("config_engine") or "Unknown"),
+                "Rows": int(get_val("trace_rows") or 0),
+                "Disk": disk_type,
+                "System": f"{str(get_val('config_engine'))} ({disk_type})" # Composite Key
+            })
 
     if not records:
-        context.log.info(f"No matching records found for Experiment {EXP_ID}.")
+        context.log.info(f"No records for {EXP_ID}")
         return
 
-    # 4. PROCESS DATA
-    # Force Polars to respect precision
-    df = pl.DataFrame(records, schema={
-        "Asset": pl.Utf8,
-        "Engine": pl.Utf8,
-        "Duration (Mean)": pl.Float64,
-        "Duration (Median)": pl.Float64, 
-        "StDev": pl.Float64,
-        "Iterations": pl.Int64, 
-        "Rows": pl.Int64,
-        "Orphans": pl.Float64,
-        "Strategy": pl.Utf8
-    })
-    # Deduplicate
-    df = df.unique(subset=["Asset", "Engine", "Rows", "Orphans"], keep="last")
+    # 2. PREPARE DATA
+    df = pl.DataFrame(records)
+    # Deduplicate and Sort
+    df = df.unique(subset=["Asset", "System", "Rows"], keep="last").sort("Rows")
+    pldf = df.to_pandas()
 
-    # Save CSV
+    figures_html = []
+
+    # --- VIEW 1: PER-QUERY SCALING (The "Small Multiples" Strategy) ---
+    # We create one graph for each Query (Selectivity Level)
+    # This isolates the "Selectivity" variable so lines don't cross confusingly.
+    unique_assets = sorted(pldf["Asset"].unique(), key=lambda x: parse_selectivity(x))
+    
+    for asset_name in unique_assets:
+        subset = pldf[pldf["Asset"] == asset_name]
+        selectivity = subset["Selectivity"].iloc[0]
+        
+        fig = px.line(
+            subset,
+            x="Rows",
+            y="Duration",
+            color="System",
+            markers=True,
+            log_x=True, # Log scale for Rows (100k -> 10M)
+            title=f"Scaling at {selectivity}% Selectivity ({asset_name})",
+            symbol="System"
+        )
+        fig.update_layout(yaxis_title="Duration (s)", height=400)
+        figures_html.append(fig.to_html(full_html=False, include_plotlyjs='cdn'))
+
+    # --- VIEW 2: 3D LANDSCAPE (The "Nerdy" View) ---
+    # Shows the entire performance surface
+    fig_3d = px.scatter_3d(
+        pldf,
+        x="Selectivity",
+        y="Rows",
+        z="Duration",
+        color="System",
+        symbol="System",
+        log_y=True, # Log scale for Rows
+        title="3D Performance Landscape: Rows x Selectivity x Time",
+        height=800
+    )
+    # Draw lines connecting the dots for better 3D visibility
+    for system in pldf["System"].unique():
+        sys_data = pldf[pldf["System"] == system].sort_values(["Rows", "Selectivity"])
+        fig_3d.add_trace(go.Scatter3d(
+            x=sys_data["Selectivity"], y=sys_data["Rows"], z=sys_data["Duration"],
+            mode='lines', name=system, line=dict(width=2), showlegend=False
+        ))
+
+    figures_html.append(fig_3d.to_html(full_html=False, include_plotlyjs=False))
+
+    # 3. REPORT
     exp_folder = os.path.join(RESULTS_DIR, EXP_ID)
     os.makedirs(exp_folder, exist_ok=True)
-    csv_path = os.path.join(exp_folder, f"results_{EXP_ID}.csv")
-    df.write_csv(csv_path)
-
-    # 5. GENERATE CHART (VISUAL FIX)
-    pldf = df.to_pandas()
-    pldf = pldf.sort_values(by=["Engine", "Strategy", "Orphans"])
-
-    fig = px.bar(
-        pldf,
-        x="Strategy",
-        y="Duration (Mean)",
-        error_y="StDev",
-        color="Engine",
-        barmode="group",
-        facet_col="Rows", 
-        facet_row="Orphans",
-        title=f"Benchmark: {EXP_ID} (N={pldf['Iterations'].iloc[0]})",
-        text_auto='.3s',
-        hover_data=["Duration (Median)", "Asset"]
-    )
-    
-    # --- THE FIX: Put numbers inside bars ---
-    fig.update_traces(textposition='inside', textfont_color='white')
-    
-    fig.update_layout(
-        margin=dict(t=60, b=0, l=0, r=0),
-        yaxis_title="Time (s) [Lower is Better]"
-    )
-
     html_path = os.path.join(exp_folder, f"dashboard_{EXP_ID}.html")
-    fig.write_html(html_path)
     
-    return MaterializeResult(
-        metadata={
-            "dashboard_path": MetadataValue.path(html_path),
-            "csv_path": MetadataValue.path(csv_path),
-            "record_count": MetadataValue.int(len(df))
-        }
-    )
+    with open(html_path, "w") as f:
+        f.write(f"<h1>Benchmark: {EXP_ID}</h1><hr>")
+        f.write("<br>".join(figures_html))
+    
+    return MaterializeResult(metadata={"dashboard_path": MetadataValue.path(html_path)})

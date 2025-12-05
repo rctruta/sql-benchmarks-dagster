@@ -62,11 +62,13 @@ def make_benchmark_asset(name, engine, used_tables, raw_template):
         # 1. Render SQL
         render_ctx = {f"{t}_table": f"{t}_{partition_key}" for t in used_tables}
         final_query = jinja2.Template(raw_template).render(render_ctx)
-        
+                
         # Extract row count for tuning
         # params comes from SCENARIO_CONFIG[partition_key]
         params = SCENARIO_CONFIG.get(partition_key, {})
         current_rows = int(params.get('rows', 0))        
+
+        pg_config = params.get("pg_settings", {})
 
         # 2. Internal Sequential Loop (Lock-Safe)
         durations = []
@@ -114,6 +116,7 @@ def make_benchmark_asset(name, engine, used_tables, raw_template):
                 db_resource.benchmark_query(
                     final_query, 
                     partition_key=partition_key, 
+                    db_config=pg_config,
                     expected_rows=current_rows  
                 )
             
@@ -140,7 +143,7 @@ def make_benchmark_asset(name, engine, used_tables, raw_template):
                 "duration_median": MetadataValue.float(median_duration),
                 "duration_stdev": MetadataValue.float(stdev),
                 "iterations": MetadataValue.int(REPLICATION_FACTOR),
-                "raw_durations": MetadataValue.json(durations)
+                "raw_durations": MetadataValue.json(durations),
 
                 "execution_plan": MetadataValue.md(f"```\n{plan_summary}\n```"),
                 "executed_sql": MetadataValue.md(f"```sql\n{final_query}\n```"),

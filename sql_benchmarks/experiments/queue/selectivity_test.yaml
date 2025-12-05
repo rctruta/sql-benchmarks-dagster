@@ -1,7 +1,8 @@
 meta:
-  description: "Optimizer Tipping Point: Index vs Seq Scan (0.1% to 64% Selectivity)"
+  description: "Optimizer Tipping Point: HDD (Seq Scan) vs SSD (Index Scan)"
 
 dataset:
+  # ... (Same synthetic generator) ...
   source: "sql_benchmarks.plugins.data_sources.synthetic_generic"
   tables:
     skewed_data:
@@ -10,43 +11,42 @@ dataset:
         - name: id
           provider: sequence
           primary_key: true
-        
-        # The Selectivity Column (Weighted Buckets)
         - name: selectivity_code
           provider: choice
-          options: 
-            - "sel_0_1"  # 0.1%
-            - "sel_1"    # 1%
-            - "sel_5"    # 5%
-            - "sel_10"   # 10%
-            - "sel_20"   # 20%
-            - "filler"   # 63.9% (The Rest)
+          options: ["sel_0_1", "sel_1", "sel_5", "sel_10", "sel_20", "filler"]
           weights: [0.001, 0.01, 0.05, 0.10, 0.20, 0.639]
-          
-        # Payload: 100 chars of padding to punish Disk I/O during Scans
         - name: payload
           provider: text_concat
-          prefix: "PADDING_DATA_TO_FORCE_DISK_READS_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA__"
+          prefix: "PADDING_DATA_TO_FORCE_DISK_READS_AAAAAAAAAAAAAAAAAAAA_"
           source: id
-      
       indexes:
-        # The Index we want Postgres to choose (or ignore)
         - columns: ["selectivity_code"]
           name: "idx_selectivity"
 
 definitions:
   rows:
-    small: 100_000       # Does Index hurt here?
-    medium: 1_000_000    # The transition zone?
-    large: 10_000_000    # The Index should win here on low %
+    small: 100_000
+    medium: 1_000_000
+    large: 10_000_000
+  
+  # DEFINING THE HARDWARE SIMULATION
+  pg_settings:
+    hdd:
+      random_page_cost: 4.0  # Default: Expensive Seeking (Prefers Seq Scan)
+      work_mem: "64MB"
+    ssd:
+      random_page_cost: 1.1  # Tuning: Cheap Seeking (Prefers Index Scan)
+      work_mem: "256MB"      # Let's give SSD mode more RAM too
 
 dimensions:
   size: [small, medium, large]
-  orphan_rate: [0.00] 
+  # Compare Default (HDD) vs Tuned (SSD) behavior
+  disk_type: [hdd, ssd] 
 
 engines:
   - postgres
-  - duckdb
+  # DuckDB doesn't use these PG settings, but we keep it for baseline
+  - duckdb 
 
 execution:
   test_suite: "selectivity"

@@ -35,18 +35,40 @@ class PostgresResource(ConfigurableResource):
                 retries -= 1
         raise Exception("Postgres failed to restart.")
 
-    def benchmark_query(self, sql: str, partition_key: str = None, expected_rows: int = 0):
+    def _calculate_default_work_mem(self, row_count: int) -> str:
+        """Heuristic: More rows = More RAM needed to avoid disk spill."""
+        if not row_count: return "64MB"
+        if row_count < 1_000_000: return "64MB"
+        if row_count < 10_000_000: return "256MB"
+        return "1GB"
+
+    def benchmark_query(self, sql: str, partition_key: str = None, db_config: dict = None, expected_rows: int = 0):
         self.clear_cache()
         
-        # Adaptive Tuning
-        work_mem = "64MB"
-        if expected_rows and expected_rows > 1_000_000: work_mem = "256MB"
-        if expected_rows and expected_rows > 10_000_000: work_mem = "1GB"
+        # 1. Start with Smart Defaults
+        config = {
+            "work_mem": self._calculate_default_work_mem(expected_rows),
+            "random_page_cost": "4.0" # Default Postgres (HDD assumption)
+        }
+        
+        # 2. Apply Explicit Overrides from YAML (The "Contract")
+        if db_config:
+            config.update(db_config)
 
         engine = self.get_engine()
         with engine.connect() as conn:
-            print(f"   ⚙️ Tuning Postgres: work_mem={work_mem}")
-            conn.execute(text(f"SET work_mem = '{work_mem}';"))
+            
+            # 3. Apply Settings
+            settings_log = []
+            for key, value in config.items():
+                # Basic injection check
+                if key.replace("_", "").isalnum(): 
+                    conn.execute(text(f"SET {key} = '{value}';"))
+                    settings_log.append(f"{key}={value}")
+            
+            print(f"   ⚙️ Tuning Postgres: {', '.join(settings_log)}")
+            
+            # 4. Execute
             _ = conn.execute(text(sql)).fetchall()
 
     # --- GENERIC BULK LOADER ---

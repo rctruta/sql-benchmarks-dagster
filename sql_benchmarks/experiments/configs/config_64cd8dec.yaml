@@ -1,6 +1,6 @@
 meta:
-  description: 'Optimizer Tipping Point: HDD (Seq Scan) vs SSD (Index Scan)'
-  experiment_id: 7b8da69a
+  description: 'Optimizer Tipping Point: Index vs Seq Scan (0.1% to 64% Selectivity)'
+  experiment_id: 64cd8dec
 dataset:
   source: sql_benchmarks.plugins.data_sources.synthetic_generic
   tables:
@@ -28,7 +28,7 @@ dataset:
         - 0.639
       - name: payload
         provider: text_concat
-        prefix: PADDING_DATA_TO_FORCE_DISK_READS_AAAAAAAAAAAAAAAAAAAA_
+        prefix: PADDING_DATA_TO_FORCE_DISK_READS_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA__
         source: id
       indexes:
       - columns:
@@ -39,21 +39,13 @@ definitions:
     small: 100000
     medium: 1000000
     large: 10000000
-  pg_settings:
-    hdd:
-      random_page_cost: 4.0
-      work_mem: 64MB
-    ssd:
-      random_page_cost: 1.1
-      work_mem: 256MB
 dimensions:
   size:
   - small
   - medium
   - large
-  disk_type:
-  - hdd
-  - ssd
+  orphan_rate:
+  - 0.0
 engines:
 - postgres
 - duckdb
