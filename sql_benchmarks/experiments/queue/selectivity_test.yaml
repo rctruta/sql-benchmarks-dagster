@@ -28,6 +28,7 @@ definitions:
     small: 100_000
     medium: 1_000_000
     large: 10_000_000
+    xlarge: 100_000_000
   
   # DEFINING THE HARDWARE SIMULATION
   pg_settings:
@@ -39,7 +40,7 @@ definitions:
       work_mem: "256MB"      # Let's give SSD mode more RAM too
 
 dimensions:
-  size: [small, medium, large]
+  size: [small, medium, large, xlarge]
   # Compare Default (HDD) vs Tuned (SSD) behavior
   disk_type: [hdd, ssd] 
 

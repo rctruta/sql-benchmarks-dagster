@@ -117,13 +117,14 @@ def performance_dashboard(context: AssetExecutionContext):
         height=800
     )
     # Draw lines connecting the dots for better 3D visibility
+    """
     for system in pldf["System"].unique():
         sys_data = pldf[pldf["System"] == system].sort_values(["Rows", "Selectivity"])
         fig_3d.add_trace(go.Scatter3d(
             x=sys_data["Selectivity"], y=sys_data["Rows"], z=sys_data["Duration"],
             mode='lines', name=system, line=dict(width=2), showlegend=False
         ))
-
+    """
     figures_html.append(fig_3d.to_html(full_html=False, include_plotlyjs=False))
 
     # 3. REPORT
