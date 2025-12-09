@@ -1,6 +1,5 @@
 from dagster import Definitions, load_assets_from_modules
 
-# 1. IMPORT ARCHITECTURE (The V5 Factories)
 from .assets import (
     data_factory,       # Generates Parquet (Data Gen)
     ingestion_factory,  # Loads Tables (DuckDB + Postgres)
@@ -8,15 +7,16 @@ from .assets import (
     reporting           # The Dashboard
 )
 
-# 2. IMPORT RESOURCES
 from .resources.duckdb import DuckDBResource
 from .resources.postgres import PostgresResource
 
-# 3. IMPORT CONSTANTS (No more path math here)
 from .constants import DATA_DIR
 
+from .jobs import benchmark_job
+from .sensors import experiment_queue_sensor
+
 # 4. CONFIGURATION
-# We point DuckDB to the folder (Shared Nothing Architecture)
+# DuckDB folder (Shared Nothing Architecture)
 duckdb_data_folder = DATA_DIR
 
 # We define Postgres connection (Standard Docker defaults)
@@ -40,4 +40,6 @@ defs = Definitions(
         "duckdb": DuckDBResource(data_folder=duckdb_data_folder),
         "postgres": PostgresResource(connection_string=postgres_url)
     },
+    jobs=[benchmark_job],
+    sensors=[experiment_queue_sensor]
 )

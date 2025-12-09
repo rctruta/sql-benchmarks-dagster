@@ -3,11 +3,9 @@ import os
 from dagster import asset, AssetExecutionContext
 from ..partitions import partitions_def, SCENARIO_CONFIG
 from ..constants import DATA_DIR
-# Import the Single Source of Truth
 from ..utils.common import load_context, get_data_dependencies
 
 # 1. LOAD CONTEXT
-# If this fails, Dagster crashes on startup (Good! We want to know).
 CTX = load_context()
 
 OUTPUT_DIR = os.path.join(DATA_DIR, "staging")

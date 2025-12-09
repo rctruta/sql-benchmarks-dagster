@@ -2,7 +2,6 @@ meta:
   description: "Optimizer Tipping Point: HDD (Seq Scan) vs SSD (Index Scan)"
 
 dataset:
-  # ... (Same synthetic generator) ...
   source: "sql_benchmarks.plugins.data_sources.declarative_gen"
   tables:
     skewed_data:
@@ -42,14 +41,11 @@ definitions:
 dimensions:
   size: [small, medium]
 #  size: [small, medium, large, xlarge]
-  # Compare Default (HDD) vs Tuned (SSD) behavior
-  disk_type: [hdd, ssd] 
-
-engines:
-  - postgres
-  # DuckDB doesn't use these PG settings, but we keep it for baseline
-  - duckdb 
 
 execution:
   test_suite: "selectivity"
   replication: 3
+  engines: ["postgres", "duckdb"]
+  matrix:
+    rows: [10_000, 100_000]
+    disk_type: ["ssd"]  

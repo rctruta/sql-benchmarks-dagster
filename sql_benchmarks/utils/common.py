@@ -12,12 +12,24 @@ def load_context():
     """Single source of truth for the active experiment."""
     if not os.path.exists(ACTIVE_CONFIG_PATH):
         raise FileNotFoundError(f"CRITICAL: Config not found at {ACTIVE_CONFIG_PATH}")
-
+  
     with open(ACTIVE_CONFIG_PATH, "r") as f:
         config = yaml.safe_load(f) or {}
 
-    if "engines" not in config: raise ValueError("Missing 'engines' list.")
-    if "dataset" not in config: raise ValueError("Missing 'dataset' block.")
+    execution = config.get("execution", {})
+    
+    engines = execution.get("engines") or config.get("engines")
+    if not engines:
+        raise ValueError("Critical: 'engines' not found in execution block or root.")
+        
+    # We support 'matrix' (V7 name) or 'dimensions' (V6 name)
+    dimensions = execution.get("matrix") or execution.get("dimensions") or config.get("dimensions", {})
+
+    if "engines" not in execution:
+        # Create it if missing so downstream code doesn't crash accessing ['execution']['engines']
+        if "execution" not in config: config["execution"] = {}
+        config["execution"]["engines"] = engines
+        config["execution"]["matrix"] = dimensions
 
     raw_tables = config['dataset']['tables']
     # Normalize tables to list of names and dict of configs
@@ -32,7 +44,7 @@ def load_context():
 
     return {
         "full_config": config,
-        "engines": config["engines"],
+        "engines": engines,
         "dataset_config": config["dataset"],
         "tables": table_names,
         "table_defs": table_configs,

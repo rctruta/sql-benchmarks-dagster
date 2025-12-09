@@ -1,53 +1,19 @@
 meta:
-  experiment_id: "baseline_v1"
-  description: "Standard benchmark: Orders & Customers with 10% skew"
+  experiment_id: "v7_refactor"
+  description: "Clean architecture test"
 
-# THE CONTRACT: Must match variables in your SQL files
 dataset:
   source: "sql_benchmarks.plugins.data_sources.declarative_gen"
   tables:
-    customers:
-      rows: "rows" # 100% of partition size
-      columns:
-        - name: customer_id
-          provider: sequence
-        - name: region
-          provider: choice
-          options: ["US", "EU", "APAC"]
-    
     orders:
-      rows: "rows" 
+      rows: 100_000
       columns:
-        - name: order_id
-          provider: sequence
-        - name: amount
-          provider: uniform
-          min: 10
-          max: 500
-        - name: customer_id
-          provider: foreign_key
-          target_table: customers
-          target_column: customer_id
-          apply_orphan_rate: true # This enables the skew logic
+        - {name: "id", provider: "sequence"}
 
 execution:
-  test_suite: "joins"
-  
-definitions:
-  rows:
-    tiny: 1_000
-    small: 100_000
-    medium: 1_000_000
-  orphan_rate_labels:
-    0.00: "clean"
-    0.10: "skew10"
-  constants:
-    ratio: 10
-
-dimensions:
-  size: [small]
-  orphan_rate: [0.00, 0.10] # Test Clean vs Dirty
-
-engines:
-  - duckdb
-  - postgres
+  test_suite: "selectivity"
+  replication: 3
+  engines: ["postgres", "duckdb"]
+  matrix:
+    rows: [10_000, 100_000]
+    disk_type: ["ssd"]

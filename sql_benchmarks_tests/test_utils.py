@@ -69,23 +69,28 @@ def test_get_data_dependencies_resolves_fks():
 # ==========================================
 # 3. TEST THE "SYSTEM" (OS Cache)
 # ==========================================
+from unittest.mock import patch, MagicMock
+from sql_benchmarks.utils.system import thrash_os_cache
+
 @patch("sql_benchmarks.utils.system.mmap")
 @patch("sql_benchmarks.utils.system.psutil")
 def test_thrash_os_cache_safety(mock_psutil, mock_mmap):
-    """Verify it calculates 75% RAM and calls mmap without crashing"""
-    # Mock 10GB RAM
-    mock_psutil.virtual_memory.return_value.total = 10 * 1024**3
+    """
+    Verify safety logic. 
+    Mocks a tiny computer (100MB RAM) so the test runs instantly.
+    """
+    # 1. Mock Tiny RAM (100 MB)
+    mock_mem = MagicMock()
+    mock_mem.total = 100 * 1024 * 1024 
+    mock_psutil.virtual_memory.return_value = mock_mem
     
     thrash_os_cache(override_gb=None)
     
-    # Check Math: 10GB * 0.75 = 7.5GB
-    expected_bytes = int(7.5 * 1024**3)
+    expected_bytes = int(0.75 * 100 * 1024 * 1024)
     
-    # Verify mmap was called with correct size
     mock_mmap.mmap.assert_called()
     call_args = mock_mmap.mmap.call_args
     assert call_args[0][1] == expected_bytes
-
 # ==========================================
 # 4. TEST THE "ARCHITECT" (DDL)
 # ==========================================

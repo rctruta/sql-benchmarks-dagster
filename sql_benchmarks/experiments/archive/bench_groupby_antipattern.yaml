@@ -9,9 +9,9 @@ dataset:
       columns:
         - name: customer_id
           provider: sequence
-          primary_key: true  # <--- NEW: Forces DDL generation
+          primary_key: true  
         - name: customer_name
-          provider: text_concat # <--- NEW: Forces heap lookup (defeats index-only scan)
+          provider: text_concat # Forces heap lookup (defeats index-only scan)
           prefix: "Customer "
           source: customer_id
         - name: region
@@ -39,16 +39,20 @@ dataset:
           provider: foreign_key
           target_table: customers
           target_column: customer_id
-          apply_orphan_rate: true # 0% in this test, but good to have
-
+          apply_orphan_rate: true
+      indexes:
+        - columns: ["customer_id"]
+          name: "idx_orders_customer"
 definitions:
   rows:
     medium: 1_000_000
+    large: 10_000_000
+    xlarge: 50_000_000
   orphan_rate_labels:
     0.00: "clean"
 
 dimensions:
-  size: [medium]
+  size: [medium, large, xlarge]
   orphan_rate: [0.00]
 
 engines:
