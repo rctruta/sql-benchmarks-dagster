@@ -5,7 +5,8 @@ setup(
     packages=find_packages(exclude=["sql_benchmarks_tests"]),
     install_requires=[
         "dagster",
-        "dagster-cloud"
+        "dagster-cloud",
+        "psutil"
     ],
-    extras_require={"dev": ["dagster-webserver", "pytest"]},
+    extras_require={"dev": ["dagster-webserver", "pytest", "sqlparse"]},
 )

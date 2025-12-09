@@ -1,8 +1,8 @@
 meta:
   description: 'Optimizer Tipping Point: HDD (Seq Scan) vs SSD (Index Scan)'
-  experiment_id: becbd211
+  experiment_id: b332f4ca
 dataset:
-  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  source: sql_benchmarks.plugins.data_sources.synthetic_generic
   tables:
     skewed_data:
       rows: rows
@@ -51,6 +51,8 @@ dimensions:
   size:
   - small
   - medium
+  - large
+  - xlarge
   disk_type:
   - hdd
   - ssd

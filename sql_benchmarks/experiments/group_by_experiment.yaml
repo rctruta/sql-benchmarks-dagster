@@ -2,7 +2,7 @@ meta:
   description: "Group By: Optimization Impact of Constraints & Column Pruning"
 
 dataset:
-  source: "sql_benchmarks.plugins.data_sources.synthetic_generic"
+  source: "sql_benchmarks.plugins.data_sources.declarative_gen"
   tables:
     customers:
       rows: "rows"

@@ -3,6 +3,7 @@ import numpy as np
 import os
 import simpleeval
 from dagster import MaterializeResult, MetadataValue
+from ...utils.common import normalize_distribution
 
 def generate(context, params, table_name, output_dir, dataset_config):
     partition_key = context.partition_key
@@ -40,11 +41,6 @@ def generate(context, params, table_name, output_dir, dataset_config):
         if provider == "sequence":
             data[col_name] = pl.int_range(1, num_rows + 1, eager=True)
             
-        elif provider == "choice":
-            if 'options' not in col:
-                raise ValueError(f"Column '{col_name}' (choice) missing required 'options' list.")
-            data[col_name] = np.random.choice(col['options'], size=num_rows)
-            
         elif provider == "uniform":
             min_v = col.get('min')
             max_v = col.get('max')
@@ -54,16 +50,18 @@ def generate(context, params, table_name, output_dir, dataset_config):
         
         elif provider == "choice":
             if 'options' not in col:
-                raise ValueError(f"Column '{col_name}' (choice) missing required 'options' list.")
+                raise ValueError(f"Missing 'options' for {col_name}")
             
-            # Feature: Weighted Distribution
-            # Example YAML: weights: [0.95, 0.05]
-            weights = col.get('weights') # None by default (uniform)
-            if weights:
-                # FIX: Normalize weights to avoid "probabilities do not sum to 1" error
-                total = sum(weights)
-                weights = [w / total for w in weights]
-            data[col_name] = np.random.choice(col['options'], size=num_rows, p=weights)            
+            raw_options = col['options']
+            raw_weights = col.get('weights')
+            
+            if raw_weights:
+                opts, probs = normalize_distribution(raw_options, raw_weights)
+                
+                data[col_name] = np.random.choice(opts, size=num_rows, p=probs)
+            else:
+                # Uniform distribution
+                data[col_name] = np.random.choice(raw_options, size=num_rows)           
         
         elif provider == "foreign_key":
             target_table = col['target_table']

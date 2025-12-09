@@ -2,35 +2,25 @@ import os
 import yaml
 import jinja2
 import jinja2.meta
+import numpy as np
 from ..constants import ACTIVE_CONFIG_PATH, SQL_DIR
 
+# ==========================================
+# 1. CONTEXT & CONFIG LOADING
+# ==========================================
 def load_context():
-    """
-    Single source of truth for the active experiment.
-    Reads YAML, validates schema, and returns a clean Context object.
-    """
-    # 1. Check Existence
+    """Single source of truth for the active experiment."""
     if not os.path.exists(ACTIVE_CONFIG_PATH):
-        raise FileNotFoundError(f"CRITICAL: Config not found at {ACTIVE_CONFIG_PATH}. Run 'python run_experiment.py <file>'")
+        raise FileNotFoundError(f"CRITICAL: Config not found at {ACTIVE_CONFIG_PATH}")
 
-    # 2. Read File
     with open(ACTIVE_CONFIG_PATH, "r") as f:
         config = yaml.safe_load(f) or {}
 
-    # 3. Validate Schema (Strict Mode)
-    # We crash immediately if keys are missing. No defaults.
-    if "engines" not in config:
-        raise ValueError(f"Invalid Config: Missing 'engines' list.")
-    
-    if "dataset" not in config:
-        raise ValueError(f"Invalid Config: Missing 'dataset' block.")
+    if "engines" not in config: raise ValueError("Missing 'engines' list.")
+    if "dataset" not in config: raise ValueError("Missing 'dataset' block.")
 
-    if "tables" not in config["dataset"]:
-        raise ValueError(f"Invalid Config: Missing 'dataset.tables'.")
-
-    # 4. Normalize Tables
-    # Supports both List ['a'] and Dict {'a': {}} formats
     raw_tables = config['dataset']['tables']
+    # Normalize tables to list of names and dict of configs
     if isinstance(raw_tables, list):
         table_names = raw_tables
         table_configs = {t: {} for t in raw_tables}
@@ -40,18 +30,24 @@ def load_context():
     else:
         raise ValueError("'dataset.tables' must be a List or Dictionary.")
 
-    # 5. Return The Context Bundle
     return {
         "full_config": config,
-        "engines": config["engines"], # List of active engines
+        "engines": config["engines"],
         "dataset_config": config["dataset"],
-        "tables": table_names,        # List of names ["orders", "customers"]
-        "table_defs": table_configs,  # Dict of details {"orders": {deps...}}
+        "tables": table_names,
+        "table_defs": table_configs,
         "meta": config.get("meta", {"experiment_id": "unknown"})
     }
 
+def get_target_sql_dir(config):
+    suite = config.get("execution", {}).get("test_suite", "")
+    return os.path.join(SQL_DIR, suite) if suite else SQL_DIR
+
+# ==========================================
+# 2. SCHEMA PARSING
+# ==========================================
 def get_tables_used_in_sql(sql_path, valid_tables_set):
-    """Parses SQL template to find dependencies."""
+    """Parses SQL template to find dependencies ({{ table_name }})."""
     with open(sql_path, "r") as f:
         raw_template = f.read()
 
@@ -63,44 +59,81 @@ def get_tables_used_in_sql(sql_path, valid_tables_set):
         print(f"⚠️ Jinja Parse Error {sql_path}: {e}")
         return [], raw_template
 
-    used_tables = []
-    for var in required_vars:
-        if var.endswith("_table"):
-            t_name = var.replace("_table", "")
-            if t_name in valid_tables_set:
-                used_tables.append(t_name)
-                
+    used_tables = [
+        var.replace("_table", "") 
+        for var in required_vars 
+        if var.endswith("_table") and var.replace("_table", "") in valid_tables_set
+    ]
     return used_tables, raw_template
 
+def extract_foreign_keys(table_def):
+    """Returns list of dicts: [{'col': 'x', 'target': 'y', 'target_col': 'z'}]"""
+    fks = []
+    for col in table_def.get('columns', []):
+        if col.get('provider') == 'foreign_key':
+            fks.append({
+                'col': col['name'],
+                'target': col.get('target_table'),
+                'target_col': col.get('target_column')
+            })
+    return fks
+
 def get_data_dependencies(table_name, table_configs):
-    """Returns upstream dependencies for a specific table based on schema."""
+    """Returns upstream dependencies for a specific table."""
     deps = set()
     t_conf = table_configs.get(table_name, {})
     
-    # Look for foreign keys in columns
-    columns = t_conf.get('columns', [])
-    for col in columns:
-        if col.get('provider') == 'foreign_key':
-            target = col.get('target_table')
-            if target:
-                deps.add(target)
+    # Implicit FK deps
+    for fk in extract_foreign_keys(t_conf):
+        if fk['target']: deps.add(fk['target'])
                 
-    # Look for explicit deps (if defined in YAML)
-    explicit = t_conf.get('deps', [])
-    for d in explicit:
-        deps.add(d)
+    # Explicit deps
+    for d in t_conf.get('deps', []): deps.add(d)
         
     return list(deps)
 
-def get_target_sql_dir(config):
+# ==========================================
+# 3. MATH & NORMALIZATION
+# ==========================================
+def normalize_distribution(options: list, weights: list):
     """
-    Determines the specific SQL folder to use based on 'test_suite' in config.
+    Robustly normalizes weights for numpy generation.
+    Used by BOTH Data Generator (Plugin) and Metadata (Dashboard).
     """
-    suite = config.get("execution", {}).get("test_suite", "")
+    if len(options) != len(weights):
+        raise ValueError(f"Mismatch: {len(options)} options vs {len(weights)} weights")
+        
+    w_arr = np.array(weights, dtype=float)
+    if w_arr.sum() <= 0: raise ValueError("Sum of weights must be positive")
     
-    # If suite is defined, look in SQL_DIR/suite/ (e.g. .../sql/joins)
-    if suite:
-        return os.path.join(SQL_DIR, suite)
+    # Normalize to sum to 1.0
+    norm_weights = w_arr / w_arr.sum()
+    return options, norm_weights
+
+# ==========================================
+# 4. METADATA INFERENCE
+# ==========================================
+def infer_metadata_from_sql(sql_content, dataset_config):
+    """Scans SQL for known data keys (e.g. 'sel_1') to derive metadata."""
+    mapping = {}
+    tables = dataset_config.get('tables', {})
     
-    # Otherwise default to SQL_DIR root (backward compatibility)
-    return SQL_DIR
+    # Build Value Map
+    if isinstance(tables, dict):
+        for table_def in tables.values():
+            for col in table_def.get('columns', []):
+                if 'options' in col and 'weights' in col:
+                    try:
+                        opts, probs = normalize_distribution(col['options'], col['weights'])
+                        for opt, p in zip(opts, probs):
+                            mapping[str(opt)] = float(p)
+                    except ValueError: continue 
+
+    # Scan SQL
+    meta = {}
+    for key, weight in mapping.items():
+        if f"'{key}'" in sql_content or f'"{key}"' in sql_content:
+            meta['selectivity_pct'] = weight * 100.0
+            meta['data_slice'] = key
+            break 
+    return meta

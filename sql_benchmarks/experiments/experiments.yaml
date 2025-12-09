@@ -7,7 +7,7 @@ engines:
   - postgres
   
 dataset:
-  source: "sql_benchmarks.plugins.data_sources.synthetic_ecommerce"
+  source: "sql_benchmarks.plugins.data_sources.declarative_gen"
   tables:
     - customers
     - orders

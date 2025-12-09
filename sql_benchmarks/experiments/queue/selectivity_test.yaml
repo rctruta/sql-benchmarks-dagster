@@ -3,7 +3,7 @@ meta:
 
 dataset:
   # ... (Same synthetic generator) ...
-  source: "sql_benchmarks.plugins.data_sources.synthetic_generic"
+  source: "sql_benchmarks.plugins.data_sources.declarative_gen"
   tables:
     skewed_data:
       rows: "rows"
@@ -40,7 +40,8 @@ definitions:
       work_mem: "256MB"      # Let's give SSD mode more RAM too
 
 dimensions:
-  size: [small, medium, large, xlarge]
+  size: [small, medium]
+#  size: [small, medium, large, xlarge]
   # Compare Default (HDD) vs Tuned (SSD) behavior
   disk_type: [hdd, ssd] 
 

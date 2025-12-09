@@ -2,7 +2,7 @@ meta:
   description: "Impact of 10% Skew on 1M Rows (DuckDB vs Postgres)"
 
 dataset:
-  source: "sql_benchmarks.plugins.data_sources.synthetic_generic"
+  source: "sql_benchmarks.plugins.data_sources.declarative_gen"
   tables:
     customers:
       rows: "rows"

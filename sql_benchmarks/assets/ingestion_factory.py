@@ -1,134 +1,51 @@
 import os
-import polars as pl
 from dagster import asset, AssetExecutionContext
 from ..partitions import partitions_def
-
-# STRICT IMPORTS
 from ..constants import DATA_DIR
-from ..utils.common import load_context
+from ..utils.common import load_context 
+from ..utils.ddl import PostgresDDLGenerator
 
-# 1. LOAD CONTEXT
-try:
-    CTX = load_context()
-    ACTIVE_ENGINES = CTX['engines']
-    TARGET_TABLES = CTX['tables']
-    TABLE_DEFS = CTX['table_defs']
-except Exception:
-    ACTIVE_ENGINES = []
-    TARGET_TABLES = []
-    TABLE_DEFS = {}
+CTX = load_context()
+ACTIVE_ENGINES = CTX['engines']
+TABLE_DEFS = CTX['table_defs']
 
-def get_parquet_path(partition_key, table_name):
-    return os.path.join(DATA_DIR, "staging", f"{table_name}_{partition_key}.parquet")
-
-def make_ingestion_asset(table_name, engine, upstream_asset_key):
+def make_ingestion_asset(table, engine, upstream):
     prefix = "pg_" if engine == "postgres" else f"{engine}_"
-    asset_name = f"{prefix}{table_name}_table"
-    group_name = f"{engine}_ingestion"
-
-    deps = [f"{table_name}_parquet"]
-    if upstream_asset_key:
-        deps.append(upstream_asset_key)
+    name = f"{prefix}{table}_table"
+    deps = [f"{table}_parquet"] + ([upstream] if upstream else [])
 
     @asset(
-        name=asset_name,
-        partitions_def=partitions_def,
-        group_name=group_name,
-        deps=deps,
-        tags={"layer": "storage", "engine": engine},
-        required_resource_keys={engine}
+        name=name, partitions_def=partitions_def, deps=deps,
+        group_name=f"ingest_{engine}", required_resource_keys={engine}
     )
-    def _ingest_asset(context: AssetExecutionContext):
-        partition_key = context.partition_key
-        file_path = get_parquet_path(partition_key, table_name)
-        
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"Missing Source Data: {file_path}")
+    def _ingest(context: AssetExecutionContext):
+        pk = context.partition_key
+        path = os.path.join(DATA_DIR, "staging", f"{table}_{pk}.parquet")
+        target = f"{table}_{pk}"
+        db = getattr(context.resources, engine)
 
-        db_resource = getattr(context.resources, engine)
-        target_table = f"{table_name}_{partition_key}"
-
-        # 1. LOAD DATA
         if engine == "postgres":
-            context.log.info(f"Loading {table_name} into Postgres (Stream Mode)...")
-            
-            # --- THE FIX ---
-            # DO NOT call pl.read_parquet()!
-            # Pass the PATH string to the resource.
-            db_resource.bulk_load(file_path, target_table)
-            
-            # 2. APPLY CONSTRAINTS
-            _apply_postgres_constraints(context, db_resource, table_name, target_table, partition_key)
-
-            # 3. STATISTICS
-            context.log.info(f"Updating statistics for {target_table}...")
-            try:
-                db_resource.execute_query(f"ANALYZE {target_table};")
-            except Exception as e:
-                context.log.warning(f"Stats update warning: {e}")
-
-        elif engine == "duckdb":
-            context.log.info(f"Loading {table_name} into DuckDB...")
-            query = f"CREATE OR REPLACE TABLE {target_table} AS SELECT * FROM read_parquet('{file_path}');"
-            db_resource.execute_query(query, partition_key=partition_key)
-
-    def _apply_postgres_constraints(context, db, config_name, physical_name, partition_key):
-        """Applies PKs, Indexes, AND Foreign Keys."""
-        t_def = TABLE_DEFS.get(config_name, {})
-        columns = t_def.get('columns', [])
+            db.bulk_load(path, target)
+            # DDL Logic
+            ddl = PostgresDDLGenerator(TABLE_DEFS.get(table, {}), target, pk)
+            if sql := ddl.generate_pk_sql(): db.execute_query(sql)
+            for sql in ddl.generate_index_sqls(): db.execute_query(sql)
+            for sql in ddl.generate_fk_sqls(): 
+                try: db.execute_query(sql)
+                except Exception as e: context.log.warning(e)
+            db.execute_query(f"ANALYZE {target};")
         
-        # A. Primary Keys
-        pk_cols = [c['name'] for c in columns if c.get('primary_key') is True]
-        if pk_cols:
-            pk_str = ", ".join(pk_cols)
-            sql = f"ALTER TABLE {physical_name} ADD PRIMARY KEY ({pk_str});"
-            context.log.info(f"Applying PK: {sql}")
-            db.execute_query(sql)
+        elif engine == "duckdb":
+            db.execute_query(f"CREATE OR REPLACE TABLE {target} AS SELECT * FROM read_parquet('{path}')", partition_key=pk)
 
-        # B. Indexes
-        indexes = t_def.get('indexes', [])
-        for idx in indexes:
-            cols = idx.get('columns', [])
-            idx_name = idx.get('name', f"idx_{physical_name}_{'_'.join(cols)}")
-            if cols:
-                col_str = ", ".join(cols)
-                sql = f"CREATE INDEX IF NOT EXISTS {idx_name} ON {physical_name} ({col_str});"
-                context.log.info(f"Applying Index: {sql}")
-                db.execute_query(sql)
-
-        # C. Foreign Keys
-        for col in columns:
-            if col.get('provider') == 'foreign_key':
-                col_name = col['name']
-                target_logical = col.get('target_table')
-                target_col = col.get('target_column')
-                
-                # Calculate the physical name of the target table
-                target_physical = f"{target_logical}_{partition_key}"
-                
-                fk_name = f"fk_{physical_name}_{col_name}"
-                
-                sql = (
-                    f"ALTER TABLE {physical_name} "
-                    f"ADD CONSTRAINT {fk_name} "
-                    f"FOREIGN KEY ({col_name}) "
-                    f"REFERENCES {target_physical} ({target_col});"
-                )
-                context.log.info(f"Applying FK: {sql}")
-                try:
-                    db.execute_query(sql)
-                except Exception as e:
-                    context.log.warning(f"Failed to apply FK {fk_name}: {e}")
-
-    _ingest_asset.__name__ = f"ingest_{engine}_{table_name}"
-    return _ingest_asset
+    return _ingest
 
 ingestion_assets = []
 if ACTIVE_ENGINES:
     for engine in ACTIVE_ENGINES:
-        previous_asset_key = None
-        for table in TARGET_TABLES:
-            upstream_key = previous_asset_key if engine == "duckdb" else None
-            new_asset = make_ingestion_asset(table, engine, upstream_key)
+        prev = None
+        for table in CTX['tables']:
+            upstream = prev if engine == "duckdb" else None
+            new_asset = make_ingestion_asset(table, engine, upstream)
             ingestion_assets.append(new_asset)
-            previous_asset_key = new_asset.key.path[-1]
+            prev = new_asset.key.path[-1]

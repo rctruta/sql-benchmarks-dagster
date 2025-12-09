@@ -4,7 +4,7 @@ meta:
 
 # THE CONTRACT: Must match variables in your SQL files
 dataset:
-  source: "sql_benchmarks.plugins.data_sources.synthetic_generic"
+  source: "sql_benchmarks.plugins.data_sources.declarative_gen"
   tables:
     customers:
       rows: "rows" # 100% of partition size
