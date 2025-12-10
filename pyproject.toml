@@ -1,18 +1,28 @@
 [project]
 name = "sql_benchmarks"
 version = "0.1.0"
-description = "SQL Benchmarks"
+description = "SQL Benchmarks V7 Platform"
 readme = "README.md"
 requires-python = ">=3.9,<3.14"
 dependencies = [
     "dagster",
     "dagster-cloud",
+    "dagster-postgres",
+    "dagster-duckdb",
+    "pandas",
+    "polars",
+    "pyarrow",
+    "psycopg2-binary",
+    "sqlalchemy",
+    "psutil",
+    "pyyaml",
+    "numpy"
 ]
 
 [project.optional-dependencies]
 dev = [
-    "dagster-webserver",
-    "pytest",
+    "dagster-webserver", 
+    "pytest"
 ]
 
 [build-system]
@@ -24,4 +34,4 @@ module_name = "sql_benchmarks.definitions"
 code_location_name = "sql_benchmarks"
 
 [tool.setuptools.packages.find]
-exclude=["sql_benchmarks_tests"]
+exclude = ["sql_benchmarks_tests"]
