@@ -5,8 +5,17 @@ setup(
     packages=find_packages(exclude=["sql_benchmarks_tests"]),
     install_requires=[
         "dagster",
-        "dagster-cloud",
-        "psutil"
+        "dagster-webserver",
+        "dagster-postgres",
+        "dagster-duckdb",
+        "pandas",
+        "polars",
+        "pyarrow",  # Critical for the new loader
+        "psycopg2-binary",
+        "sqlalchemy",
+        "psutil",
+        "pyyaml",
+        "numpy"
     ],
-    extras_require={"dev": ["dagster-webserver", "pytest", "sqlparse"]},
+    extras_require={"dev": ["pytest"]},
 )
