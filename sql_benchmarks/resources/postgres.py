@@ -6,6 +6,7 @@ import io
 import csv
 from dagster import ConfigurableResource
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine.url import make_url
 from ..utils.system import thrash_os_cache
 import polars as pl
 
@@ -17,7 +18,15 @@ class PostgresResource(ConfigurableResource):
     connection_string: str
     container_name: str = "benchmark_postgres"
     
-    def _check_port_available(self, port: int = 5432) -> bool:
+    def _get_port_from_url(self) -> int:
+        """Parses the port from the connection string, default 5432."""
+        try:
+            url = make_url(self.connection_string)
+            return url.port or 5432
+        except Exception:
+            return 5432
+
+    def _check_port_available(self, port: int) -> bool:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             return s.connect_ex(('localhost', port)) != 0
 
@@ -34,12 +43,17 @@ class PostgresResource(ConfigurableResource):
 
     def setup_docker(self, settings: dict = None):
         """
-        Idempotent Docker startup.
+        Idempotent Docker startup with Dynamic Port Mapping.
         """
+        target_port = self._get_port_from_url()
+        
         self._kill_zombie_container()
         
-        if "localhost" in self.connection_string and not self._check_port_available(5432):
-            raise RuntimeError("Port 5432 is occupied. Stop local Postgres.")
+        if "localhost" in self.connection_string and not self._check_port_available(target_port):
+            raise RuntimeError(
+                f"Port {target_port} is occupied by another service. "
+                "Update POSTGRES_PORT env var or stop the local service."
+            )
 
         shm_size = "2gb"
         cmd_args = ["postgres"]
@@ -61,7 +75,7 @@ class PostgresResource(ConfigurableResource):
         subprocess.run([
             "docker", "run", "-d",
             "--name", self.container_name,
-            "-p", "5432:5432",
+            "-p", f"{target_port}:5432",
             "-v", f"{data_mount}:/data",
             "--shm-size", shm_size,
             "-e", "POSTGRES_PASSWORD=password",
@@ -98,12 +112,25 @@ class PostgresResource(ConfigurableResource):
         with engine.begin() as conn:
             conn.execute(text(sql))
 
-    def benchmark_query(self, sql: str) -> float:
+    # CHANGED: Added partition_key and db_config to match Factory expectations
+    def benchmark_query(self, sql: str, partition_key: str = None, db_config: dict = None) -> float:
         engine = self.get_engine()
+        
+        # We use connect() so we can set session variables before the query
         with engine.connect() as conn:
+            
+            # 1. Apply Session Configs (e.g. work_mem) if provided
+            if db_config:
+                for key, val in db_config.items():
+                    # We use simple string injection here for SET commands.
+                    # Ensure your config values are safe strings.
+                    conn.execute(text(f"SET {key} = '{val}'"))
+
+            # 2. Run Benchmark
             start = time.time()
             conn.execute(text(sql))
             end = time.time()
+            
         return end - start
 
     def bulk_load(self, file_path: str, table_name: str):
@@ -155,16 +182,11 @@ class PostgresResource(ConfigurableResource):
             raw_conn.close()
 
     def _stream_json(self, path: str, table_name: str, batch_size: int = 100_000):
-        # Basic JSON implementation - iterates lines for NDJSON
         engine = self.get_engine()
         raw_conn = engine.raw_connection()
         try:
             with raw_conn.cursor() as cur:
-                # Lazy read JSON
-                reader = pl.read_ndjson(path, batch_size=batch_size, return_type="arrow")
-                # Assuming simple NDJSON here; if complex, requires custom logic
-                # For now, simplistic implementation to satisfy interface
-                df = pl.read_ndjson(path) # Warning: Loads all to memory if no iterator
+                df = pl.read_ndjson(path)
                 self._create_schema(table_name, df)
                 self._copy_buffer(cur, df, table_name)
             raw_conn.commit()
@@ -172,16 +194,11 @@ class PostgresResource(ConfigurableResource):
             raw_conn.close()
             
     def _stream_csv(self, path: str, table_name: str):
-        # CSV is native to Postgres, we can just use COPY directly from file if mounted,
-        # but since we are running remote/docker execution, stream via Python
         engine = self.get_engine()
         raw_conn = engine.raw_connection()
         try:
             with open(path, 'r') as f:
                 with raw_conn.cursor() as cur:
-                     # Create table first? Assuming exists or inferred.
-                     # For CSV, inference is harder without scanning. 
-                     # Using simplistic direct copy for now.
                      cur.copy_expert(f"COPY {table_name} FROM STDIN WITH (FORMAT CSV, HEADER)", f)
             raw_conn.commit()
         finally:
@@ -189,7 +206,6 @@ class PostgresResource(ConfigurableResource):
 
     def _copy_buffer(self, cursor, df: pl.DataFrame, table_name: str):
         csv_buffer = io.StringIO()
-        # FIX: 'include_header' is correct for Polars write_csv
         df.write_csv(csv_buffer, include_header=False)
         csv_buffer.seek(0)
         cursor.copy_expert(

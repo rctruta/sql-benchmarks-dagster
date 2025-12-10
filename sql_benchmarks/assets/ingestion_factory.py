@@ -1,51 +1,85 @@
 import os
+# Removed 'glob' as we no longer guess file paths
 from dagster import asset, AssetExecutionContext
-from ..partitions import partitions_def
 from ..constants import DATA_DIR
-from ..utils.common import load_context 
-from ..utils.ddl import PostgresDDLGenerator
+from ..partitions import partitions_def
 
-CTX = load_context()
-ACTIVE_ENGINES = CTX['engines']
-TABLE_DEFS = CTX['table_defs']
+def load_dataset_config():
+    import yaml
+    from ..constants import EXPERIMENTS_DIR
+    config_path = os.path.join(EXPERIMENTS_DIR, "active.yaml")
+    if not os.path.exists(config_path):
+        return {}
+    with open(config_path, "r") as f:
+        conf = yaml.safe_load(f) or {}
+    return conf.get("dataset", {}).get("tables", {})
 
-def make_ingestion_asset(table, engine, upstream):
-    prefix = "pg_" if engine == "postgres" else f"{engine}_"
-    name = f"{prefix}{table}_table"
-    deps = [f"{table}_parquet"] + ([upstream] if upstream else [])
-
-    @asset(
-        name=name, partitions_def=partitions_def, deps=deps,
-        group_name=f"ingest_{engine}", required_resource_keys={engine}
-    )
-    def _ingest(context: AssetExecutionContext):
-        pk = context.partition_key
-        path = os.path.join(DATA_DIR, "staging", f"{table}_{pk}.parquet")
-        target = f"{table}_{pk}"
-        db = getattr(context.resources, engine)
-
-        if engine == "postgres":
-            db.bulk_load(path, target)
-            # DDL Logic
-            ddl = PostgresDDLGenerator(TABLE_DEFS.get(table, {}), target, pk)
-            if sql := ddl.generate_pk_sql(): db.execute_query(sql)
-            for sql in ddl.generate_index_sqls(): db.execute_query(sql)
-            for sql in ddl.generate_fk_sqls(): 
-                try: db.execute_query(sql)
-                except Exception as e: context.log.warning(e)
-            db.execute_query(f"ANALYZE {target};")
-        
-        elif engine == "duckdb":
-            db.execute_query(f"CREATE OR REPLACE TABLE {target} AS SELECT * FROM read_parquet('{path}')", partition_key=pk)
-
-    return _ingest
-
+tables = load_dataset_config()
 ingestion_assets = []
-if ACTIVE_ENGINES:
-    for engine in ACTIVE_ENGINES:
-        prev = None
-        for table in CTX['tables']:
-            upstream = prev if engine == "duckdb" else None
-            new_asset = make_ingestion_asset(table, engine, upstream)
-            ingestion_assets.append(new_asset)
-            prev = new_asset.key.path[-1]
+
+for table_name in tables.keys():
+    
+    # 1. POSTGRES INGESTION
+    @asset(
+        name=f"pg_{table_name}_table",
+        group_name="ingestion",
+        partitions_def=partitions_def,
+        deps=[f"{table_name}_parquet"],
+        required_resource_keys={"postgres"}
+    )
+    def _pg_ingest(context: AssetExecutionContext):
+        partition_key = context.partition_key
+        db = context.resources.postgres
+        
+        # 1. FIND THE EXACT FILE (New Architecture)
+        # Matches: assets/data_factory.py
+        filename = f"{table_name}_{partition_key}.parquet"
+        parquet_path = os.path.join(DATA_DIR, "staging", filename)
+        
+        if not os.path.exists(parquet_path):
+             raise FileNotFoundError(f"Parquet file not found: {parquet_path}")
+        
+        # 2. DEFINE TARGET TABLE NAME
+        # Matches: benchmark_factory.py (expects {table}_{pk})
+        target_table_name = f"{table_name}_{partition_key}"
+        
+        context.log.info(f"Ingesting {parquet_path} into Postgres table '{target_table_name}'...")
+        db.bulk_load(parquet_path, target_table_name)
+
+    _pg_ingest.__name__ = f"pg_ingest_{table_name}"
+    ingestion_assets.append(_pg_ingest)
+
+    # 2. DUCKDB INGESTION
+    @asset(
+        name=f"duckdb_{table_name}_table",
+        group_name="ingestion",
+        partitions_def=partitions_def,
+        deps=[f"{table_name}_parquet"],
+        required_resource_keys={"duckdb"}
+    )
+    def _duck_ingest(context: AssetExecutionContext):
+        partition_key = context.partition_key
+        db = context.resources.duckdb
+        
+        # 1. FIND THE EXACT FILE
+        filename = f"{table_name}_{partition_key}.parquet"
+        parquet_path = os.path.join(DATA_DIR, "staging", filename)
+        
+        if not os.path.exists(parquet_path):
+             raise FileNotFoundError(f"Parquet file not found: {parquet_path}")
+        
+        # 2. DEFINE TARGET TABLE NAME
+        # Matches: benchmark_factory.py (expects {table}_{pk})
+        target_table_name = f"{table_name}_{partition_key}"
+        
+        context.log.info(f"Ingesting {parquet_path} into DuckDB table '{target_table_name}'...")
+
+        # We use the LEGACY execute_query (which writes to benchmark_{pk}.duckdb)
+        # This keeps the rest of your pipeline working.
+        db.execute_query(
+            f"CREATE OR REPLACE TABLE {target_table_name} AS SELECT * FROM read_parquet('{parquet_path}')",
+            partition_key=partition_key 
+        )
+
+    _duck_ingest.__name__ = f"duck_ingest_{table_name}"
+    ingestion_assets.append(_duck_ingest)

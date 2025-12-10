@@ -5,13 +5,15 @@ from ..partitions import partitions_def, SCENARIO_CONFIG
 from ..constants import DATA_DIR
 from ..utils.common import load_context, get_data_dependencies
 
+from ..plugins.data_sources import declarative_gen
+
 # 1. LOAD CONTEXT
 CTX = load_context()
 
 OUTPUT_DIR = os.path.join(DATA_DIR, "staging")
 
 def make_data_asset(table_name):
-    # Ask Utils for dependencies
+
     raw_deps = get_data_dependencies(table_name, CTX['table_defs'])
     asset_deps = [f"{d}_parquet" for d in raw_deps]
 
@@ -30,10 +32,21 @@ def make_data_asset(table_name):
         plugin_name = CTX['dataset_config']['source']
         module = importlib.import_module(plugin_name)
         
-        # Pass Config to Plugin
-        return module.generate(context, params, table_name, OUTPUT_DIR, CTX['dataset_config'])
-
+        # 1. Construct the path
+        file_name = f"{table_name}_{partition_key}.parquet"
+        target_path = os.path.join(OUTPUT_DIR, file_name)
+        
+        # 2. Ensure folder exists
+        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+        
+        # 3. Call Plugin
+        return module.generate(
+            context=context, 
+            params=params, 
+            table_name=table_name, 
+            target_path=target_path, 
+            dataset_config=CTX['dataset_config']
+        )
     return _generator
 
-# Loop over the list provided by Common
 data_assets = [make_data_asset(t) for t in CTX['tables']]

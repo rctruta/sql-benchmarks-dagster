@@ -6,13 +6,12 @@ import statistics
 from dagster import asset, AssetExecutionContext, MaterializeResult, MetadataValue
 from ..partitions import partitions_def, SCENARIO_CONFIG
 
-# UNIFIED IMPORTS
 from ..utils.common import load_context, get_tables_used_in_sql, get_target_sql_dir, infer_metadata_from_sql
 from ..utils.system import thrash_os_cache
 
 CTX = load_context()
 ACTIVE_ENGINES = CTX['engines']
-EXPERIMENT_META = CTX['meta']
+EXPERIMENT_META = CTX['meta'] # <--- We have this, but weren't using it!
 VALID_TABLES = set(CTX['tables'])
 FULL_CONFIG = CTX['full_config']
 REPLICATION_FACTOR = FULL_CONFIG.get("execution", {}).get("replication", 1)
@@ -29,7 +28,7 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta):
         name=asset_name,
         partitions_def=partitions_def,
         deps=deps,
-        group_name=f"bench_{engine}",
+        group_name=f"dynamic_bench_{engine}",
         required_resource_keys={engine}
     )
     def _benchmark(context: AssetExecutionContext):
@@ -56,6 +55,11 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta):
         meta = {
             "duration": MetadataValue.float(statistics.mean(durations)),
             "sql": MetadataValue.md(f"```sql\n{sql}\n```"),
+            
+            "experiment_id": EXPERIMENT_META.get("experiment_id", "unknown"),
+            "config_engine": engine, # Reporting also needs this!
+            
+            # Static & Dimension Meta
             **{k: _smart_cast(v) for k,v in static_meta.items()},
             **{f"dim_{k}": _smart_cast(v) for k,v in params.items() if k != "pg_settings"}
         }

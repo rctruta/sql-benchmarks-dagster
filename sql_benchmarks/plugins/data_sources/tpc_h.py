@@ -2,7 +2,8 @@ import duckdb
 import os
 from dagster import MaterializeResult, MetadataValue
 
-def generate(context, params, table_name, output_dir, dataset_config):
+# CHANGED: 'output_dir' -> 'target_path'
+def generate(context, params, table_name, target_path, dataset_config):
     partition_key = context.partition_key
     
     if 'tables' not in dataset_config:
@@ -23,9 +24,9 @@ def generate(context, params, table_name, output_dir, dataset_config):
     # 2. Generate Data
     con.execute(f"CALL dbgen(sf={scale_factor})")
     
-    # 3. Export with Type Casting (The Fix)
-    os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, f"{table_name}_{partition_key}.parquet")
+    # 3. Export with Type Casting
+    # Ensure directory exists (Defensive)
+    os.makedirs(os.path.dirname(target_path), exist_ok=True)
     
     # Get columns for the table
     cols_info = con.execute(f"DESCRIBE {table_name}").fetchall()
@@ -34,16 +35,16 @@ def generate(context, params, table_name, output_dir, dataset_config):
     select_parts = []
     for col_name, col_type, _, _, _, _ in cols_info:
         if "DECIMAL" in col_type:
-            # Cast to DOUBLE to prevent Postgres/SQLAlchemy TEXT mapping issues
             select_parts.append(f"CAST({col_name} AS DOUBLE) AS {col_name}")
         else:
             select_parts.append(col_name)
             
     select_query = ", ".join(select_parts)
     
+    # USE THE PASSED TARGET_PATH
     con.execute(f"""
         COPY (SELECT {select_query} FROM {table_name}) 
-        TO '{output_path}' 
+        TO '{target_path}' 
         (FORMAT PARQUET, COMPRESSION 'SNAPPY')
     """)
     
@@ -52,7 +53,7 @@ def generate(context, params, table_name, output_dir, dataset_config):
     
     return MaterializeResult(
         metadata={
-            "path": MetadataValue.path(output_path),
+            "path": MetadataValue.path(target_path),
             "row_count": MetadataValue.int(row_count),
             "scale_factor": MetadataValue.float(scale_factor),
             "source": "duckdb_tpch_extension"

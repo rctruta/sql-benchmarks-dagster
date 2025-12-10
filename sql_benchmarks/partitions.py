@@ -1,75 +1,70 @@
+import os
+import yaml
 import itertools
-from dagster import MultiPartitionsDefinition, StaticPartitionsDefinition
-from .utils.common import load_context
-
-try:
-    CTX = load_context()
-except Exception:
-    CTX = {"dimensions": {}, "engines": []}
+from dagster import StaticPartitionsDefinition
+from .constants import EXPERIMENTS_DIR
 
 def build_partitions():
     """
-    Dynamically projects N dimensions onto a 2D Grid (Engine x Scenario).
-    Uses Composite Key Encoding (__) to prevent separator collisions with Dagster (|).
+    Builds partitions STRICTLY from the 'matrix' section of active.yaml.
+    Engines are NOT part of the partition key.
     """
-    # 1. PRIMARY AXIS: Engine
-    engines = CTX.get("engines", [])
-    if not engines: engines = ["default"]
+    config_path = os.path.join(EXPERIMENTS_DIR, "active.yaml")
+    
+    # 1. STRICT VALIDATION
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"CRITICAL: Config not found at {config_path}")
 
-    # 2. SECONDARY AXIS: Scenario (Composite)
-    other_dims = CTX.get("dimensions", {}).copy()
+    try:
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f) or {}
+    except Exception as e:
+        raise RuntimeError(f"CRITICAL: Failed to parse active.yaml: {e}")
 
-    if not other_dims:
-        composite_keys = ["baseline"]
-        composite_params_map = {"baseline": {}}
-        composite_axis_name = "scenario"
-    else:
-        dim_names = sorted(other_dims.keys())
-        dim_values_list = [other_dims[k] for k in dim_names]
+    execution = config.get("execution", {})
+    matrix = execution.get("matrix", {})
+
+    # 2. FAIL FAST if Matrix is missing
+    # Partitions are governed ONLY by the matrix. No matrix = No partitions.
+    if not matrix:
+        raise ValueError("CRITICAL: active.yaml missing 'execution.matrix'. Cannot generate partitions.")
+
+    # 3. GENERATE MATRIX KEYS
+    # We sort keys to ensure consistent naming (e.g., rows_disk)
+    keys = sorted(matrix.keys())
+    value_lists = [matrix[k] for k in keys]
+    
+    scenarios = []
+    params_map = {}
+
+    for combination in itertools.product(*value_lists):
+        # Name: "10000_ssd" 
+        # (This is a pure data slice. No engine info here.)
+        name = "_".join(str(x) for x in combination)
         
-        # Name the axis explicitly
-        composite_axis_name = "_".join(dim_names) # e.g. "disk_rows"
-        composite_keys = []
-        composite_params_map = {}
+        # Params: {'rows': 10000, 'disk_type': 'ssd'}
+        params = dict(zip(keys, combination))
+        
+        scenarios.append(name)
+        params_map[name] = params
 
-        for combo in itertools.product(*dim_values_list):
-            params = dict(zip(dim_names, combo))
-            
-            # SAFE ENCODING: Use double underscore __ to avoid clashing with Dagster's |
-            key_str = "__".join([str(v) for v in combo])
-            
-            composite_keys.append(key_str)
-            composite_params_map[key_str] = params
+    # 4. CREATE DEFINITION (1D List of Data Scenarios)
+    partitions_def = StaticPartitionsDefinition(scenarios)
 
-    # 3. DEFINE 2D GRID
-    partitions_def = MultiPartitionsDefinition({
-        "engine": StaticPartitionsDefinition([str(e) for e in engines]),
-        composite_axis_name: StaticPartitionsDefinition(composite_keys)
-    })
+    return partitions_def, params_map
 
-    # 4. BUILD LOOKUP MAP
-    full_config_map = {}
-    axes = sorted(["engine", composite_axis_name]) # Dagster sorts axis names alphabetically
-
-    for eng in engines:
-        for comp_key in composite_keys:
-            # Reconstruct params
-            params = composite_params_map[comp_key].copy()
-            if eng != "default":
-                params["engine"] = eng
-            
-            # Reconstruct Dagster Key (Axis1|Axis2)
-            key_parts = []
-            for axis in axes:
-                if axis == "engine":
-                    key_parts.append(str(eng))
-                else:
-                    key_parts.append(comp_key)
-            
-            final_key = "|".join(key_parts)
-            full_config_map[final_key] = params
-
-    return partitions_def, full_config_map
-
-# EXPORT
+# --- EXPORTS ---
 partitions_def, SCENARIO_CONFIG = build_partitions()
+
+def get_params_for_partition(partition_key):
+    """
+    Decodes the partition key into the configuration for that data slice.
+    """
+    if partition_key not in SCENARIO_CONFIG:
+        raise KeyError(f"Partition '{partition_key}' not found in configuration map.")
+        
+    matrix_params = SCENARIO_CONFIG[partition_key].copy()
+    
+    return {
+        "SCENARIO_CONFIG": matrix_params
+    }

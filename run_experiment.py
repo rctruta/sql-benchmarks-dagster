@@ -5,6 +5,7 @@ import shutil
 import argparse
 import subprocess
 import time
+import itertools
 from sql_benchmarks.utils.hasher import generate_experiment_hash
 from sql_benchmarks.constants import (
     ROOT_DIR, 
@@ -14,10 +15,34 @@ from sql_benchmarks.constants import (
     DAGSTER_MODULE_TARGET
 )
 
-def run_interactive(exp_hash):
+def get_partition_keys(config):
+    """Extracts partition keys (e.g., ssd_100000) from the config matrix."""
+    execution = config.get("execution", {})
+    matrix = execution.get("matrix") or execution.get("dimensions")
+    
+    if not matrix:
+        return [None] # Return None to signal a non-partitioned run
+
+    keys = sorted(matrix.keys())
+    values = [matrix[k] for k in keys]
+    
+    partition_keys = []
+    for combination in itertools.product(*values):
+        key_str = "_".join(str(v) for v in combination)
+        partition_keys.append(key_str)
+    
+    return partition_keys
+
+def run_interactive(exp_hash, keys):
     """Pauses execution so the user can run the job in the Dagster UI."""
     print(f"🚀 ACTIVATED: {exp_hash}")
-    print(f"👉 ACTION: Go to Dagster UI -> 'Reload Definitions' -> 'Materialize All'")
+    
+    if keys and keys != [None]:
+        print(f"⚠️  NOTE: This experiment has {len(keys)} partitions: {keys}")
+        print(f"👉 ACTION: In UI, click 'Materialize All' -> Then select Partition: {keys[0]} (or all)")
+    else:
+        print(f"👉 ACTION: Go to Dagster UI -> 'Reload Definitions' -> 'Materialize All'")
+        
     try:
         input(f"⌨️  Press [ENTER] once the run is GREEN (or Ctrl+C to stop)...")
         return True
@@ -25,26 +50,44 @@ def run_interactive(exp_hash):
         print("\n🛑 Stopping queue.")
         return False
 
-def run_automated(exp_hash):
-    """Automatically triggers the job via Dagster CLI."""
+def run_automated(exp_hash, keys):
+    """Automatically triggers the job via Dagster CLI, per partition."""
     print(f"🚀 Launching {exp_hash} (Automated)...")
     start = time.time()
-    try:
-        cmd = [
-            "dagster", "asset", "materialize", 
-            "-m", DAGSTER_MODULE_TARGET, 
-            "--select", "*"
-        ]
-        
-        subprocess.run(cmd, check=True, capture_output=True)
-        print(f"✅ Success ({time.time() - start:.1f}s)")
-        return True
-        
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Failed.")
-        if e.stderr:
-            print(f"🔎 Error: {e.stderr.decode('utf-8')[-500:]}")
-        return False
+    
+    if not keys: keys = [None]
+    
+    overall_success = True
+    
+    for pk in keys:
+        if pk:
+            print(f"   ▶ Triggering Partition: {pk}...")
+            cmd = [
+                "dagster", "asset", "materialize", 
+                "-m", DAGSTER_MODULE_TARGET, 
+                "--select", "*",
+                "--partition", pk  # <--- THE FIX
+            ]
+        else:
+            print(f"   ▶ Triggering Unpartitioned Run...")
+            cmd = [
+                "dagster", "asset", "materialize", 
+                "-m", DAGSTER_MODULE_TARGET, 
+                "--select", "*"
+            ]
+
+        try:
+            subprocess.run(cmd, check=True, capture_output=True)
+            print(f"     ✅ Done.")
+        except subprocess.CalledProcessError as e:
+            print(f"     ❌ Failed.")
+            if e.stderr:
+                print(f"🔎 Error: {e.stderr.decode('utf-8')[-500:]}")
+            overall_success = False
+
+    total_time = time.time() - start
+    print(f"🏁 Experiment Complete ({total_time:.1f}s)")
+    return overall_success
 
 def process_queue(target_input, auto_mode=False):
     # 1. SMART PATH RESOLUTION
@@ -88,12 +131,9 @@ def process_queue(target_input, auto_mode=False):
         try:
             with open(config_file, 'r') as f:
                 config = yaml.safe_load(f)
-            
-            # --- FIX: Handle Empty or Invalid Files ---
             if not config or not isinstance(config, dict):
                 print(f"⚠️  Skipping empty or invalid YAML: {filename}")
                 continue
-                
         except Exception as e:
             print(f"❌ Invalid YAML: {e}")
             continue
@@ -114,17 +154,20 @@ def process_queue(target_input, auto_mode=False):
             yaml.dump(config, f, sort_keys=False)
 
         # D. Run
+        keys = get_partition_keys(config)
+        
         success = False
         if auto_mode:
-            success = run_automated(exp_hash)
+            success = run_automated(exp_hash, keys)
         else:
-            success = run_interactive(exp_hash)
+            success = run_interactive(exp_hash, keys)
 
         # E. Archive
         if success:
             shutil.copy(ACTIVE_CONFIG_PATH, registry_path)
             print(f"💾 Archived {exp_hash} to registry.")
         elif not auto_mode:
+            # In interactive mode, if user fails, we stop.
             sys.exit(0)
 
 if __name__ == "__main__":

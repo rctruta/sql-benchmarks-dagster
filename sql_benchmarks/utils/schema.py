@@ -56,13 +56,12 @@ class PostgresSettings(BaseModel):
 class ExecutionConfig(BaseModel):
     model_config = ConfigDict(extra='allow')
     
-    # REQUIRED in V7
     engines: List[str] 
     
     # Optional
     test_suite: Optional[str] = None
     replication: int = 1
-    pg_settings: Optional[Dict[str, Any]] = None
+    pg_settings: Optional[PostgresSettings] = None
     
     # The Matrix (can be named matrix or dimensions)
     matrix: Optional[Dict[str, List[Any]]] = None
