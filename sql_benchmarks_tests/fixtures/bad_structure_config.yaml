@@ -1,0 +1,6 @@
+meta:
+  experiment_id: "test_fail_structure"
+
+execution:
+  engines: ["postgres"]
+  # matrix is missing!

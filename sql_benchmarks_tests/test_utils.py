@@ -4,10 +4,13 @@ from sql_benchmarks.utils.common import (
     infer_metadata_from_sql, 
     normalize_distribution, 
     get_tables_used_in_sql,
-    get_data_dependencies
+    get_data_dependencies,
+    load_context
 )
 from sql_benchmarks.utils.ddl import PostgresDDLGenerator
 from sql_benchmarks.utils.system import thrash_os_cache
+from sql_benchmarks.config_loader import ConfigLoader
+
 
 # ==========================================
 # 1. TEST THE "BRAIN" (Math & Metadata)
@@ -69,8 +72,6 @@ def test_get_data_dependencies_resolves_fks():
 # ==========================================
 # 3. TEST THE "SYSTEM" (OS Cache)
 # ==========================================
-from unittest.mock import patch, MagicMock
-from sql_benchmarks.utils.system import thrash_os_cache
 
 @patch("sql_benchmarks.utils.system.mmap")
 @patch("sql_benchmarks.utils.system.psutil")
@@ -98,3 +99,41 @@ def test_ddl_pk_generation():
     table_def = {"columns": [{"name": "id", "primary_key": True}]}
     gen = PostgresDDLGenerator(table_def, "users_small", "small")
     assert "PRIMARY KEY (id)" in gen.generate_pk_sql()
+
+from sql_benchmarks.utils import common
+
+MOCK_CONFIG_PAYLOAD = {
+    "meta": {"experiment_id": "test_success"},
+    "dataset": {
+        "tables": {"orders": {}, "customers": {}}
+    },
+    "execution": {
+        "engines": ["postgres", "duckdb"],
+        "matrix": {"rows": ["small"], "disk_type": ["ssd"]},
+    }
+}
+
+@pytest.fixture
+def mock_compiler_setup(monkeypatch):
+    """
+    Uses monkeypatch to safely replace the global _GLOBAL_COMPILER
+    with a mock object, using autospec to correctly capture instance attributes.
+    """
+    # 1. Create the Mock Object
+    from sql_benchmarks.config_loader import ConfigLoader # Ensure access to the class
+
+    # FIX: Use autospec=ConfigLoader for reliable attribute detection
+    mock_compiler = MagicMock(autospec=ConfigLoader) 
+    
+    # 2. Setup the Mock's Properties (The Contract)
+    # This setup will now work without the AttributeError
+    mock_compiler.execution = MOCK_CONFIG_PAYLOAD['execution']
+    mock_compiler.definitions = MOCK_CONFIG_PAYLOAD['definitions'] # <-- This line is now safe
+    mock_compiler.dataset = MOCK_CONFIG_PAYLOAD['dataset']
+    mock_compiler.get_full_config.return_value = MOCK_CONFIG_PAYLOAD
+    
+    # 3. Use monkeypatch to swap the global variable
+    # ... rest of the fixture remains the same ...
+    monkeypatch.setattr(common, "_GLOBAL_COMPILER", mock_compiler)
+    
+    yield mock_compiler

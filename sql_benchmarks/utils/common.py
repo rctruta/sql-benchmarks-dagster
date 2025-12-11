@@ -4,52 +4,57 @@ import jinja2
 import jinja2.meta
 import numpy as np
 from ..constants import ACTIVE_CONFIG_PATH, SQL_DIR
+from ..config_loader import ConfigLoader
+from typing import Dict, Any
 
+# Initialize the compiler once globally
+# NOTE: If this fails to initialize due to a strict violation, the error will propagate up 
+# when Dagster tries to load definitions, which is the correct fail-hard behavior.
 # ==========================================
 # 1. CONTEXT & CONFIG LOADING
 # ==========================================
-def load_context():
-    """Single source of truth for the active experiment."""
-    if not os.path.exists(ACTIVE_CONFIG_PATH):
-        raise FileNotFoundError(f"CRITICAL: Config not found at {ACTIVE_CONFIG_PATH}")
-  
-    with open(ACTIVE_CONFIG_PATH, "r") as f:
-        config = yaml.safe_load(f) or {}
+try:
+    _GLOBAL_COMPILER = ConfigLoader()
+except ValueError as e:
+    # Propagate structural errors during load time
+    raise e 
 
-    execution = config.get("execution", {})
+def load_context() -> Dict[str, Any]:
+    """
+    Returns a consolidated context dictionary containing all derived and raw configuration
+    needed by asset factories. This replaces the old context loading logic.
+    """
+    raw_config = _GLOBAL_COMPILER.get_full_config()
     
-    engines = execution.get("engines") or config.get("engines")
-    if not engines:
-        raise ValueError("Critical: 'engines' not found in execution block or root.")
-        
-    # We support 'matrix' (V7 name) or 'dimensions' (V6 name)
-    dimensions = execution.get("matrix") or execution.get("dimensions") or config.get("dimensions", {})
-
-    if "engines" not in execution:
-        # Create it if missing so downstream code doesn't crash accessing ['execution']['engines']
-        if "execution" not in config: config["execution"] = {}
-        config["execution"]["engines"] = engines
-        config["execution"]["matrix"] = dimensions
-
-    raw_tables = config['dataset']['tables']
-    # Normalize tables to list of names and dict of configs
-    if isinstance(raw_tables, list):
-        table_names = raw_tables
-        table_configs = {t: {} for t in raw_tables}
-    elif isinstance(raw_tables, dict):
-        table_names = list(raw_tables.keys())
-        table_configs = raw_tables
-    else:
-        raise ValueError("'dataset.tables' must be a List or Dictionary.")
-
-    return {
-        "full_config": config,
-        "engines": engines,
-        "dataset_config": config["dataset"],
-        "tables": table_names,
-        "table_defs": table_configs,
-        "meta": config.get("meta", {"experiment_id": "unknown"})
+    # --- Tracing All Necessary Context for Asset Factories ---
+    
+    # 1. Core Config Blocks
+    context = {
+        "full_config": raw_config,
+        "execution": _GLOBAL_COMPILER.execution,
+        "definitions": _GLOBAL_COMPILER.definitions,
+        "dataset_config": _GLOBAL_COMPILER.dataset, # Used by benchmark_factory for schema inference
     }
+
+    # 2. Derived/Extracted Context (Crucial for Downstream Logic)
+    
+   # A. Active Engines (Used by benchmark_factory to loop over engines)
+    context["engines"] = context["execution"].get("engines", [])
+    
+    # B. Valid Tables (Set of table names for dependency checking)
+    table_defs = context["dataset_config"].get("tables", {})
+    context["tables"] = set(table_defs.keys())
+    
+    # C. Legacy Contract Fulfillment
+    context["table_defs"] = table_defs
+    
+    # D. Experiment Metadata
+    context["meta"] = raw_config.get("meta", {})
+    
+    # E. Full Scenario Config
+    context["scenario_config"] = _GLOBAL_COMPILER.scenario_config
+    
+    return context
 
 def get_target_sql_dir(config):
     suite = config.get("execution", {}).get("test_suite", "")
@@ -126,7 +131,7 @@ def normalize_distribution(options: list, weights: list):
 # 4. METADATA INFERENCE
 # ==========================================
 def infer_metadata_from_sql(sql_content, dataset_config):
-    """Scans SQL for known data keys (e.g. 'sel_1') to derive metadata."""
+    """Scans SQL for known data keys to derive metadata."""
     mapping = {}
     tables = dataset_config.get('tables', {})
     
@@ -149,3 +154,29 @@ def infer_metadata_from_sql(sql_content, dataset_config):
             meta['data_slice'] = key
             break 
     return meta
+
+# ==========================================
+# 5. PARTITION KEYS
+# ==========================================
+
+def generate_partition_keys(matrix_config):
+    """
+    Takes a matrix dict and returns sorted partition keys.
+    Used by: sensors.py, run_experiment.py (CLI), and potentially partitions.py
+    """
+    import itertools
+    
+    if not matrix_config:
+        return []
+
+    # 1. Sort keys to ensure consistent naming
+    keys = sorted(matrix_config.keys())
+    values = [matrix_config[k] for k in keys]
+    
+    # 2. Cartesian Product
+    partition_keys = []
+    for combination in itertools.product(*values):
+        key_str = "_".join(str(v) for v in combination)
+        partition_keys.append(key_str)
+        
+    return partition_keys

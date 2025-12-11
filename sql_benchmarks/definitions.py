@@ -41,7 +41,7 @@ defs = Definitions(
     ],
     resources={
         "postgres": PostgresResource(connection_string=postgres_url),
-        "duckdb": DuckDBResource(data_folder=DATA_DIR)
+        "duckdb": DuckDBResource(data_folder=os.path.join(DATA_DIR, "duckdb"))
     },
     jobs=[benchmark_job],
     sensors=[experiment_queue_sensor]

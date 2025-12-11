@@ -1,23 +1,23 @@
+meta:
+  experiment_id: ff890937
+  description: Clean architecture test
 dataset:
   source: sql_benchmarks.plugins.data_sources.declarative_gen
   tables:
     orders:
+      rows: 100000
       columns:
       - name: id
         provider: sequence
-      rows: 100
 execution:
+  test_suite: selectivity
+  replication: 3
   engines:
   - postgres
   - duckdb
   matrix:
+    rows:
+    - 100000
     disk_type:
     - ssd
     - hdd
-    rows:
-    - 100
-  replication: 3
-  test_suite: selectivity
-meta:
-  description: Clean architecture test
-  experiment_id: v7_refactor

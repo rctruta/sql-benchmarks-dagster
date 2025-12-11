@@ -77,3 +77,13 @@ with open(active_yaml_path, "w") as f:
 @pytest.fixture(scope="session")
 def test_context():
     return test_config
+
+@pytest.fixture(scope="session")
+def loaded_benchmark_assets():
+    """
+    Loads all assets dynamically within the fixture scope to ensure 
+    partitions_def and other global state are fully initialized.
+    """
+    # Import the newly cleaned function
+    from sql_benchmarks.assets.benchmark_factory import get_benchmark_assets 
+    return get_benchmark_assets()

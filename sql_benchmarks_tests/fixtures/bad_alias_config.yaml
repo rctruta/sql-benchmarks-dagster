@@ -1,0 +1,10 @@
+meta:
+  experiment_id: "test_fail"
+
+definitions:
+  rows:
+    small: 100000 # 'medium' is missing here!
+
+execution:
+  matrix:
+    rows: [small, medium] # <--- 'medium' cannot be resolved

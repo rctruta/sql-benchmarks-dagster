@@ -1,0 +1,18 @@
+meta:
+  experiment_id: "test_success"
+
+definitions:
+  rows:
+    small: 100000
+    medium: 1000000
+  pg_settings:
+    hdd:
+      random_page_cost: 4.0
+    ssd:
+      random_page_cost: 1.1
+
+execution:
+  engines: ["postgres"]
+  matrix:
+    rows: [small, medium]
+    disk_type: [ssd, hdd]

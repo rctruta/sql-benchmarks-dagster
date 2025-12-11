@@ -47,5 +47,5 @@ execution:
   replication: 3
   engines: ["postgres", "duckdb"]
   matrix:
-    rows: [10_000, 100_000]
+    rows: [small, medium]
     disk_type: ["ssd"]  

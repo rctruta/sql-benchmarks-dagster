@@ -107,31 +107,30 @@ class PostgresResource(ConfigurableResource):
     def get_engine(self):
         return create_engine(self.connection_string)
 
-    def execute_query(self, sql: str):
-        engine = self.get_engine()
-        with engine.begin() as conn:
-            conn.execute(text(sql))
-
-    # CHANGED: Added partition_key and db_config to match Factory expectations
     def benchmark_query(self, sql: str, partition_key: str = None, db_config: dict = None) -> float:
+        """LEGACY METHOD: Call the stable execute_query instead."""
+ 
+        self.execute_query(sql, partition_key=partition_key, db_config=db_config, read_only=True, is_benchmark=True) 
+
+    def execute_query(self, sql: str, partition_key: str = None, db_config: dict = None, read_only: bool = False, is_benchmark: bool = False):
         engine = self.get_engine()
         
         # We use connect() so we can set session variables before the query
         with engine.connect() as conn:
             
-            # 1. Apply Session Configs (e.g. work_mem) if provided
+            # 1. Apply Session Configs (e.g. work_mem)
             if db_config:
                 for key, val in db_config.items():
-                    # We use simple string injection here for SET commands.
-                    # Ensure your config values are safe strings.
                     conn.execute(text(f"SET {key} = '{val}'"))
 
-            # 2. Run Benchmark
-            start = time.time()
-            conn.execute(text(sql))
-            end = time.time()
-            
-        return end - start
+            # 2. Run Query/Benchmark
+            if is_benchmark:
+                start = time.time()
+                conn.execute(text(sql))
+                end = time.time()
+                return end - start # Return the duration for consistency if needed
+            else:
+                conn.execute(text(sql))
 
     def bulk_load(self, file_path: str, table_name: str):
         print(f"🚀 Streaming {file_path} to {table_name}...")

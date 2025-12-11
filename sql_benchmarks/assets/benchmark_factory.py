@@ -32,23 +32,34 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta):
         required_resource_keys={engine}
     )
     def _benchmark(context: AssetExecutionContext):
-        db = getattr(context.resources, engine)
+        if engine == "duckdb":
+            db = context.resources.duckdb
+        elif engine == "postgres":
+            db = context.resources.postgres
+        else:
+        # Fails hard if an unsupported engine is provided
+            raise ValueError(f"Unsupported engine: {engine}")
+        
         pk = context.partition_key
         params = SCENARIO_CONFIG.get(pk, {})
         
         # SQL Render
-        render_ctx = {f"{t}_table": f"{t}_{pk}" for t in used_tables}
-        sql = jinja2.Template(raw_template).render(render_ctx)
 
+        render_ctx = {f"{t}_table": f"{t}_{pk}" for t in used_tables}
+        render_ctx.update(params)         
+        sql = jinja2.Template(raw_template).render(render_ctx)
+        
         # Run
         durations = []
         for _ in range(REPLICATION_FACTOR):
             t0 = time.time()
             if engine == "duckdb":
                 thrash_os_cache(override_gb=params.get("flood_size_gb"))
-                db.benchmark_query(sql, partition_key=pk)
+                db.execute_query(sql, partition_key=pk, read_only=True, is_benchmark=True)
             else:
-                db.benchmark_query(sql, partition_key=pk, db_config=params.get("pg_settings", {}))
+                db.execute_query(sql, partition_key=pk, 
+                                 db_config=params.get("pg_settings", {}),
+                                 read_only=True, is_benchmark=True)
             durations.append(time.time() - t0)
 
         # Metadata
@@ -67,15 +78,49 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta):
 
     return _benchmark
 
-benchmark_assets = []
-if ACTIVE_ENGINES:
+def get_benchmark_assets():
+    assets = []
+    
+    # Access global configuration context (CTX)
+    # Check if CTX is loaded before attempting to read configuration
+    if not CTX: 
+        return [] 
+
+    ACTIVE_ENGINES = CTX.get('engines')
+    if not ACTIVE_ENGINES:
+        return []
+        
+    FULL_CONFIG = CTX.get('full_config', {})
+    dataset_cfg = CTX.get('dataset_config', {})
+    VALID_TABLES = CTX.get('tables', set())
+    
     target_dir = get_target_sql_dir(FULL_CONFIG)
-    dataset_cfg = CTX['dataset_config']
+
     for engine in ACTIVE_ENGINES:
         path = os.path.join(target_dir, engine)
         if not os.path.exists(path): continue
+        
         for f in glob.glob(os.path.join(path, "*.sql")):
             base = os.path.basename(f).replace(".sql", "")
             tables, raw = get_tables_used_in_sql(f, VALID_TABLES)
             static_meta = infer_metadata_from_sql(raw, dataset_cfg)
-            benchmark_assets.append(make_benchmark_asset(base, engine, tables, raw, static_meta))
+            
+            # 1. Get the raw decorated function
+            asset_wrapper = make_benchmark_asset(base, engine, tables, raw, static_meta)
+            
+            # 2. Convert to the stable AssetDefinition object
+            # We assume the conversion method is available on the wrapper function.
+            # If to_asset_def() fails, we rely on the object being directly recognizable.
+            try:
+                asset_obj = asset_wrapper.to_asset_def()
+            except AttributeError:
+                # Fallback: Assume the decorated function is the AssetDefinition object itself
+                asset_obj = asset_wrapper
+                
+            assets.append(asset_obj)
+            
+    return assets
+
+# --- Final Global Definition ---
+
+#benchmark_assets = get_benchmark_assets()

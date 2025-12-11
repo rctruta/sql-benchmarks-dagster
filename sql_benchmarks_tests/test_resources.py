@@ -1,7 +1,9 @@
 import pytest
+import os
 import polars as pl
 from unittest.mock import patch, MagicMock
 from sql_benchmarks.resources.postgres import PostgresResource
+from sql_benchmarks.resources.duckdb import DuckDBResource
 
 TEST_CONN = "postgresql://postgres:password@localhost:5432/postgres"
 
@@ -87,3 +89,38 @@ def test_check_port_available_logic():
         
         mock_sock.connect_ex.return_value = 111 # Non-zero = Free
         assert pg._check_port_available(5432) is True
+
+# ==========================================
+# 4. TEST THE DUCKDB RESOURCE (Isolation)
+# ==========================================
+
+def test_duckdb_path_isolation_contract():
+    """
+    Verify DuckDB resource correctly uses the symbolic partition key for isolation,
+    and handles unpartitioned paths.
+    """
+    mock_data_folder = "/tmp/data/duckdb_isolation"
+    
+    # 1. Instantiate the Resource
+    db_resource = DuckDBResource(data_folder=mock_data_folder)
+
+    # 2. Test Partitioned Path (Symbolic Key Contract)
+    partition_key_1 = "tiny_ssd_pg"
+    path_1 = db_resource._get_db_path(partition_key_1)
+    
+    # Assert correct structure and use of symbolic key
+    expected_path_1 = os.path.join(mock_data_folder, "benchmark_tiny_ssd_pg.duckdb")
+    assert path_1 == expected_path_1
+
+    # 3. Test Isolation (Ensures two keys generate distinct paths)
+    partition_key_2 = "medium_hdd_duck"
+    path_2 = db_resource._get_db_path(partition_key_2)
+
+    expected_path_2 = os.path.join(mock_data_folder, "benchmark_medium_hdd_duck.duckdb")
+    assert path_2 == expected_path_2
+    assert path_1 != path_2
+
+    # 4. Test Unpartitioned Path (Fallback)
+    path_unpartitioned = db_resource._get_db_path(None)
+    expected_path_unpartitioned = os.path.join(mock_data_folder, "benchmark.duckdb")
+    assert path_unpartitioned == expected_path_unpartitioned        
