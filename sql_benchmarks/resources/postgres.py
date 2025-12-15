@@ -2,10 +2,9 @@
 from dagster import ConfigurableResource
 from typing import Dict, Any, Optional
 import socket 
-import time
-
 from .base_engine import IBenchmarkEngine # We import it for type hinting, but don't inherit
 from .postgres_client import PostgresClient 
+from pydantic import ConfigDict
 
 # Inheritance is simplified to prevent MRO conflicts. It satisfies IBenchmarkEngine via Protocol.
 class PostgresEngine(ConfigurableResource): 
@@ -13,6 +12,7 @@ class PostgresEngine(ConfigurableResource):
     # --- CONFIGURATION (Immutable) ---
     connection_string: str
     container_name: str = "benchmark_postgres"
+    model_config = ConfigDict(extra='forbid')
     
     # --- FACTORY METHOD ---
     def _get_client(self) -> PostgresClient:

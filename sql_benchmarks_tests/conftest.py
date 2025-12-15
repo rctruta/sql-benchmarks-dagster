@@ -1,6 +1,7 @@
 import pytest
 import os
 import yaml
+from unittest.mock import patch, MagicMock
 from sql_benchmarks.constants import EXPERIMENTS_DIR
 from sql_benchmarks.resources.duckdb import DuckDBEngine
 
@@ -97,29 +98,21 @@ def static_parquet_path():
         raise FileNotFoundError(f"CRITICAL: Static fixture file not found at: {TEST_DATA_PATH}. Please create it.")
     return TEST_DATA_PATH
 
-@pytest.fixture
-def duckdb_resource_ready(static_parquet_path):
-    """
-    Instantiates the resource and ensures the partitioned database file exists 
-    by running the bulk_load method using the static Parquet file.
-    """
-    resource = DuckDBEngine(data_folder=TEST_DATA_FOLDER)
+@pytest.fixture(scope="session", autouse=True) # Use session scope for efficiency
+def mock_duckdb_connect():
+    """Globally mocks duckdb.connect used by DuckDBClient."""
     
-    # 1. Resolve DB Path
-    db_path = resource._get_db_path(TEST_PARTITION_KEY)
-    
-    # 2. CLEANUP (Ensure test is repeatable)
-    if os.path.exists(db_path):
-        os.remove(db_path)
-    
-    resource.bulk_load(
-        filepath=static_parquet_path,
-        target_table_name=TEST_TABLE_NAME,
-        partition_key=TEST_PARTITION_KEY
-    )
-    
-    yield resource
-
-    if os.path.exists(db_path):
-        os.remove(db_path)
-
+    # We target the 'connect' function in the client module
+    with patch("sql_benchmarks.resources.duckdb_client.duckdb.connect") as mock_connect_func:
+        # Create a mock connection and result object
+        mock_conn = MagicMock()
+        mock_result = MagicMock()
+        
+        # Configure the result for typical read queries
+        mock_result.fetchall.return_value = []
+        
+        # Configure the connection context manager to return the mock
+        mock_connect_func.return_value.__enter__.return_value = mock_conn
+        mock_conn.execute.return_value = mock_result
+        
+        yield mock_conn

@@ -1,5 +1,16 @@
 from pydantic import BaseModel, ConfigDict
 from typing import List, Dict, Optional, Union, Any
+import warnings
+
+# Temporarily silence Dagster's Pydantic V2 Deprecation Warning
+# Since this file is now fully V2, this filter might be unnecessary, 
+# but it's kept here in case the test runner needs it.
+warnings.filterwarnings(
+    "ignore", 
+    category=DeprecationWarning, 
+    message="Support for class-based `config` is deprecated"
+)
+
 # ==========================================
 # 1. TABLE & COLUMN DEFINITIONS (Synthetic)
 # ==========================================
@@ -30,9 +41,8 @@ class TableDef(BaseModel):
     columns: Optional[List[ColumnDef]] = None
     indexes: Optional[List[IndexDef]] = []
     
-    # Allow table-level overrides (compression, etc.)
-    class Config:
-        extra = 'allow'
+    # --- V2 MIGRATION: Replaces class Config: extra = 'allow' ---
+    model_config = ConfigDict(extra='allow')
 
 # ==========================================
 # 2. DATASET CONFIGURATION (Polymorphic)
@@ -40,18 +50,17 @@ class TableDef(BaseModel):
 class DatasetConfig(BaseModel):
     model_config = ConfigDict(extra='allow')
     source: Optional[str] = None
-    tables: Optional[Dict[str, Any]] = None # permissive for now
+    tables: Optional[Dict[str, Any]] = None
     paths: Optional[Dict[str, str]] = None
 
 # ==========================================
 # 3. EXECUTION CONFIGURATION (The Matrix)
 # ==========================================
 class PostgresSettings(BaseModel):
+    # --- V2 MIGRATION: Replaces class Config: extra = 'allow' ---
+    model_config = ConfigDict(extra='allow')
     work_mem: Optional[str] = None
     random_page_cost: Optional[float] = None
-    # Allow other pg_settings keys without validation errors
-    class Config:
-        extra = 'allow'
 
 class ExecutionConfig(BaseModel):
     model_config = ConfigDict(extra='allow')
@@ -71,11 +80,10 @@ class ExecutionConfig(BaseModel):
 # 4. ROOT CONFIGURATION
 # ==========================================
 class MetaInfo(BaseModel):
+    # --- V2 MIGRATION: Replaces class Config: extra = 'allow' ---
+    model_config = ConfigDict(extra='allow')
     experiment_id: str
     description: Optional[str] = None
-    # Allow extra metadata tags
-    class Config:
-        extra = 'allow'
 
 class ExperimentSchema(BaseModel):
     meta: Dict[str, str]
