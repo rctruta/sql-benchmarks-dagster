@@ -2,6 +2,7 @@ import pytest
 import os
 import yaml
 from sql_benchmarks.constants import EXPERIMENTS_DIR
+from sql_benchmarks.resources.duckdb import DuckDBEngine
 
 def load_real_config_and_shrink():
     """
@@ -21,24 +22,16 @@ def load_real_config_and_shrink():
         # Fallback only if NO config exists in the repo
         return get_fallback_config()
 
-    # 2. SHRINK IT (The "Safe Mode" Logic)
-    # We keep the structure (keys, plugins, queries) but kill the volume.
-    
     # A. Shrink Dataset
     if "dataset" in config and "tables" in config["dataset"]:
         for table_name, table_def in config["dataset"]["tables"].items():
-            # If rows is a number, make it tiny
             if isinstance(table_def.get("rows"), int):
                 table_def["rows"] = 100
-            # If rows is a variable ("rows_var"), we handle it in the matrix below
+
 
     # B. Shrink Execution Matrix
     if "execution" in config:
-        # Force the engine to just DuckDB (fastest for tests) if available
-        # But keep user's list if they want to test postgres logic
-        # config["execution"]["engines"] = ["duckdb"] 
-        
-        # Shrink the Matrix dimensions to 1 tiny option
+
         matrix = config["execution"].get("matrix") or config["execution"].get("dimensions") or {}
         
         # Overwrite specific scaling dimensions with tiny values
@@ -87,3 +80,46 @@ def loaded_benchmark_assets():
     # Import the newly cleaned function
     from sql_benchmarks.assets.benchmark_factory import get_benchmark_assets 
     return get_benchmark_assets()
+
+
+
+BASE_TEST_DIR = os.path.dirname(os.path.abspath(__file__))
+TEST_DATA_PATH = os.path.join(BASE_TEST_DIR, "fixtures", "test_hierarchy_small.parquet")
+
+TEST_DATA_FOLDER = "/tmp/duckdb_data"
+TEST_PARTITION_KEY = "medium_ssd"
+TEST_TABLE_NAME = "test_table" 
+
+@pytest.fixture
+def static_parquet_path():
+    """Provides the persistent, absolute path to the static Parquet fixture file."""
+    if not os.path.exists(TEST_DATA_PATH):
+        raise FileNotFoundError(f"CRITICAL: Static fixture file not found at: {TEST_DATA_PATH}. Please create it.")
+    return TEST_DATA_PATH
+
+@pytest.fixture
+def duckdb_resource_ready(static_parquet_path):
+    """
+    Instantiates the resource and ensures the partitioned database file exists 
+    by running the bulk_load method using the static Parquet file.
+    """
+    resource = DuckDBEngine(data_folder=TEST_DATA_FOLDER)
+    
+    # 1. Resolve DB Path
+    db_path = resource._get_db_path(TEST_PARTITION_KEY)
+    
+    # 2. CLEANUP (Ensure test is repeatable)
+    if os.path.exists(db_path):
+        os.remove(db_path)
+    
+    resource.bulk_load(
+        filepath=static_parquet_path,
+        target_table_name=TEST_TABLE_NAME,
+        partition_key=TEST_PARTITION_KEY
+    )
+    
+    yield resource
+
+    if os.path.exists(db_path):
+        os.remove(db_path)
+

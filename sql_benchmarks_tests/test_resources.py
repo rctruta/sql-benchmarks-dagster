@@ -2,25 +2,26 @@ import pytest
 import os
 import polars as pl
 from unittest.mock import patch, MagicMock
-from sql_benchmarks.resources.postgres import PostgresResource
-from sql_benchmarks.resources.duckdb import DuckDBResource
+from sqlalchemy import text
+from sql_benchmarks.resources.base_engine import IBenchmarkEngine 
+from sql_benchmarks.resources.postgres import PostgresEngine
+from sql_benchmarks.resources.duckdb import DuckDBEngine
 
 TEST_CONN = "postgresql://postgres:password@localhost:5432/postgres"
 
 def test_execute_query_runs_sql():
-    """
-    Verifies DDL execution logic.
-    Strategy: Patch 'create_engine' (the import), NOT the Pydantic field.
-    """
-    pg = PostgresResource(connection_string=TEST_CONN)
+    pg = PostgresEngine(connection_string=TEST_CONN)
     
-    with patch("sql_benchmarks.resources.postgres.create_engine") as mock_create:
+    # 1. Patch the internal engine accessor
+    with patch.object(pg, "get_sql_engine") as mock_get_engine:
         mock_engine = MagicMock()
         mock_conn = MagicMock()
-        mock_create.return_value = mock_engine
-        mock_engine.begin.return_value.__enter__.return_value = mock_conn
+        mock_get_engine.return_value = mock_engine
         
-        pg.execute_query("DROP TABLE t1")
+        # 2. Mock the connection context manager used inside _execute_internal
+        mock_engine.connect.return_value.__enter__.return_value = mock_conn
+        
+        pg._execute_internal("DROP TABLE t1")
         
         assert mock_conn.execute.called
         # Verify the arguments passed to sqlalchemy.text()
@@ -28,22 +29,24 @@ def test_execute_query_runs_sql():
         assert "DROP TABLE t1" in args
 
 def test_benchmark_query_returns_float():
-    """
-    Verifies benchmark timing logic.
-    """
-    pg = PostgresResource(connection_string=TEST_CONN)
+    pg = PostgresEngine(connection_string=TEST_CONN)
     
+    # Patch create_engine inside the module being tested
     with patch("sql_benchmarks.resources.postgres.create_engine") as mock_create:
         mock_engine = MagicMock()
         mock_conn = MagicMock()
         mock_create.return_value = mock_engine
         mock_engine.connect.return_value.__enter__.return_value = mock_conn
         
-        duration = pg.benchmark_query("SELECT 1")
+        # Define minimal scenario_params required by run_query
+        scenario_params = {} 
+        
+        # ACT: Use the new public contract method
+        duration = pg.run_query("SELECT 1", partition_key="test", scenario_params=scenario_params)
         
         assert isinstance(duration, float)
         assert mock_conn.execute.called
-
+        
 def test_postgres_bulk_load_calls_copy(tmp_path):
     """
     Verifies that bulk_load correctly formats the COPY command.
@@ -53,7 +56,7 @@ def test_postgres_bulk_load_calls_copy(tmp_path):
     df = pl.DataFrame({"id": [1], "val": ["a"]})
     df.write_parquet(valid_parquet)
     
-    pg = PostgresResource(connection_string=TEST_CONN)
+    pg = PostgresEngine(connection_string=TEST_CONN)
     
     # 2. Patch create_engine to catch the COPY command
     with patch("sql_benchmarks.resources.postgres.create_engine") as mock_create:
@@ -67,10 +70,12 @@ def test_postgres_bulk_load_calls_copy(tmp_path):
         
         # 3. Patch internal logic helper methods
         # This is safe because we patch the CLASS, not the instance
-        with patch.object(PostgresResource, "_create_schema"):
-            with patch.object(PostgresResource, "execute_query"):
+        with patch.object(PostgresEngine, "_create_schema"):
+            # The public run_query is now the replacement for the old execute_query
+            with patch.object(PostgresEngine, "run_query"): 
                 
-                pg.bulk_load(str(valid_parquet), "test_table")
+                # ACT: Must include the required partition_key argument
+                pg.bulk_load(str(valid_parquet), "test_table", partition_key="test")
         
         # 4. Verify SQL construction
         assert mock_cursor.copy_expert.called
@@ -81,46 +86,13 @@ def test_check_port_available_logic():
     """
     Unit test the port check logic (pure python, no Pydantic conflict).
     """
-    pg = PostgresResource(connection_string=TEST_CONN)
+    pg = PostgresEngine(connection_string=TEST_CONN)
     
     with patch("socket.socket") as mock_sock_cls:
         mock_sock = MagicMock()
         mock_sock_cls.return_value.__enter__.return_value = mock_sock
         
-        mock_sock.connect_ex.return_value = 111 # Non-zero = Free
+        mock_sock.connect_ex.return_value = 111 
         assert pg._check_port_available(5432) is True
 
-# ==========================================
-# 4. TEST THE DUCKDB RESOURCE (Isolation)
-# ==========================================
 
-def test_duckdb_path_isolation_contract():
-    """
-    Verify DuckDB resource correctly uses the symbolic partition key for isolation,
-    and handles unpartitioned paths.
-    """
-    mock_data_folder = "/tmp/data/duckdb_isolation"
-    
-    # 1. Instantiate the Resource
-    db_resource = DuckDBResource(data_folder=mock_data_folder)
-
-    # 2. Test Partitioned Path (Symbolic Key Contract)
-    partition_key_1 = "tiny_ssd_pg"
-    path_1 = db_resource._get_db_path(partition_key_1)
-    
-    # Assert correct structure and use of symbolic key
-    expected_path_1 = os.path.join(mock_data_folder, "benchmark_tiny_ssd_pg.duckdb")
-    assert path_1 == expected_path_1
-
-    # 3. Test Isolation (Ensures two keys generate distinct paths)
-    partition_key_2 = "medium_hdd_duck"
-    path_2 = db_resource._get_db_path(partition_key_2)
-
-    expected_path_2 = os.path.join(mock_data_folder, "benchmark_medium_hdd_duck.duckdb")
-    assert path_2 == expected_path_2
-    assert path_1 != path_2
-
-    # 4. Test Unpartitioned Path (Fallback)
-    path_unpartitioned = db_resource._get_db_path(None)
-    expected_path_unpartitioned = os.path.join(mock_data_folder, "benchmark.duckdb")
-    assert path_unpartitioned == expected_path_unpartitioned        

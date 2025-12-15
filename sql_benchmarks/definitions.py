@@ -14,8 +14,8 @@ from .assets.reporting import performance_dashboard
 from .assets.maintenance import cleanup_staging_data
 
 # 3. RESOURCES & INFRA
-from .resources.postgres import PostgresResource
-from .resources.duckdb import DuckDBResource
+from .resources.postgres import PostgresEngine
+from .resources.duckdb import DuckDBEngine
 from .constants import DATA_DIR
 from .jobs import benchmark_job
 from .sensors import experiment_queue_sensor
@@ -40,8 +40,8 @@ defs = Definitions(
         cleanup_staging_data
     ],
     resources={
-        "postgres": PostgresResource(connection_string=postgres_url),
-        "duckdb": DuckDBResource(data_folder=os.path.join(DATA_DIR, "duckdb"))
+        "postgres": PostgresEngine(connection_string=postgres_url),
+        "duckdb": DuckDBEngine(data_folder=os.path.join(DATA_DIR, "duckdb"))
     },
     jobs=[benchmark_job],
     sensors=[experiment_queue_sensor]

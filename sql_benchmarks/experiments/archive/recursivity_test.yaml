@@ -1,0 +1,51 @@
+meta:
+  description: "Optimizer Tipping Point: Recursive CTE vs"
+
+-- Target Table Schema (for a table named hierarchy): 
+| id | INTEGER | Primary Key, Node ID | 
+| parent_id | INTEGER | Foreign Key to id, or NULL for the root | 
+| name | VARCHAR | Node label |
+
+dataset:
+  source: "sql_benchmarks.plugins.data_sources.declarative_gen"
+  tables:
+    hierarchy_data:
+      rows: "rows"
+      columns:
+        - name: id
+          provider: sequence
+          primary_key: true
+        - name: parent_id
+          provider: foreign key
+          target_table: hierarchy_daya
+          target_column: id
+        - name: name
+          provider: text
+
+definitions:
+  rows:
+    small: 100_000
+    medium: 1_000_000
+    large: 10_000_000
+    xlarge: 100_000_000
+  
+  # DEFINING THE HARDWARE SIMULATION
+  pg_settings:
+    hdd:
+      random_page_cost: 4.0  # Default: Expensive Seeking (Prefers Seq Scan)
+      work_mem: "64MB"
+    ssd:
+      random_page_cost: 1.1  # Tuning: Cheap Seeking (Prefers Index Scan)
+      work_mem: "256MB"      # Let's give SSD mode more RAM too
+
+dimensions:
+  size: [small, medium]
+#  size: [small, medium, large, xlarge]
+
+execution:
+  test_suite: "recursivity"
+  replication: 3
+  engines: ["postgres", "duckdb"]
+  matrix:
+    rows: [small, medium]
+    disk_type: ["ssd"]  

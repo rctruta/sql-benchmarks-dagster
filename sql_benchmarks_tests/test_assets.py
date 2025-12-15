@@ -6,16 +6,10 @@ import time
 from dagster import materialize_to_memory, build_asset_context, ResourceDefinition, DagsterInstance
 from unittest.mock import patch, MagicMock
 
-# --- Imports for necessary external objects ---
-# Assuming these are defined elsewhere and accessible
 from sql_benchmarks.partitions import partitions_def, SCENARIO_CONFIG 
-# from sql_benchmarks.assets.benchmark_factory import get_asset_key
 from sql_benchmarks.assets.data_factory import data_assets
 from sql_benchmarks.assets.ingestion_factory import ingestion_assets
 
-
-# --- MOCK SETUP: Defining the Test Contract ---
-# We define the configuration used in the system for testing other logic.
 MOCK_SYMBOLIC_KEY = 'small-ssd' 
 
 # Set the global SCENARIO_CONFIG payload using the symbolic key format
