@@ -180,3 +180,18 @@ def generate_partition_keys(matrix_config):
         partition_keys.append(key_str)
         
     return partition_keys
+
+# ==========================================
+# 6. ASSET NAMING UTILITY 
+# ==========================================
+
+def get_engine_asset_prefix(engine_name: str) -> str:
+    """
+    Resolves the engine resource key ('postgres', 'duckdb') 
+    to the canonical asset prefix ('pg_', 'duckdb_').
+    This is the single source of truth for asset naming conventions across all factories.
+    """
+    if engine_name == 'postgres':
+        return 'pg_'
+    # Default: Use the engine name itself followed by an underscore
+    return f'{engine_name}_'

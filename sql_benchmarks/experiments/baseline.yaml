@@ -5,7 +5,7 @@ meta:
 dataset:
   source: "sql_benchmarks.plugins.data_sources.declarative_gen"
   tables:
-    orders:
+    skewed_data:
       rows: 100_000
       columns:
         - {name: "id", provider: "sequence"}

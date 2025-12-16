@@ -1,0 +1,24 @@
+meta:
+  experiment_id: bff6321d
+  description: Clean architecture test
+dataset:
+  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  tables:
+    skewed_data:
+      rows: 100000
+      columns:
+      - name: id
+        provider: sequence
+execution:
+  test_suite: selectivity
+  replication: 3
+  engines:
+  - postgres
+  - duckdb
+  matrix:
+    rows:
+    - 10000
+    - 100000
+    disk_type:
+    - ssd
+    - hdd

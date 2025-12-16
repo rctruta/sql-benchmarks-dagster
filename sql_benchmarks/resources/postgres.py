@@ -34,12 +34,3 @@ class PostgresEngine(ConfigurableResource):
     def clear_cache(self):
         """External control logic (e.g., Docker commands)."""
         pass 
-
-    def _check_port_available(self, port: int, host: str = 'localhost') -> bool:
-        """Utility function for checking external system state (the port)."""
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            sock.connect_ex((host, port))
-            return True 
-        finally:
-            sock.close()
