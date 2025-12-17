@@ -24,12 +24,12 @@ definitions:
     xlarge: 100_000_000
 
 dimensions:
-  size: [tiny]
+  size: [tiny, small, medium, large]
 
 execution:
   test_suite: "selectivity"
   replication: 3
   engines: ["postgres", "duckdb"]
   matrix:
-    rows: [tiny]
+    rows: [tiny, small, medium, large]
     disk_type: ["ssd", "hdd"]

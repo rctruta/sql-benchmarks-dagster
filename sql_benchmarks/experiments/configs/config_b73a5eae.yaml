@@ -1,5 +1,5 @@
 meta:
-  experiment_id: a2d83874
+  experiment_id: b73a5eae
   description: Clean architecture test
 dataset:
   source: sql_benchmarks.plugins.data_sources.declarative_gen
@@ -35,10 +35,9 @@ definitions:
     xlarge: 100000000
 dimensions:
   size:
-  - tiny
-  - small
   - medium
   - large
+  - xlarge
 execution:
   test_suite: selectivity
   replication: 3
@@ -47,10 +46,9 @@ execution:
   - duckdb
   matrix:
     rows:
-    - tiny
-    - small
     - medium
     - large
+    - xlarge
     disk_type:
     - ssd
     - hdd

@@ -15,7 +15,14 @@ class IBenchmarkEngine(Protocol):
     def get_engine_name(self) -> str:
         """Returns the canonical name of the engine (e.g., 'duckdb', 'postgres', 'neo4j')."""
         raise NotImplementedError
-    
+
+    @abstractmethod
+    def clear_cache(self):
+        """
+        Resets the database state to ensure a 'Cold Cache' benchmark.
+        """
+        pass   
+     
     @abstractmethod
     def run_query(self, 
                   sql: str, 

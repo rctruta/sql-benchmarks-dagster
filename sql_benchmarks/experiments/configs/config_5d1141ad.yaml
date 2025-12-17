@@ -1,5 +1,5 @@
 meta:
-  experiment_id: a2d83874
+  experiment_id: 5d1141ad
   description: Clean architecture test
 dataset:
   source: sql_benchmarks.plugins.data_sources.declarative_gen
@@ -36,9 +36,6 @@ definitions:
 dimensions:
   size:
   - tiny
-  - small
-  - medium
-  - large
 execution:
   test_suite: selectivity
   replication: 3
@@ -48,9 +45,6 @@ execution:
   matrix:
     rows:
     - tiny
-    - small
-    - medium
-    - large
     disk_type:
     - ssd
     - hdd

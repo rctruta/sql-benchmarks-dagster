@@ -4,6 +4,7 @@ from typing import Dict, Any, Optional
 from .base_engine import IBenchmarkEngine 
 from .duckdb_client import DuckDBClient 
 from pydantic import ConfigDict
+from ..utils.system import thrash_os_cache
 
 # The Engine is the immutable facade that satisfies the contract.
 class DuckDBEngine(ConfigurableResource): 
@@ -25,12 +26,15 @@ class DuckDBEngine(ConfigurableResource):
         """Delegates the bulk loading operation to the client."""
         client = self._get_client()
         client.bulk_load(filepath, table_name, partition_key)
+
              
     def run_query(self, 
                   sql: str, 
                   partition_key: str, 
                   scenario_params: Dict[str, Any]) -> Optional[float]:
         """Delegates the core benchmarking query execution to the client."""
+        self.clear_cache()
+    
         client = self._get_client()
         # Delegate the call using the exact method signature
         return client.run_query(sql=sql, 
@@ -49,3 +53,6 @@ class DuckDBEngine(ConfigurableResource):
         db_filename = f"benchmark_{partition_key}.duckdb" 
         return os.path.join(self.data_folder, db_filename)
 
+    def clear_cache(self):
+        
+        thrash_os_cache()

@@ -21,8 +21,8 @@ def thrash_os_cache(override_gb=None):
             log_msg = f"🌊 Manual Flood: {target_gb} GB"
         else:
             total_ram_gb = psutil.virtual_memory().total / (1024 ** 3)
-            target_gb = total_ram_gb * 0.75
-            log_msg = f"🌊 Auto-Flood: {target_gb:.2f} GB (75% of RAM)"
+            target_gb = min(total_ram_gb * 0.75, 6.0)
+            log_msg = f"🌊 Auto-Flood: {target_gb:.2f} GB)"
 
         logger.info(log_msg)
 

@@ -8,6 +8,7 @@ services:
       POSTGRES_DB: benchmark_db
     ports:
       - "5432:5432"
+    shm_size: "2gb" 
     volumes:
       # We mount the data folder so we can eventually do bulk loads if needed
       - ./data:/data

@@ -36,10 +36,6 @@ class DuckDBClient:
         
         db_path = self._get_db_path(partition_key)
         
-        # NOTE: thrash_os_cache is I/O logic, so it is correctly moved here.
-        flood_size_gb = scenario_params.get("flood_size_gb")
-        thrash_os_cache(override_gb=flood_size_gb)
-        
         with duckdb.connect(db_path, read_only=True) as con:
             start = time.time()
             result = con.execute(sql)
