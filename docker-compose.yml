@@ -1,14 +1,19 @@
+version: '3.8'
 services:
-  postgres:
+  benchmark_postgres: # Service name
     image: postgres:16
-    container_name: benchmark_postgres
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: benchmark_db
+    container_name: benchmark_postgres # Fixed name for Python to find
     ports:
       - "5432:5432"
-    shm_size: "2gb" 
+    environment:
+      POSTGRES_PASSWORD: password
+      POSTGRES_HOST_AUTH_METHOD: trust
+    shm_size: 2gb
     volumes:
-      # We mount the data folder so we can eventually do bulk loads if needed
-      - ./data:/data
+      # NAMED VOLUME (Docker manages this. You don't touch it.)
+      # This is where your ingested data will live.
+      - pg_bench_data:/var/lib/postgresql/data
+
+# Declare the volume here so Docker knows to create it
+volumes:
+  pg_bench_data:

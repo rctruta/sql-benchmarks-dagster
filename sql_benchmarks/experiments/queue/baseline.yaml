@@ -21,6 +21,7 @@ definitions:
     small: 100_000
     medium: 1_000_000
     large: 10_000_000
+    mlarge: 50_000_000
     xlarge: 100_000_000
 
 dimensions:

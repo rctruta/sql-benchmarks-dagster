@@ -33,13 +33,17 @@ def make_ingestion_asset(engine: str, table_name: str):
     """
     prefix = get_engine_asset_prefix(engine)
     asset_name = f"{prefix}{table_name}_table"
+
+    tags = {}
+    tags["experiment_scope"] = "partitioned"  
     
     @asset(
         name=asset_name,
         group_name="ingestion",
         partitions_def=partitions_def,
         deps=[f"{table_name}_parquet"], 
-        required_resource_keys={engine}
+        required_resource_keys={engine},
+        op_tags=tags
     )
     def _ingest(context: AssetExecutionContext):
         partition_key = context.partition_key

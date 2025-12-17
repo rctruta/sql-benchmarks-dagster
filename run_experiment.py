@@ -27,7 +27,7 @@ def run_automated(exp_hash, keys):
             cmd = [
                 "dagster", "asset", "materialize", 
                 "-m", DAGSTER_MODULE_TARGET, 
-                "--select", "*",
+                "--select", "tag:experiment_phase=partitioned",
                 "--partition", pk 
             ]
         else:

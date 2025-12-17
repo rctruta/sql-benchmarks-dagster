@@ -24,13 +24,20 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta):
     prefix = get_engine_asset_prefix(engine)
     deps = [f"{prefix}{t}_table" for t in used_tables]
     asset_name = f"{prefix}benchmark_{name}"
+    tags = {}
+    
+    # Condition: If this is Postgres, enforce the Single-Lane Limit
+    if engine == "postgres":
+        tags["dagster/concurrency_key"] = "postgres_exclusive"
+    tags["experiment_scope"] = "partitioned"    
 
     @asset(
         name=asset_name,
         partitions_def=partitions_def,
         deps=deps,
         group_name=f"dynamic_bench_{engine}",
-        required_resource_keys={engine}
+        required_resource_keys={engine},
+        op_tags=tags
     )
     def _benchmark(context: AssetExecutionContext):
         # 1. Dynamic Resource Retrieval

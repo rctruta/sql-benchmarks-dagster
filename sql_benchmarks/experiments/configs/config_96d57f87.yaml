@@ -1,5 +1,5 @@
 meta:
-  experiment_id: a9e19262
+  experiment_id: 96d57f87
   description: Clean architecture test
 dataset:
   source: sql_benchmarks.plugins.data_sources.declarative_gen
