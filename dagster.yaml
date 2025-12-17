@@ -1,0 +1,17 @@
+run_coordinator:
+  module: dagster.core.run_coordinator
+  class: QueuedRunCoordinator
+  config:
+    max_concurrent_runs: 10
+    tag_concurrency_limits:
+      - key: "engine"
+        value: "duckdb"
+        limit: 1
+      - key: "dagster/concurrency_key"
+        value: "postgres_exclusive"
+        limit: 1
+
+# Needed for local runs to store history in the repo folder (optional but good for portability)
+storage:
+  sqlite:
+    base_dir: "data/dagster_home/storage"
