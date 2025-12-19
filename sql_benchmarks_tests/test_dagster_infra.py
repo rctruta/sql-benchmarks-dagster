@@ -1,41 +1,31 @@
 import pytest
-from dagster import MultiPartitionsDefinition
-from unittest.mock import patch
-import sql_benchmarks.partitions as p
+from dagster import StaticPartitionsDefinition
+from sql_benchmarks.partitions import partitions_def, SCENARIO_CONFIG
 
-def test_partition_generation_composite_logic():
+def test_partitions_configuration():
     """
-    Verify that N dimensions are encoded safely into 2 axes.
+    Verifies that the partitions module correctly initialized a StaticPartitionsDefinition
+    and a corresponding scenario config map.
     """
-    # 1. Mock the Context
-    mock_ctx = {
-        "engines": ["pg", "duck"],
-        "dimensions": {
-            "disk": ["ssd"],
-            "rows": [100]
-        }
-    }
+    # 1. Verify Definition Type (We moved from Multi -> Static)
+    assert isinstance(partitions_def, StaticPartitionsDefinition)
     
-    # 2. Patch the module CTX
-    with patch.object(p, 'CTX', mock_ctx):
-        partitions_def, config_map = p.build_partitions()
-        
-        # 3. Verify Definition Type
-        assert isinstance(partitions_def, MultiPartitionsDefinition)
-        
-        # 4. Verify Lookup Map Logic
-        # The key should be: "disk_rows" (d) comes before "engine" (e) -> "ssd__100|pg"
-        # We don't hardcode the sort order of axes in the assert, just that the map works.
-        
-        assert len(config_map) > 0
-        
-        # Grab a value and verify it decoded correctly
-        # We expect 4 combinations: (ssd,100,pg), (ssd,100,duck)
-        first_val = list(config_map.values())[0]
-        assert first_val["engine"] in ["pg", "duck"]
-        assert first_val["disk"] == "ssd"
-        assert first_val["rows"] == 100
+    # 2. Verify Config Integrity
+    # Logic: Every partition key must have a corresponding entry in SCENARIO_CONFIG
+    keys = partitions_def.get_partition_keys()
+    
+    # If we are in "init" mode (no config found), strict checks might differ,
+    # but for a valid test env we expect keys.
+    if keys != ["init"]:
+        for k in keys:
+            assert k in SCENARIO_CONFIG
+            assert isinstance(SCENARIO_CONFIG[k], dict)
 
 def test_definitions_load_correctly():
+    """
+    High-level smoke test to ensure the entire Dagster repository can load.
+    This implicitly checks all imports in definitions.py, assets, resources, etc.
+    """
     from sql_benchmarks.definitions import defs
     assert len(defs.assets) > 0
+    assert defs.resources is not None

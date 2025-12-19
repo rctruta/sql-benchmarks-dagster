@@ -27,13 +27,14 @@ def test_synthetic_data_generation():
 
     # 2. Run Plugin
     context = build_asset_context(partition_key="small")
-    result = generate(context, params, table_name, output_dir, dataset_config)
+    full_path = os.path.join(output_dir, f"{table_name}.parquet")
+    result_path = generate(context, params, table_name, full_path, dataset_config)
     
     # 3. Verify Output
-    parquet_path = result.metadata["path"].value
-    assert os.path.exists(parquet_path)
+    # The new interface returns the path string directly, not a MaterializeResult object with metadata
+    assert os.path.exists(result_path)
     
-    df = pl.read_parquet(parquet_path)
+    df = pl.read_parquet(result_path)
     assert len(df) == 100
     assert "id" in df.columns
     assert "group" in df.columns

@@ -98,7 +98,7 @@ def static_parquet_path():
         raise FileNotFoundError(f"CRITICAL: Static fixture file not found at: {TEST_DATA_PATH}. Please create it.")
     return TEST_DATA_PATH
 
-@pytest.fixture(scope="session", autouse=True) # Use session scope for efficiency
+@pytest.fixture # Default scope is function
 def mock_duckdb_connect():
     """Globally mocks duckdb.connect used by DuckDBClient."""
     

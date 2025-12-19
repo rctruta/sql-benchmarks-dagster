@@ -20,7 +20,8 @@ def test_local_file_loader_normalization(tmp_path):
     
     # 3. Run
     context = build_asset_context(partition_key="prod")
-    result = gen_local(context, {}, "my_table", output_dir, config)
+    full_path = os.path.join(output_dir, "my_table.parquet")
+    result = gen_local(context, {}, "my_table", full_path, config)
     
     # 4. Verify
     out_file = result.metadata["path"].value
@@ -45,7 +46,8 @@ def test_tpch_generation_runs(tmp_path):
     config = {"tables": {"customer": True}} # Dummy config check
     
     context = build_asset_context(partition_key="tiny")
-    result = gen_tpch(context, params, "customer", output_dir, config)
+    full_path = os.path.join(output_dir, "customer.parquet")
+    result = gen_tpch(context, params, "customer", full_path, config)
     
     # Verify
     assert result.metadata["row_count"].value > 0

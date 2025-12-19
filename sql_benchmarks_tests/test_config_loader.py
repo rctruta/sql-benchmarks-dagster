@@ -48,14 +48,14 @@ def test_config_success(load_config_from_fixture):
 
     # 3. Verify Partitions (Symbolic combination)
     expected_keys = [
-        'small_ssd', 'small_hdd', 
-        'medium_ssd', 'medium_hdd'
+        'ssd_small', 'hdd_small', 
+        'ssd_medium', 'hdd_medium'
     ]
     assert sorted(compiler.partition_keys) == sorted(expected_keys)
 
     # 4. Verify SCENARIO_CONFIG (Numeric/Literal payload)
-    assert compiler.scenario_config['small_ssd']['rows'] == 100000
-    assert compiler.scenario_config['medium_hdd']['rows'] == 1000000
+    assert compiler.scenario_config['ssd_small']['rows'] == 100000
+    assert compiler.scenario_config['hdd_medium']['rows'] == 1000000
 
 
 def test_config_fail_alias(load_config_from_fixture):

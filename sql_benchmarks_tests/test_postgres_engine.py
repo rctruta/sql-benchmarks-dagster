@@ -49,65 +49,40 @@ def get_executed_sqls(mock_conn):
         sqls.append(str(call[0][0]).strip())
     return sqls        
 
-def test_postgres_engine_delegates_run_query():
-    """Verifies that the PostgresEngine delegates the run_query call to the Client."""
-    
-    TEST_CONN = "postgresql://user:pass@host/db"
-    
-    # 1. Mock the Client class where it is defined, to intercept instantiation
-    with patch("sql_benchmarks_dagster.resources.postgres_client.PostgresClient") as MockClientClass:
-        
-        # Configure the mock instance that the Engine will use
-        mock_instance = MockClientClass.return_value
-        mock_instance.run_query.return_value = 5.0  # Set a dummy return value
-        
-        # 2. Instantiate the Engine (which will internally call the mocked Client class)
-        engine = PostgresEngine(connection_string=TEST_CONN)
-        
-        # 3. Execution
-        result = engine.run_query(
-            sql="SELECT 1", 
-            partition_key="key", 
-            scenario_params={"pg_settings": {"work_mem": "1GB"}}
-        )
-        
-        # 4. Assertions
-        
-        # Assert the Engine called the Client class factory once
-        MockClientClass.assert_called_once_with(connection_string=TEST_CONN)
-        
-        # Assert the Engine delegated the call correctly to the Client instance
-        mock_instance.run_query.assert_called_once_with(
-            sql="SELECT 1",
-            scenario_params={"pg_settings": {"work_mem": "1GB"}}
-        )
-        
-        # Assert the result came from the Client
-        assert result == 5.0
-
-
-def test_postgres_engine_delegates_run_query():
+@patch("sql_benchmarks.resources.postgres.thrash_os_cache")
+def test_postgres_engine_delegates_run_query(mock_thrash):
     """
     Validates that the immutable PostgresEngine resource delegates the run_query call 
-    to a newly created PostgresClient instance.
+    to a newly created PostgresClient instance, after clearing cache.
     """
     TEST_CONN = "postgresql://mock:mock@mock:5432/mock"
     engine = PostgresEngine(connection_string=TEST_CONN)
     
-    # Mock the creation of the PostgresClient itself
-    with patch("sql_benchmarks.resources.postgres.PostgresClient") as MockClientClass:
-        mock_client = MockClientClass.return_value
-        
-        sql = "SELECT 1"
-        params = {"key": "value"}
-        
-        # ACT
-        engine.run_query(sql=sql, partition_key="p1", scenario_params=params)
-        
-        # ASSERT 1: The engine MUST create a client instance
-        MockClientClass.assert_called_once_with(TEST_CONN)
-        
-        # ASSERT 2: The engine MUST delegate the call to the client
-        mock_client.run_query.assert_called_once_with(sql=sql, scenario_params=params)
-        
+    # Mock the internal side-effect methods to prevent Docker usage/System thrash
+    with patch.object(PostgresEngine, "clear_cache") as mock_clear:
+        with patch.object(PostgresEngine, "_wait_for_ready") as mock_wait:
+            # Mock the creation of the PostgresClient
+            with patch("sql_benchmarks.resources.postgres.PostgresClient") as MockClientClass:
+                mock_client = MockClientClass.return_value
+                mock_client.run_query.return_value = 1.23
+                
+                sql = "SELECT 1"
+                params = {"pg_settings": {"work_mem": "4MB"}}
+                
+                # ACT
+                result = engine.run_query(sql=sql, partition_key="p1", scenario_params=params)
+                
+                # ASSERT 1: Pre-execution cleanup happened
+                mock_thrash.assert_called_once()
+                mock_clear.assert_called_once()
+                mock_wait.assert_called_once()
+
+                # ASSERT 2: The engine created a client
+                MockClientClass.assert_called_once_with(TEST_CONN)
+                
+                # ASSERT 3: The engine delegated the call
+                mock_client.run_query.assert_called_once_with(sql=sql, scenario_params=params)
+                
+                # ASSERT 4: Result passed through
+                assert result == 1.23
  
