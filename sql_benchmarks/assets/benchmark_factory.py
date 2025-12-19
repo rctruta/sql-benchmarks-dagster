@@ -1,3 +1,5 @@
+import json
+import datetime
 import os
 import glob
 import time
@@ -5,7 +7,7 @@ import jinja2
 import statistics
 from dagster import asset, AssetExecutionContext, MaterializeResult, MetadataValue
 from ..partitions import partitions_def, SCENARIO_CONFIG
-
+from ..constants import RESULTS_DIR
 from ..utils.common import load_context, get_tables_used_in_sql, get_target_sql_dir, infer_metadata_from_sql, get_engine_asset_prefix
 
 CTX = load_context()
@@ -19,6 +21,39 @@ def _smart_cast(val):
     if isinstance(val, (int, float, bool)): return val
     return str(val)
 
+def write_benchmark_fragment(experiment_id, run_id, engine, asset_name, pk, durations, params):
+    """
+    Writes the atomic result fragment to disk. 
+    Isolates the 'Scientific Proof' logic from the Dagster asset.
+    """
+    # Use global RESULTS_DIR and f-string as requested
+    fragment_path = os.path.join(
+        RESULTS_DIR, 
+        f"{experiment_id}/fragments/{asset_name}__{pk}.json"
+    )
+    
+    os.makedirs(os.path.dirname(fragment_path), exist_ok=True)
+    
+    payload = {
+        "meta": {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "experiment_id": experiment_id,
+            "dagster_run_id": run_id,
+            "engine": engine,
+            "asset": asset_name,
+            "partition": pk
+        },
+        "metrics": {
+            "duration_seconds": statistics.mean(durations),
+            "replication_factor": REPLICATION_FACTOR  
+        },
+        "parameters": params # The "Jagged" Context
+    }
+    
+    with open(fragment_path, "w") as f:
+        json.dump(payload, f, default=str, indent=2)
+        
+    return fragment_path
 
 def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta):
     prefix = get_engine_asset_prefix(engine)
@@ -55,7 +90,6 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta):
         # 3. Execution Loop
         durations = []
         for _ in range(REPLICATION_FACTOR):
-
             duration = db.run_query(
                 sql=sql, 
                 partition_key=pk, 
@@ -68,7 +102,20 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta):
             
             durations.append(duration)
 
-        # 4. Metadata
+        # 4. Write Fragment (The Isolated Call)
+        experiment_id = EXPERIMENT_META.get("experiment_id", "unknown")
+        
+        saved_path = write_benchmark_fragment(
+            experiment_id=experiment_id,
+            run_id=context.run.run_id,
+            engine=engine,
+            asset_name=asset_name,
+            pk=pk,
+            durations=durations,
+            params=params
+        )
+
+        # 4. Return Dagster Metadata
         meta = {
             "duration": MetadataValue.float(statistics.mean(durations)),
             "sql": MetadataValue.md(f"```sql\n{sql}\n```"),

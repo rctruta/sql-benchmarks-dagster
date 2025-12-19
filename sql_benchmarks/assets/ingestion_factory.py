@@ -6,12 +6,9 @@ from ..constants import DATA_DIR, EXPERIMENTS_DIR # FIX: Ensure EXPERIMENTS_DIR 
 from ..partitions import partitions_def
 from ..utils.common import load_context, get_engine_asset_prefix 
 
-# --- New Global Context Loading ---
-# We use CTX only to find the list of ACTIVE_ENGINES ('duckdb', 'postgres', etc.)
 CTX = load_context()
 ACTIVE_ENGINES = CTX.get('engines', []) 
 
-# --- RESTORED WORKING CONFIGURATION LOGIC ---
 def load_dataset_config():
     """Reads the active experiment YAML to find the tables configured for the dataset."""
     config_path = os.path.join(EXPERIMENTS_DIR, "active.yaml")
@@ -23,7 +20,6 @@ def load_dataset_config():
 
 TABLES_CONFIG = load_dataset_config()
 
-# The final list of AssetDefinition objects
 ingestion_assets: List[object] = []
 
 def make_ingestion_asset(engine: str, table_name: str):
@@ -63,7 +59,7 @@ def make_ingestion_asset(engine: str, table_name: str):
         
         context.log.info(f"Ingesting {parquet_path} into {engine} table '{target_table_name}'...")
 
-        # 4. Use the polymorphic bulk_load method (Decoupled!)
+        # 4. Use the polymorphic bulk_load method
         db.bulk_load(
             filepath=parquet_path, 
             table_name=target_table_name, 

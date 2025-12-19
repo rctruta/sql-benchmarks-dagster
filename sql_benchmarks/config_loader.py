@@ -45,7 +45,7 @@ class ConfigLoader:
         This is the consolidated logic from partitions.py.
         """
         matrix = self.execution["matrix"]
-        keys = list(matrix.keys())
+        keys = sorted(list(matrix.keys()))
         symbolic_values = [matrix[k] for k in keys]
 
         for symbolic_combination in itertools.product(*symbolic_values):

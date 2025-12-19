@@ -1,6 +1,7 @@
 # File: sql_benchmarks_tests/test_assets.py
 
 import pytest
+import os
 import statistics
 import time
 from dagster import materialize_to_memory, build_asset_context, ResourceDefinition, DagsterInstance
@@ -156,3 +157,93 @@ def test_benchmark_injection_contract(mock_execute_query, loaded_benchmark_asset
     assert "100000" in sql_string
     assert "ssd" in sql_string
 """
+
+# ==========================================
+# 3. BENCHMARK INTEGRATION TESTS
+# ==========================================
+def test_writer_creates_valid_json(tmpdir):
+    """
+    Verifies that 'write_benchmark_fragment' creates a valid JSON file 
+    with the expected schema.
+    """
+    import json
+    from sql_benchmarks.assets.benchmark_factory import write_benchmark_fragment
+    from sql_benchmarks.constants import RESULTS_DIR
+    
+    # 1. Setup Mock Data
+    exp_id = "test_exp_001"
+    run_id = "run_abc"
+    engine = "duckdb"
+    asset_name = "bench_test"
+    pk = "small-ssd"
+    durations = [1.1, 1.2, 1.3]
+    params = {"rows": 100, "disk_type": "ssd"}
+    
+    # 2. Patch global RESULTS_DIR to use tmpdir
+    with patch("sql_benchmarks.assets.benchmark_factory.RESULTS_DIR", str(tmpdir)):
+        
+        # 3. Execute
+        out_path = write_benchmark_fragment(exp_id, run_id, engine, asset_name, pk, durations, params)
+        
+        # 4. Assert
+        assert os.path.exists(out_path)
+        
+        with open(out_path, "r") as f:
+            data = json.load(f)
+            
+        assert data["meta"]["experiment_id"] == exp_id
+        assert data["metrics"]["duration_seconds"] == 1.2 # Mean of 1.1, 1.2, 1.3
+        assert data["parameters"]["rows"] == 100
+
+def test_benchmark_asset_integration_writes_file(loaded_benchmark_assets, tmpdir):
+    """
+    Verifies that the actual Asset Execution (via materialize_to_memory)
+    triggers the side effect of writing the JSON fragment.
+    """
+    from sql_benchmarks.partitions import partitions_def
+    
+    benchmark_assets = loaded_benchmark_assets
+    if not benchmark_assets:
+        pytest.skip("No benchmark assets loaded.")
+        
+    target_asset = benchmark_assets[0]
+    
+    # 1. Mock Resources & Execution
+    resource_defs = get_mock_resource_defs()
+    
+    # We need to mock the DB run_query to return a float (duration)
+    # The current mock definition in 'get_mock_resource_defs' returns a MagicMock, 
+    # but we need to ensure the method 'run_query' returns a float.
+    mock_db = resource_defs["postgres"].resource_fn(None)
+    mock_db.run_query.return_value = 0.5 
+    
+    valid_keys = partitions_def.get_partition_keys()
+    pk = valid_keys[0]
+    
+    # 2. Patch RESULTS_DIR in the factory module so it writes to our tmpdir
+    with patch("sql_benchmarks.assets.benchmark_factory.RESULTS_DIR", str(tmpdir)):
+        
+        # 3. Run Asset
+        result = materialize_to_memory(
+            assets=[target_asset],
+            partition_key=pk,
+            resources={"postgres": resource_defs["postgres"], "duckdb": resource_defs["duckdb"]}
+        )
+        
+        assert result.success
+        
+        # 4. Verify Side Effect (File Creation)
+        # We expect a file in {tmpdir}/{exp_id}/fragments/....
+        # Since we don't know the exact randomness or timestamp, we just scan.
+        files = []
+        for root, _, filenames in os.walk(str(tmpdir)):
+            for f in filenames:
+                if f.endswith(".json"):
+                    files.append(os.path.join(root, f))
+                    
+        assert len(files) > 0, "No JSON fragment was written during asset execution!"
+
+def test_reporting_asset_is_unpartitioned():
+    """Confirms that the reporting asset is NOT partitioned, as per requirements."""
+    from sql_benchmarks.assets.reporting import performance_dashboard
+    assert performance_dashboard.partitions_def is None

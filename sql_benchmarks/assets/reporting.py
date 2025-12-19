@@ -7,58 +7,57 @@ from dagster import asset, AssetExecutionContext, MetadataValue, MaterializeResu
 from ..constants import RESULTS_DIR
 from ..utils.common import load_context
 from .benchmark_factory import benchmark_assets
+import glob
+import json
 
 all_benchmark_keys = [k.key for k in benchmark_assets]
 
 # ==========================================
 # 1. PURE LOGIC (Testable)
 # ==========================================
-def parse_events_to_records(events, active_exp_id):
+def parse_fragments_to_records(experiment_id):
     """
-    Pure function: Transforms raw Dagster events into a list of dictionaries.
-    Decoupled from the Asset Context for unit testing.
+    Scans the results directory for the given experiment_id
+    and parses all fragment JSONs into a flat list of records.
     """
+    fragments_pattern = os.path.join(RESULTS_DIR, experiment_id, "fragments", "*.json")
+    fragment_files = glob.glob(fragments_pattern)
+    
     records = []
     
-    for record in events:
-        # 1. Extract Metadata Safe-ly
-        # Note: Depending on how the event was fetched, structure might vary.
-        # This assumes standard Dagster EventLogEntry structure.
+    for fpath in fragment_files:
         try:
-            mat = record.event_log_entry.dagster_event.step_materialization_data.materialization
-            meta = mat.metadata
-        except AttributeError:
-            continue # Skip malformed records
-
-        def get_val(k, default=None):
-            v = meta.get(k)
-            if v is None: return default
-            return v.value if hasattr(v, 'value') else v
-
-        # 2. Filter by Experiment ID
-        stored_id = get_val("experiment_id")
-        if stored_id != active_exp_id: 
-            continue
-        
-        # 3. Build Record
-        # We rely on the AssetKey path for the name
-        asset_name = record.asset_key.path[-1]
-        
-        row = {
-            "Asset": asset_name,
-            "Duration": float(get_val("duration_seconds", 0.0)),
-            "Engine": str(get_val("config_engine", "Unknown")),
-            "Rows": int(get_val("dim_rows", 0)),
-            "Selectivity": float(get_val("derived_selectivity", 0.0)),
-            "System": str(get_val("config_engine"))
-        }
-        
-        # Optional: Add Disk Type if present
-        if get_val("dim_disk_type"):
-            row["System"] += f" ({get_val('dim_disk_type')})"
+            with open(fpath, "r") as f:
+                data = json.load(f)
             
-        records.append(row)
-        
+            meta = data.get("meta", {})
+            metrics = data.get("metrics", {})
+            params = data.get("parameters", {})
+            
+            # Check ID consistency (optional but good sanity check)
+            if meta.get("experiment_id") != experiment_id:
+                continue
+
+            asset_name = meta.get("asset", "unknown_asset")
+            row = {
+                "Asset": asset_name,
+                "Duration": float(metrics.get("duration_seconds", 0.0)),
+                "Engine": str(meta.get("engine", "Unknown")),
+                "Rows": int(params.get("rows", 0)), # Assuming 'rows' is in params
+                "Selectivity": float(params.get("derived_selectivity", 0.0) or 0.0), # Assuming this might be explicitly passed or derived
+                "System": str(meta.get("engine"))
+            }
+
+            # Handle Dimensions broadly if needed, but for now stick to the plan:
+            if "disk_type" in params:
+                 row["System"] += f" ({params['disk_type']})"
+
+            records.append(row)
+            
+        except Exception as e:
+            print(f"Skipping malformed fragment {fpath}: {e}")
+            continue
+            
     return records
 
 # ==========================================
@@ -78,17 +77,8 @@ def performance_dashboard(context: AssetExecutionContext):
         context.log.warning("Could not read active context.")
         return
 
-    # 1. FETCH (Side Effect)
-    raw_events = []
-    for key in all_benchmark_keys:
-        events = instance.get_event_records(
-            EventRecordsFilter(event_type=DagsterEventType.ASSET_MATERIALIZATION, asset_key=key),
-            limit=50
-        )
-        raw_events.extend(events)
-
-    # 2. PARSE (Logic)
-    records = parse_events_to_records(raw_events, EXP_ID)
+    # 1. FETCH & PARSE (New Logic)
+    records = parse_fragments_to_records(EXP_ID)
 
     if not records:
         context.log.info(f"No records found for experiment: {EXP_ID}")
@@ -117,7 +107,18 @@ def performance_dashboard(context: AssetExecutionContext):
     html_path = os.path.join(exp_folder, f"dashboard_{EXP_ID}.html")
     
     with open(html_path, "w") as f:
+
         f.write(f"<h1>Benchmark: {EXP_ID}</h1><hr>")
         f.write("<br>".join(figures_html))
+
+    # 6. WRITE CSV (Legacy Support / Unified Output)
+    # Replaces the partial logic in extract_results.py
+    csv_path = os.path.join(exp_folder, f"results_{EXP_ID}.csv")
+    df.write_csv(csv_path)
     
-    return MaterializeResult(metadata={"dashboard_path": MetadataValue.path(html_path)})
+    return MaterializeResult(
+        metadata={
+            "dashboard_path": MetadataValue.path(html_path),
+            "results_csv_path": MetadataValue.path(csv_path),
+            "experiment_id": EXP_ID 
+        })

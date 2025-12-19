@@ -24,6 +24,7 @@ def normalize_sql(content):
     
     # 5. Canonicalize Case (Select -> select)
     return content.lower()
+
 def normalize_python(content):
     """
     Parses Python code to AST and regenerates it.

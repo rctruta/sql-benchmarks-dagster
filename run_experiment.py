@@ -27,7 +27,7 @@ def run_automated(exp_hash, keys):
             cmd = [
                 "dagster", "asset", "materialize", 
                 "-m", DAGSTER_MODULE_TARGET, 
-                "--select", "tag:experiment_phase=partitioned",
+                "--select", "group:data_generation,group:dynamic_bench_postgres,group:dynamic_bench_duckdb",
                 "--partition", pk 
             ]
         else:
@@ -45,6 +45,21 @@ def run_automated(exp_hash, keys):
             print(f"     ❌ Failed.")
             if e.stderr:
                 print(f"🔎 Error: {e.stderr.decode('utf-8')[-500:]}")
+
+    # NEW: Trigger Reporting Asset (Unpartitioned)
+    print(f"   ▶ Triggering Reporting...")
+    cmd = [
+        "dagster", "asset", "materialize", 
+        "-m", DAGSTER_MODULE_TARGET, 
+        "--select", "group:reporting"
+    ]
+    try:
+        subprocess.run(cmd, check=True, capture_output=True)
+        print(f"     ✅ Done.")
+    except subprocess.CalledProcessError as e:
+        print(f"     ❌ Reporting Failed.")
+        if e.stderr:
+            print(f"🔎 Error: {e.stderr.decode('utf-8')[-500:]}")
 
     print(f"🏁 Experiment Complete ({time.time() - start:.1f}s)")
     return True

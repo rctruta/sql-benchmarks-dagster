@@ -30,6 +30,7 @@ class PostgresEngine(ConfigurableResource):
     # --- IBenchmarkEngine Implementation (Delegation) ---
     def run_query(self, sql: str, partition_key: str, scenario_params: Dict[str, Any]) -> Optional[float]:
         # self.setup_docker(scenario_params.get("pg_settings"))
+        thrash_os_cache()
         self.clear_cache()
         self._wait_for_ready()
         client = self._get_client() 
