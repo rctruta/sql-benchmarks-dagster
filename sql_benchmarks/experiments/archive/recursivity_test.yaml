@@ -1,11 +1,6 @@
 meta:
   description: "Optimizer Tipping Point: Recursive CTE vs"
 
--- Target Table Schema (for a table named hierarchy): 
-| id | INTEGER | Primary Key, Node ID | 
-| parent_id | INTEGER | Foreign Key to id, or NULL for the root | 
-| name | VARCHAR | Node label |
-
 dataset:
   source: "sql_benchmarks.plugins.data_sources.declarative_gen"
   tables:
