@@ -12,7 +12,7 @@ dataset:
           primary_key: true
         - name: parent_id
           provider: foreign key
-          target_table: hierarchy_daya
+          target_table: hierarchy_data
           target_column: id
         - name: name
           provider: text
@@ -38,7 +38,7 @@ dimensions:
 #  size: [small, medium, large, xlarge]
 
 execution:
-  test_suite: "recursivity"
+  test_suite: "recursion"
   replication: 3
   engines: ["postgres", "duckdb"]
   matrix:

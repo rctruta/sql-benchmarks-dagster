@@ -1,6 +1,6 @@
 meta:
   description: 'Optimizer Tipping Point: Recursive CTE vs'
-  experiment_id: a69926ff
+  experiment_id: 6957be63
 dataset:
   source: sql_benchmarks.plugins.data_sources.declarative_gen
   tables:

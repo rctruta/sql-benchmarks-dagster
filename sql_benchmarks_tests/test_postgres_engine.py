@@ -59,6 +59,9 @@ def test_postgres_engine_delegates_run_query(mock_thrash):
     engine = PostgresEngine(connection_string=TEST_CONN)
     
     # Mock the internal side-effect methods to prevent Docker usage/System thrash
+    # Since we now use docker-py, we mock the method that calls it (clear_cache)
+    # OR we verify clear_cache mocks docker correctly. 
+    # For this delegation test, mocking clear_cache is cleaner.
     with patch.object(PostgresEngine, "clear_cache") as mock_clear:
         with patch.object(PostgresEngine, "_wait_for_ready") as mock_wait:
             # Mock the creation of the PostgresClient
@@ -85,4 +88,31 @@ def test_postgres_engine_delegates_run_query(mock_thrash):
                 
                 # ASSERT 4: Result passed through
                 assert result == 1.23
+
+@patch("sql_benchmarks.resources.postgres.docker")
+def test_clear_cache_calls_docker(mock_docker):
+    """
+    Verifies that clear_cache uses the Docker SDK to restart the container.
+    """
+    TEST_CONN = "postgresql://mock:mock@mock:5432/mock"
+    engine = PostgresEngine(connection_string=TEST_CONN)
+    
+    # Mock the client and container
+    mock_client = MagicMock()
+    mock_container = MagicMock()
+    mock_docker.from_env.return_value = mock_client
+    mock_client.containers.get.return_value = mock_container
+    
+    # Mock database ready check to return immediately
+    # We patch create_engine because PostgresEngine is frozen and cannot be patched on the instance
+    with patch("sql_benchmarks.resources.postgres.create_engine") as mock_create_engine:
+        mock_conn = MagicMock()
+        mock_create_engine.return_value.connect.return_value.__enter__.return_value = mock_conn
+        
+        # ACT
+        engine.clear_cache()
+        
+        # ASSERT
+        mock_client.containers.get.assert_called_once_with("benchmark_postgres")
+        mock_container.restart.assert_called_once()
  

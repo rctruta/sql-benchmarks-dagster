@@ -16,22 +16,22 @@ from sql_benchmarks.constants import (
 )
 
 def run_automated(exp_hash, keys):
-    print(f"🚀 Launching {exp_hash} (Automated)...")
+    print(f"[INFO] Launching {exp_hash} (Automated)...")
     start = time.time()
     
     if not keys: keys = [None]
     
     for pk in keys:
         if pk:
-            print(f"   ▶ Triggering Partition: {pk}...")
+            print(f"       -> Triggering Partition: {pk}...")
             cmd = [
                 "dagster", "asset", "materialize", 
                 "-m", DAGSTER_MODULE_TARGET, 
-                "--select", "group:data_generation,group:dynamic_bench_postgres,group:dynamic_bench_duckdb",
+                "--select", "group:data_generation,group:ingestion,group:dynamic_bench_postgres,group:dynamic_bench_duckdb",
                 "--partition", pk 
             ]
         else:
-            print(f"   ▶ Triggering Unpartitioned Run...")
+            print(f"       -> Triggering Unpartitioned Run...")
             cmd = [
                 "dagster", "asset", "materialize", 
                 "-m", DAGSTER_MODULE_TARGET, 
@@ -40,14 +40,14 @@ def run_automated(exp_hash, keys):
 
         try:
             subprocess.run(cmd, check=True, capture_output=True)
-            print(f"     ✅ Done.")
+            print(f"          [SUCCESS] Done.")
         except subprocess.CalledProcessError as e:
-            print(f"     ❌ Failed.")
+            print(f"          [FAILED] Execution failed.")
             if e.stderr:
-                print(f"🔎 Error: {e.stderr.decode('utf-8')[-500:]}")
+                print(f"[ERROR] {e.stderr.decode('utf-8')[-500:]}")
 
     # NEW: Trigger Reporting Asset (Unpartitioned)
-    print(f"   ▶ Triggering Reporting...")
+    print(f"       -> Triggering Reporting...")
     cmd = [
         "dagster", "asset", "materialize", 
         "-m", DAGSTER_MODULE_TARGET, 
@@ -55,13 +55,13 @@ def run_automated(exp_hash, keys):
     ]
     try:
         subprocess.run(cmd, check=True, capture_output=True)
-        print(f"     ✅ Done.")
+        print(f"          [SUCCESS] Done.")
     except subprocess.CalledProcessError as e:
-        print(f"     ❌ Reporting Failed.")
+        print(f"          [FAILED] Reporting Failed.")
         if e.stderr:
-            print(f"🔎 Error: {e.stderr.decode('utf-8')[-500:]}")
+            print(f"[ERROR] {e.stderr.decode('utf-8')[-500:]}")
 
-    print(f"🏁 Experiment Complete ({time.time() - start:.1f}s)")
+    print(f"[INFO] Experiment Complete ({time.time() - start:.1f}s)")
     return True
 
 def process_queue(target_input, auto_mode=False):
@@ -78,7 +78,7 @@ def process_queue(target_input, auto_mode=False):
         target_path = os.path.join(EXPERIMENTS_DIR, target_input)
     
     if target_path is None:
-        print(f"❌ CRITICAL: Target not found: {target_input}")
+        print(f"[ERROR] CRITICAL: Target not found: {target_input}")
         return
 
     # 2. CHECK TARGET TYPE (File vs. Directory)
@@ -86,7 +86,7 @@ def process_queue(target_input, auto_mode=False):
     if os.path.isfile(target_path):
         queue.append(target_path)
     elif os.path.isdir(target_path):
-        print(f"📂 Scanning directory: {target_path}")
+        print(f"[INFO] Scanning directory: {target_path}")
         # Support both .yaml and .yml, ignore .processed files
         files = sorted([
             os.path.join(target_path, f) 
@@ -96,26 +96,26 @@ def process_queue(target_input, auto_mode=False):
         queue.extend(files)
 
     if not queue:
-        print(f"⚠️  No YAML files found in {target_path}. Skipping.")
+        print(f"[WARN] No YAML files found in {target_path}. Skipping.")
         return
 
-    print(f"📋 Queue size: {len(queue)}")
-    print(f"⚙️  Mode: {'AUTOMATED' if auto_mode else 'INTERACTIVE (UI)'}")
+    print(f"[INFO] Queue size: {len(queue)}")
+    print(f"[INFO] Mode: {'AUTOMATED' if auto_mode else 'INTERACTIVE (UI)'}")
 
     # 3. EXECUTE LOOP
     for i, config_file in enumerate(queue):
         filename = os.path.basename(config_file)
-        print(f"\n------------------------------------------------------------")
+        print(f"\n" + "-" * 60)
         print(f"[{i+1}/{len(queue)}] PREPARING: {filename}")
         
         try:
             with open(config_file, 'r') as f:
                 config = yaml.safe_load(f)
             if not config or not isinstance(config, dict):
-                print(f"⚠️  Skipping empty/invalid YAML: {filename}")
+                print(f"[WARN] Skipping empty/invalid YAML: {filename}")
                 continue
         except Exception as e:
-            print(f"❌ Invalid YAML: {e}")
+            print(f"[ERROR] Invalid YAML: {e}")
             continue
 
         exp_hash = generate_experiment_hash(config, ROOT_DIR)
@@ -123,7 +123,7 @@ def process_queue(target_input, auto_mode=False):
         # A. Check Registry
         registry_path = os.path.join(CONFIG_ARCHIVE_DIR, f"config_{exp_hash}.yaml")
         if os.path.exists(registry_path):
-            print(f"✨ SKIPPING: Experiment {exp_hash} already exists in registry.")
+            print(f"[INFO] SKIPPING: Experiment {exp_hash} already exists in registry.")
             continue
 
         # B. Activate
@@ -142,17 +142,17 @@ def process_queue(target_input, auto_mode=False):
         if auto_mode:
             success = run_automated(exp_hash, keys)
         else:
-            print(f"🚀 ACTIVATED: {exp_hash}")
+            print(f"[INFO] ACTIVATED: {exp_hash}")
             if keys:
-                print(f"⚠️  Partitions found: {keys}")
-                print(f"👉 ACTION: In UI, click 'Materialize All' -> Select Partition")
+                print(f"[INFO] Partitions found: {keys}")
+                print(f"       -> ACTION: In UI, click 'Materialize All' -> Select Partition")
             input("Press Enter when done...")
             success = True
 
         # D. Archive
         if success:
             shutil.copy(ACTIVE_CONFIG_PATH, registry_path)
-            print(f"💾 Archived {exp_hash} to registry.")
+            print(f"[INFO] Archived {exp_hash} to registry.")
         elif not auto_mode:
             sys.exit(0)
 

@@ -2,36 +2,50 @@
 set -e  # Exit immediately if any command fails
 
 # --- STEP 1: SET THE ENVIRONMENT ---
-# This tells Dagster: "Look for dagster.yaml right here, not in the user's home folder."
 export DAGSTER_HOME=$(pwd)
 export PYTHONPATH=$PYTHONPATH:$(pwd)
 
-echo "🤖 AGENT INITIALIZATION: Setting DAGSTER_HOME to $(pwd)"
+echo "[INFO] Setting DAGSTER_HOME to $(pwd)"
 
 # --- STEP 2: ENSURE INFRASTRUCTURE ---
-# The Agent doesn't know if Docker is running. We ensure it is.
-echo "🐘 AGENT: Starting Infrastructure..."
-docker-compose up -d
+# echo "[INFO] Starting Infrastructure..."
+# docker-compose up -d
+# NOTE: We now let postgres.py manage the container via docker-py SDK
+
 
 # --- STEP 3: START THE COORDINATOR (The Daemon) ---
-# The Daemon reads dagster.yaml and enforces the 'limit=1' rule.
-# We run it in the background (&) so the script can continue.
-echo "🚦 AGENT: Starting Traffic Control (Daemon)..."
-mkdir -p data/dagster_home/storage # Ensure storage dir exists
-dagster-daemon run > /dev/null 2>&1 &
-DAEMON_PID=$!
-echo "   -> Daemon started with PID $DAEMON_PID"
+echo "[INFO] Checking Traffic Control (Daemon)..."
+mkdir -p data/dagster_home/storage
 
-# Give the daemon a moment to wake up
-sleep 3
+DAEMON_PID_FILE="dagster_daemon.pid"
+MOUNTED_DAEMON=0
+
+cleanup() {
+    if [ "$MOUNTED_DAEMON" -eq 1 ]; then
+        echo "[INFO] Mission Complete. Shutting down Daemon (PID $DAEMON_PID)."
+        kill $DAEMON_PID 2>/dev/null || true
+    else
+        echo "[INFO] Leaving existing Daemon running."
+    fi
+}
+
+# Trap cleanup on EXIT (success, fail, or interrupt)
+trap cleanup EXIT
+
+if pgrep -f "dagster-daemon run" > /dev/null; then
+    echo "       -> Daemon is already running."
+else
+    echo "       -> Starting new Daemon..."
+    dagster-daemon run > /dev/null 2>&1 &
+    DAEMON_PID=$!
+    MOUNTED_DAEMON=1
+    echo "       -> Daemon started with PID $DAEMON_PID"
+    sleep 3
+fi
 
 # --- STEP 4: EXECUTE THE MISSION ---
-# This runs your Python logic. The Agent doesn't need to know flags.
-echo "🚀 AGENT: Launching Experiment..."
-# Using --auto to tell your script "Don't ask for UI input, just run."
-python run_experiment.py queue --auto
+echo "[INFO] Launching Experiment Runner..."
 
-# --- STEP 5: CLEANUP ---
-# When the mission is done, we kill the background daemon.
-echo "🛑 AGENT: Mission Complete. Shutting down Daemon."
-kill $DAEMON_PID
+# Pass all arguments provided to this script ($@) to the python script
+# Example: ./run.sh queue --auto -> python run_experiment.py queue --auto
+python run_experiment.py "$@"

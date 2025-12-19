@@ -4,7 +4,8 @@ import os
 from dagster import ConfigurableResource
 from typing import Dict, Any, Optional
 import socket 
-import subprocess
+import docker
+from docker.errors import NotFound, APIError
 from .base_engine import IBenchmarkEngine # We import it for type hinting, but don't inherit
 from .postgres_client import PostgresClient 
 from pydantic import ConfigDict
@@ -13,7 +14,6 @@ from sqlalchemy.engine.url import make_url
 from sqlalchemy.exc import OperationalError
 from ..utils.system import thrash_os_cache
 from ..constants import DATA_DIR
-import polars as pl
 
 # Inheritance is simplified to prevent MRO conflicts. It satisfies IBenchmarkEngine via Protocol.
 class PostgresEngine(ConfigurableResource): 
@@ -29,7 +29,7 @@ class PostgresEngine(ConfigurableResource):
 
     # --- IBenchmarkEngine Implementation (Delegation) ---
     def run_query(self, sql: str, partition_key: str, scenario_params: Dict[str, Any]) -> Optional[float]:
-        # self.setup_docker(scenario_params.get("pg_settings"))
+        self.setup_docker(scenario_params.get("pg_settings"))
         thrash_os_cache()
         self.clear_cache()
         self._wait_for_ready()
@@ -37,7 +37,7 @@ class PostgresEngine(ConfigurableResource):
         return client.run_query(sql=sql, scenario_params=scenario_params)
 
     def bulk_load(self, filepath: str, table_name: str, partition_key: str) -> None:
-        # self.setup_docker()      
+        self.setup_docker()      
         self._wait_for_ready()
         client = self._get_client()
         client.bulk_load(filepath, table_name, partition_key)
@@ -61,8 +61,14 @@ class PostgresEngine(ConfigurableResource):
             return s.connect_ex(('localhost', port)) != 0
 
     def clear_cache(self):
-        """Restarts the container to ensure cold cache."""
-        subprocess.run(["docker", "restart", self.container_name], check=True)
+        """Restarts the container using Docker SDK to ensure cold cache."""
+        client = docker.from_env()
+        try:
+            container = client.containers.get(self.container_name)
+            container.restart()
+        except NotFound:
+            # If it doesn't exist, we can't restart it. Setup should have caught this.
+            raise RuntimeError(f"Container {self.container_name} not found during cache clear.")
         
         # Retry loop to wait for DB to come up
         retries = 15
@@ -88,21 +94,20 @@ class PostgresEngine(ConfigurableResource):
 
     def _kill_zombie_container(self):
         """
-        Forcefully removes the container. 
-        Raises an error if removal fails (except if the container is already gone).
+        Forcefully removes the container using Docker SDK.
         """
-        result = subprocess.run(
-            ["docker", "rm", "-f", self.container_name],
-            capture_output=True,
-            text=True
-        )
-        
-        if result.returncode != 0 and "No such container" not in result.stderr:
-            raise RuntimeError(f"Failed to cleanup container {self.container_name}: {result.stderr}")
+        client = docker.from_env()
+        try:
+            container = client.containers.get(self.container_name)
+            container.remove(force=True)
+        except NotFound:
+            pass # Already gone
+        except APIError as e:
+            raise RuntimeError(f"Failed to cleanup container {self.container_name}: {e}")
 
     def setup_docker(self, settings: dict = None):
         """
-        Robust Provisioning:
+        Robust Provisioning using Docker SDK:
         1. Cleanup old containers.
         2. Validate Port Availability.
         3. Use Two-Mount Strategy (Storage vs. Inputs).
@@ -132,32 +137,34 @@ class PostgresEngine(ConfigurableResource):
         db_storage_path = os.path.join(DATA_DIR, "postgres_db")
         os.makedirs(db_storage_path, exist_ok=True)
 
-        # 4. BUILD COMMAND (Two-Mount Strategy)
-        cmd = [
-            "docker", "run", "-d",
-            "--name", self.container_name,
-            "-p", f"{target_port}:5432",
-            
-            # Mount 1: The DB Storage (Mapped to internal DB home)
-            "-v", f"pg_bench_data:/var/lib/postgresql/data",
-            
-            # Mount 2: The Staging Data (Mapped to /mnt/data for COPY operations)
-            "-v", f"{DATA_DIR}:/mnt/data",
-            
-            "-e", "POSTGRES_PASSWORD=password",
-            "-e", "POSTGRES_HOST_AUTH_METHOD=trust",
-            "--shm-size", "2gb",
-            "postgres:15"
-        ]
-
+        # 4. BUILD & RUN CONTAINER
+        client = docker.from_env()
+        
+        # Construct config commands
+        # Postgres entrypoint interprets arguments as config flags if they start with -c
+        command_args = []
         if settings:
             for key, val in settings.items():
-                cmd.extend(["-c", f"{key}={val}"])
-
-        # 5. EXECUTE
-        result = subprocess.run(cmd, capture_output=True, text=True)
+                command_args.extend(["-c", f"{key}={val}"])
         
-        if result.returncode != 0:
-            raise RuntimeError(f"Postgres failed to start: {result.stderr}")
+        try:
+            client.containers.run(
+                image="postgres:15",
+                name=self.container_name,
+                detach=True,
+                ports={f'5432/tcp': target_port},
+                volumes={
+                    'pg_bench_data': {'bind': '/var/lib/postgresql/data', 'mode': 'rw'},
+                    DATA_DIR: {'bind': '/mnt/data', 'mode': 'rw'}
+                },
+                environment={
+                    "POSTGRES_PASSWORD": "password",
+                    "POSTGRES_HOST_AUTH_METHOD": "trust"
+                },
+                shm_size="2gb",
+                command=command_args
+            )
+        except APIError as e:
+            raise RuntimeError(f"Postgres failed to start via Docker SDK: {e}")
 
         # No wait here. Orchestration layer handles the wait.
