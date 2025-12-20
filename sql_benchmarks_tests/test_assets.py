@@ -68,24 +68,27 @@ def test_data_factory_metadata(loaded_benchmark_assets):
     assert key.path[0].endswith("_parquet") or key.path[0].endswith("_csv") or key.path[0].endswith("_table")
 
 def test_smoke_run_data_generation():
-    """A smoke test to ensure that unpartitioned data assets can be materialized without errors."""
-    
-    # 1. Identify a truly unpartitioned asset
-    unpartitioned_assets = [asset for asset in data_assets if asset.partitions_def is None]
-
-    if not unpartitioned_assets:
-        # If all data assets are now partitioned, the smoke test is invalid.
-        pytest.skip("No unpartitioned data assets available for smoke test.")
-        
-    try:
-        # 2. Materialize the guaranteed unpartitioned asset
-        result = materialize_to_memory(
-            assets=[unpartitioned_assets[0]],
-            resources=get_mock_resource_defs()
-        )
-        assert result.success
-    except IndexError:
+    """A smoke test to ensure that data assets can be materialized without errors."""
+    if not data_assets:
         pytest.skip("Data assets list is empty.")
+    
+    target_asset = data_assets[0]
+    
+    # 2. Prepare Context
+    pk = None
+    if target_asset.partitions_def:
+        keys = target_asset.partitions_def.get_partition_keys()
+        if keys:
+            pk = keys[0]
+            
+    # 3. Materialize
+    # We use mock resources to avoid actual side effects if possible, or live ones if intended.
+    result = materialize_to_memory(
+        assets=[target_asset],
+        partition_key=pk,
+        resources=get_mock_resource_defs()
+    )
+    assert result.success
 
 
 # Around the line for test_ingestion_factory_structure

@@ -18,10 +18,11 @@ fi
 echo $$ > "$LOCKFILE"
 
 # --- STEP 2: SET THE ENVIRONMENT ---
-export DAGSTER_HOME=$(pwd)
+export DAGSTER_HOME=$(pwd)/dagster_home
+mkdir -p "$DAGSTER_HOME"
 export PYTHONPATH=$PYTHONPATH:$(pwd)
 
-echo "[INFO] Setting DAGSTER_HOME to $(pwd)"
+echo "[INFO] Setting DAGSTER_HOME to $(pwd)/dagster_home"
 
 # --- STEP 2: ENSURE INFRASTRUCTURE ---
 # echo "[INFO] Starting Infrastructure..."

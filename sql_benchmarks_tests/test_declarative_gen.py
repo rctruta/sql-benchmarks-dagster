@@ -76,7 +76,8 @@ def test_declarative_gen_success_flow(temp_output):
         }
     }
     
-    path = declarative_gen.generate({}, {}, "valid_table", temp_output, config)
+    result = declarative_gen.generate({}, {}, "valid_table", temp_output, config)
+    path = result.metadata["path"].value
     
     # Verify file exists and content is correct
     assert os.path.exists(path)
@@ -98,7 +99,8 @@ def test_declarative_gen_foreign_key_flow(temp_output):
         }
     }
     
-    path = declarative_gen.generate({}, {}, "fk_table", temp_output, config)
+    result = declarative_gen.generate({}, {}, "fk_table", temp_output, config)
+    path = result.metadata["path"].value
     df = pl.read_parquet(path)
     assert df.height == 50
     assert df["parent_id"].min() >= 1

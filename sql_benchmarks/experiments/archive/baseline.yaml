@@ -21,15 +21,16 @@ definitions:
     small: 100_000
     medium: 1_000_000
     large: 10_000_000
+    mlarge: 50_000_000
     xlarge: 100_000_000
 
 dimensions:
-  size: [tiny]
+  size: [tiny, medium, large, xlarge]
 
 execution:
   test_suite: "selectivity"
   replication: 3
   engines: ["postgres", "duckdb"]
   matrix:
-    rows: [tiny]
+    rows: [tiny, small, medium, large, xlarge]
     disk_type: ["ssd", "hdd"]

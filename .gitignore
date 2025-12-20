@@ -34,6 +34,6 @@ sql_benchmarks/experiments/results/
 *.csv
 *.html
 
-# --- Temporary Scripts ---
-debug_*.py
-dump_data.py
+# --- Internal Storage (Indirected) ---
+dagster_home/
+.telemetry/

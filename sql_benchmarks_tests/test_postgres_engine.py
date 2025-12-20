@@ -62,7 +62,8 @@ def test_postgres_engine_delegates_run_query(mock_thrash):
     # Since we now use docker-py, we mock the method that calls it (clear_cache)
     # OR we verify clear_cache mocks docker correctly. 
     # For this delegation test, mocking clear_cache is cleaner.
-    with patch.object(PostgresEngine, "clear_cache") as mock_clear:
+    # Mock setup_docker since it's the new way we clear cache (lifecycle)
+    with patch.object(PostgresEngine, "setup_docker") as mock_setup:
         with patch.object(PostgresEngine, "_wait_for_ready") as mock_wait:
             # Mock the creation of the PostgresClient
             with patch("sql_benchmarks.resources.postgres.PostgresClient") as MockClientClass:
@@ -77,7 +78,7 @@ def test_postgres_engine_delegates_run_query(mock_thrash):
                 
                 # ASSERT 1: Pre-execution cleanup happened
                 mock_thrash.assert_called_once()
-                mock_clear.assert_called_once()
+                mock_setup.assert_called_once()
                 mock_wait.assert_called_once()
 
                 # ASSERT 2: The engine created a client

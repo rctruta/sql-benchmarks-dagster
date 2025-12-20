@@ -52,6 +52,15 @@ def run_automated(exp_hash, keys):
         print(f"          [FAILED] Reporting Failed.")
         overall_success = False
 
+    # PRINT REPORT LOCATION
+    results_dir = os.path.join(ROOT_DIR, "sql_benchmarks", "experiments", "results", exp_hash)
+    dashboard_path = os.path.join(results_dir, f"dashboard_{exp_hash}.html")
+    if os.path.exists(dashboard_path):
+        print(f"\n[INFO] 📊 Dashboard generated: {dashboard_path}")
+        print(f"[INFO] 📄 CSV Results:       {os.path.join(results_dir, f'results_{exp_hash}.csv')}")
+    else:
+        print(f"\n[WARN] Dashboard not found at {dashboard_path}")
+
     print(f"[INFO] Experiment Complete ({time.time() - start:.1f}s)")
     return overall_success
 

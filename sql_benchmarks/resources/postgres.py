@@ -32,7 +32,6 @@ class PostgresEngine(ConfigurableResource):
     def run_query(self, sql: str, partition_key: str, scenario_params: Dict[str, Any]) -> Optional[float]:
         self.setup_docker(scenario_params.get("pg_settings"))
         thrash_os_cache()
-        # self.clear_cache()
         self._wait_for_ready()
         client = self._get_client() 
         return client.run_query(sql=sql, scenario_params=scenario_params)

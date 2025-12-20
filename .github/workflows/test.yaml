@@ -27,15 +27,7 @@ jobs:
         pip list
         echo "================================="
 
-    - name: Run Integrity & Schema Tests
+    - name: Run Full Test Suite
       run: |
-        pytest sql_benchmarks_tests/test_config_integrity.py
-
-    - name: Run Unit Tests
-      run: |
-        pytest sql_benchmarks_tests/test_utils.py
-
-    - name: Run Infrastructure Smoke Tests
-      run: |
-        pytest sql_benchmarks_tests/test_dagster_infra.py
-        pytest sql_benchmarks_tests/test_assets.py
+        # Run all tests in the package
+        pytest sql_benchmarks_tests -v
