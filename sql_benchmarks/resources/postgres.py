@@ -21,6 +21,7 @@ class PostgresEngine(ConfigurableResource):
     # --- CONFIGURATION (Immutable) ---
     connection_string: str
     container_name: str = "benchmark_postgres"
+    docker_image: str = "postgres:15" 
     model_config = ConfigDict(extra='forbid')
     
     # --- FACTORY METHOD ---
@@ -31,7 +32,7 @@ class PostgresEngine(ConfigurableResource):
     def run_query(self, sql: str, partition_key: str, scenario_params: Dict[str, Any]) -> Optional[float]:
         self.setup_docker(scenario_params.get("pg_settings"))
         thrash_os_cache()
-        self.clear_cache()
+        # self.clear_cache()
         self._wait_for_ready()
         client = self._get_client() 
         return client.run_query(sql=sql, scenario_params=scenario_params)
@@ -107,10 +108,7 @@ class PostgresEngine(ConfigurableResource):
 
     def setup_docker(self, settings: dict = None):
         """
-        Robust Provisioning using Docker SDK:
-        1. Cleanup old containers.
-        2. Validate Port Availability.
-        3. Use Two-Mount Strategy (Storage vs. Inputs).
+        Robust Provisioning using Docker SDK
         """
         # 1. CLEANUP
         self._kill_zombie_container()
@@ -147,24 +145,36 @@ class PostgresEngine(ConfigurableResource):
             for key, val in settings.items():
                 command_args.extend(["-c", f"{key}={val}"])
         
-        try:
-            client.containers.run(
-                image="postgres:15",
-                name=self.container_name,
-                detach=True,
-                ports={f'5432/tcp': target_port},
-                volumes={
-                    'pg_bench_data': {'bind': '/var/lib/postgresql/data', 'mode': 'rw'},
-                    DATA_DIR: {'bind': '/mnt/data', 'mode': 'rw'}
-                },
-                environment={
-                    "POSTGRES_PASSWORD": "password",
-                    "POSTGRES_HOST_AUTH_METHOD": "trust"
-                },
-                shm_size="2gb",
-                command=command_args
-            )
-        except APIError as e:
-            raise RuntimeError(f"Postgres failed to start via Docker SDK: {e}")
+        # Retry logic for "Port is already allocated" race condition
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                client.containers.run(
+                    image=self.docker_image,
+                    name=self.container_name,
+                    detach=True,
+                    ports={f'5432/tcp': target_port},
+                    volumes={
+                        'pg_bench_data': {'bind': '/var/lib/postgresql/data', 'mode': 'rw'},
+                        DATA_DIR: {'bind': '/mnt/data', 'mode': 'rw'}
+                    },
+                    environment={
+                        "POSTGRES_PASSWORD": "password",
+                        "POSTGRES_HOST_AUTH_METHOD": "trust",
+                        "POSTGRES_DB": make_url(self.connection_string).database
+                    },
+                    shm_size="2gb",
+                    command=command_args
+                )
+                break # Success
+            except APIError as e:
+                # If port is busy or conflict, wait and retry
+                if "port is already allocated" in str(e) or "Conflict" in str(e):
+                    if attempt < max_retries - 1:
+                        time.sleep(2)
+                        # Try cleanup again just in case
+                        self._kill_zombie_container()
+                        continue
+                raise RuntimeError(f"Postgres failed to start via Docker SDK: {e}")
 
         # No wait here. Orchestration layer handles the wait.

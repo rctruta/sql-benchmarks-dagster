@@ -15,54 +15,46 @@ from sql_benchmarks.constants import (
     DAGSTER_MODULE_TARGET
 )
 
+
 def run_automated(exp_hash, keys):
     print(f"[INFO] Launching {exp_hash} (Automated)...")
     start = time.time()
+    
+    overall_success = True
     
     if not keys: keys = [None]
     
     for pk in keys:
         if pk:
             print(f"       -> Triggering Partition: {pk}...")
-            cmd = [
-                "dagster", "asset", "materialize", 
-                "-m", DAGSTER_MODULE_TARGET, 
-                "--select", "group:data_generation,group:ingestion,group:dynamic_bench_postgres,group:dynamic_bench_duckdb",
-                "--partition", pk 
-            ]
+            # Use local runner script (SDK Wrapper)
+            cmd = [sys.executable, "execute_run.py", "--partition", pk]
         else:
             print(f"       -> Triggering Unpartitioned Run...")
-            cmd = [
-                "dagster", "asset", "materialize", 
-                "-m", DAGSTER_MODULE_TARGET, 
-                "--select", "*"
-            ]
+            cmd = [sys.executable, "execute_run.py", "--all"]
 
         try:
-            subprocess.run(cmd, check=True, capture_output=True)
+            # FIX: Do not capture output. Stream it to stdout to avoid buffer deadlocks.
+            subprocess.run(cmd, check=True)
             print(f"          [SUCCESS] Done.")
         except subprocess.CalledProcessError as e:
             print(f"          [FAILED] Execution failed.")
-            if e.stderr:
-                print(f"[ERROR] {e.stderr.decode('utf-8')[-500:]}")
+            overall_success = False
 
     # NEW: Trigger Reporting Asset (Unpartitioned)
     print(f"       -> Triggering Reporting...")
-    cmd = [
-        "dagster", "asset", "materialize", 
-        "-m", DAGSTER_MODULE_TARGET, 
-        "--select", "group:reporting"
-    ]
+    cmd = [sys.executable, "execute_run.py", "--reporting"]
+    
     try:
-        subprocess.run(cmd, check=True, capture_output=True)
+        subprocess.run(cmd, check=True)
         print(f"          [SUCCESS] Done.")
     except subprocess.CalledProcessError as e:
         print(f"          [FAILED] Reporting Failed.")
-        if e.stderr:
-            print(f"[ERROR] {e.stderr.decode('utf-8')[-500:]}")
+        overall_success = False
 
     print(f"[INFO] Experiment Complete ({time.time() - start:.1f}s)")
-    return True
+    return overall_success
+
 
 def process_queue(target_input, auto_mode=False):
     # 1. STRICT PATH RESOLUTION
@@ -103,6 +95,7 @@ def process_queue(target_input, auto_mode=False):
     print(f"[INFO] Mode: {'AUTOMATED' if auto_mode else 'INTERACTIVE (UI)'}")
 
     # 3. EXECUTE LOOP
+    overall_queue_success = True
     for i, config_file in enumerate(queue):
         filename = os.path.basename(config_file)
         print(f"\n" + "-" * 60)
@@ -116,6 +109,7 @@ def process_queue(target_input, auto_mode=False):
                 continue
         except Exception as e:
             print(f"[ERROR] Invalid YAML: {e}")
+            overall_queue_success = False
             continue
 
         exp_hash = generate_experiment_hash(config, ROOT_DIR)
@@ -154,7 +148,12 @@ def process_queue(target_input, auto_mode=False):
             shutil.copy(ACTIVE_CONFIG_PATH, registry_path)
             print(f"[INFO] Archived {exp_hash} to registry.")
         elif not auto_mode:
-            sys.exit(0)
+            sys.exit(0) # Interactive user cancelled
+        else:
+            # Automated mode failure
+            overall_queue_success = False
+
+    return overall_queue_success
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -175,4 +174,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     
-    process_queue(args.target, args.auto)
+    success = process_queue(args.target, args.auto)
+    
+    # If process_queue returns False (failed), exit with status 1
+    if not success:
+        sys.exit(1)

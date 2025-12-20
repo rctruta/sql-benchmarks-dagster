@@ -1,47 +1,57 @@
 meta:
-  description: 'Optimizer Tipping Point: Recursive CTE vs'
-  experiment_id: a69926ff
+  experiment_id: eda7646d
+  description: Clean architecture test
 dataset:
   source: sql_benchmarks.plugins.data_sources.declarative_gen
   tables:
-    hierarchy_data:
+    skewed_data:
       rows: rows
       columns:
       - name: id
         provider: sequence
         primary_key: true
-      - name: parent_id
-        provider: foreign key
-        target_table: hierarchy_data
-        target_column: id
-      - name: name
-        provider: text
+      - name: selectivity_code
+        provider: choice
+        options:
+        - sel_0_1
+        - sel_1
+        - sel_5
+        - sel_10
+        - sel_20
+        - filler
+        weights:
+        - 0.001
+        - 0.01
+        - 0.05
+        - 0.1
+        - 0.2
+        - 0.639
 definitions:
   rows:
+    tiny: 1000
     small: 100000
     medium: 1000000
     large: 10000000
+    mlarge: 50000000
     xlarge: 100000000
-  pg_settings:
-    hdd:
-      random_page_cost: 4.0
-      work_mem: 64MB
-    ssd:
-      random_page_cost: 1.1
-      work_mem: 256MB
 dimensions:
   size:
-  - small
+  - tiny
   - medium
+  - large
+  - xlarge
 execution:
-  test_suite: recursion
+  test_suite: selectivity
   replication: 3
   engines:
   - postgres
   - duckdb
   matrix:
     rows:
-    - small
+    - tiny
     - medium
+    - large
+    - xlarge
     disk_type:
     - ssd
+    - hdd
