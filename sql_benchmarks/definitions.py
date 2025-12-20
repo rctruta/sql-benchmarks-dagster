@@ -29,16 +29,17 @@ pg_db = os.getenv("POSTGRES_DB", "postgres")
 
 postgres_url = f"postgresql://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_db}"
 
-# 5. THE DEFINITION
-# No magic scanning. No deduplication hacks. Just the exact assets we own.
+# 5. Definitions
+all_assets = [
+    *data_assets,
+    *ingestion_assets,
+    *benchmark_assets,
+    performance_dashboard,
+    cleanup_staging_data
+]
+
 defs = Definitions(
-    assets=[
-        *data_assets,
-        *ingestion_assets,
-        *benchmark_assets,
-        performance_dashboard,
-        cleanup_staging_data
-    ],
+    assets=all_assets,
     resources={
         "postgres": PostgresEngine(connection_string=postgres_url),
         "duckdb": DuckDBEngine(data_folder=os.path.join(DATA_DIR, "duckdb"))

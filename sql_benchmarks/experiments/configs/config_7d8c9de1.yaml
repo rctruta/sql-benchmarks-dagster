@@ -1,0 +1,27 @@
+meta:
+  description: 'Recursivity Depth Test: Wide (Zipf) vs Deep (Chain) vs Random (Uniform)'
+  experiment_id: 7d8c9de1
+dataset:
+  source: sql_benchmarks.plugins.data_sources.local_file_loader
+  tables:
+    hierarchy_data: {}
+  paths:
+    hierarchy_data: /Users/ramona/Projects/sql-benchmarks-dagster/data/staging/hierarchy_{topology}.parquet
+definitions:
+  rows:
+    medium: 100000
+  pg_settings:
+    ssd:
+      random_page_cost: 1.1
+      work_mem: 256MB
+execution:
+  engines:
+  - postgres
+  - duckdb
+  matrix:
+    size:
+    - medium
+    topology:
+    - uniform
+    - chain
+    - zipf

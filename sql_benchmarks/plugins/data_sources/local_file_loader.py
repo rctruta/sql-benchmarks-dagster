@@ -11,11 +11,15 @@ def generate(context, params, table_name, target_path, dataset_config):
     
     # 1. GET PATH
     paths = dataset_config.get("paths", {})
-    source_file = paths.get(table_name)
+    source_template = paths.get(table_name)
     
-    if not source_file:
+    if not source_template:
         raise ValueError(f"CRITICAL: No path defined for table '{table_name}' in dataset.paths")
     
+    # INTERPOLATE
+    # Support {topology} or other vars from the partition params
+    source_file = source_template.format(**params)
+
     if not os.path.exists(source_file):
         raise FileNotFoundError(f"CRITICAL: Real data file not found: {source_file}")
 

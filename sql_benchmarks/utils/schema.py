@@ -28,6 +28,8 @@ class ColumnDef(BaseModel):
     
     # Type override for DB DDL (e.g., "double precision")
     type: Optional[str] = None
+    
+    model_config = ConfigDict(extra='allow')
 
 class IndexDef(BaseModel):
     columns: List[str]

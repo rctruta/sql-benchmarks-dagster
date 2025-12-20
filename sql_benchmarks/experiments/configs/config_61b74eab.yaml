@@ -1,0 +1,50 @@
+meta:
+  description: 'Optimizer Tipping Point: Recursive CTE vs'
+  experiment_id: 61b74eab
+dataset:
+  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  tables:
+    hierarchy_data:
+      rows: rows
+      columns:
+      - name: id
+        provider: sequence
+        primary_key: true
+      - name: parent_id
+        provider: foreign key
+        target_table: hierarchy_data
+        target_column: id
+      - name: name
+        provider: text_concat
+        source: id
+        prefix: node_
+definitions:
+  rows:
+    small: 100000
+    medium: 1000000
+    demo: 1000
+    large: 10000000
+    xlarge: 100000000
+  pg_settings:
+    hdd:
+      random_page_cost: 4.0
+      work_mem: 64MB
+    ssd:
+      random_page_cost: 1.1
+      work_mem: 256MB
+dimensions:
+  size:
+  - demo
+  - small
+execution:
+  test_suite: recursion
+  replication: 3
+  engines:
+  - postgres
+  - duckdb
+  matrix:
+    rows:
+    - small
+    - medium
+    disk_type:
+    - ssd

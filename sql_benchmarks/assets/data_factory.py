@@ -38,7 +38,17 @@ def make_data_asset(table_name):
         
         # 2. Ensure folder exists
         os.makedirs(os.path.dirname(target_path), exist_ok=True)
-        
+
+        # [PERFORMANCE FIX] Skip generation if file exists
+        if os.path.exists(target_path):
+             context.log.info(f"⚡ Skipping generation: {target_path} already exists.")
+             return MaterializeResult(
+                metadata={
+                    "path": MetadataValue.path(target_path),
+                    "status": "skipped_existing"
+                }
+             )
+
         # 3. Call Plugin
         return module.generate(
             context=context, 

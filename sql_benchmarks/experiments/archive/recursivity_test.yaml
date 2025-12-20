@@ -15,12 +15,15 @@ dataset:
           target_table: hierarchy_data
           target_column: id
         - name: name
-          provider: text
+          provider: text_concat
+          source: id
+          prefix: "node_"
 
 definitions:
   rows:
     small: 100_000
     medium: 1_000_000
+    demo: 10  # Added to force new hash
     large: 10_000_000
     xlarge: 100_000_000
   
@@ -34,7 +37,7 @@ definitions:
       work_mem: "256MB"      # Let's give SSD mode more RAM too
 
 dimensions:
-  size: [small, medium]
+  size: [demo, small]
 #  size: [small, medium, large, xlarge]
 
 execution:
@@ -42,5 +45,5 @@ execution:
   replication: 3
   engines: ["postgres", "duckdb"]
   matrix:
-    rows: [small, medium]
+    rows: [demo]
     disk_type: ["ssd"]  

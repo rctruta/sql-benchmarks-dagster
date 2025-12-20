@@ -1,7 +1,23 @@
 #!/bin/bash
 set -e  # Exit immediately if any command fails
 
-# --- STEP 1: SET THE ENVIRONMENT ---
+# --- STEP 1: SINGLETON LOCK (Prevent Multiple Instances) ---
+LOCKFILE="experiment.lock"
+
+if [ -f "$LOCKFILE" ]; then
+    PID=$(cat "$LOCKFILE")
+    if ps -p "$PID" > /dev/null; then
+        echo "[ERROR] Benchmark is already running (PID $PID)."
+        exit 1
+    else
+        echo "[WARN] Found stale lock file (PID $PID). Cleaning up."
+        rm -f "$LOCKFILE"
+    fi
+fi
+
+echo $$ > "$LOCKFILE"
+
+# --- STEP 2: SET THE ENVIRONMENT ---
 export DAGSTER_HOME=$(pwd)
 export PYTHONPATH=$PYTHONPATH:$(pwd)
 
@@ -15,7 +31,6 @@ echo "[INFO] Setting DAGSTER_HOME to $(pwd)"
 
 # --- STEP 3: START THE COORDINATOR (The Daemon) ---
 echo "[INFO] Checking Traffic Control (Daemon)..."
-mkdir -p data/dagster_home/storage
 
 DAEMON_PID_FILE="dagster_daemon.pid"
 MOUNTED_DAEMON=0
@@ -27,6 +42,7 @@ cleanup() {
     else
         echo "[INFO] Leaving existing Daemon running."
     fi
+    rm -f "experiment.lock"
 }
 
 # Trap cleanup on EXIT (success, fail, or interrupt)

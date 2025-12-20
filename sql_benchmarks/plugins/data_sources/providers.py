@@ -39,26 +39,49 @@ def generate_text_concat(rows: int, existing_data: dict, **kwargs):
 def generate_foreign_key(rows: int, table_name: str, **kwargs):
     """
     Generates foreign keys.
-    For hierarchy tables, enforces tree-like structure (parent_id < id) if possible, 
-    or random links (allowing cycles) based on user intent.
-    Current Default: Random(1, rows) which simulates 'contained in' relationship.
+    Supports distributions:
+    - 'uniform' (Default): Random parent. Avg Depth ~ O(log N).
+    - 'chain': Linked List structure (parent = id - 1). Depth = N.
+    - 'zipf': Power law. Wide tree. Most nodes point to top few IDs.
     """
-    # For self-referencing hierarchy (recursion test), we simulate a tree/graph.
-    # To strictly prevent cycles (DAG), we'd need parent < id.
-    # To allow full graphs (recursive queries), we allow any ID.
-    # 
-    # Logic: Simply point to any existing row in the referenced table.
-    # We assume referenced table has IDs 1..rows.
-    # If target table size differs, this logic needs 'target_rows' param.
-    # For now, we assume self-reference or 1:1 sizing for simplicty in benchmarks.
+    target_rows = kwargs.get("target_rows")
+    distribution = kwargs.get("distribution", "uniform")
     
-    # Validation constraint for Recursivity Test:
-    # "foreign_key" usually points to an EXISTING ID.
-    # If we are pointing to *ourselves* (parent_id), the IDs 1..N exist.
+    # Range of valid IDs
     mn = 1
-    mx = rows + 1 # Exclusive
+    # If target_rows is set, use it. Else assume self-reference up to current rows.
+    mx = (target_rows if target_rows else rows) + 1 
     
-    return np.random.randint(mn, mx, size=rows)
+    if distribution == "chain":
+        # Point to previous ID. ID 1 points to NULL (represnted as 0 or 1? Let's say 1 to be valid FK)
+        # Actually standard FK usually allows NULL. But our schema might be strict int64.
+        # Let's point root to itself (id=1 -> parent=1) or make it a forest.
+        # For simplicity: parent_id = max(1, id - 1)
+        # But we generate an array of *values*. We don't know the current ID *per row* easily unless we assume row_idx+1 = ID.
+        # Yes, declarative_gen assumes sequence ID 1..N.
+        ids = np.arange(1, rows + 1)
+        parents = ids - 1
+        parents[0] = 1 # Root points to self? Or we need NULL support.
+        # If we return ints, we can't have None.
+        # Sticking to valid ID range [1, mx).
+        parents = np.maximum(1, parents)
+        return parents
+
+    elif distribution == "zipf":
+        # numpy zipf is z ~ 1/k^a. Returns ints >= 1.
+        # We need to map this to valid ID range.
+        # A common trick: parent_id = 1 + (zipf sample % mx)
+        # But we want frequent *low* IDs (1, 2, 3 as roots).
+        # Zipf(a=2) generates many 1s.
+        a = kwargs.get("zipf_a", 2.0)
+        samples = np.random.zipf(a, size=rows)
+        # Map samples to range [1, mx-1] using modulo? 
+        # Better: min(samples, mx-1) to preserve frequency of 1.
+        parents = np.minimum(samples, mx - 1)
+        return parents
+
+    else: # uniform
+        return np.random.randint(mn, mx, size=rows)
 
 PROVIDER_REGISTRY = {
     "sequence": generate_sequence,
