@@ -1,5 +1,5 @@
 meta:
-  experiment_id: "null_logic_test"
+  experiment_id: "null_sentinel"
   description: "Benchmarking 3-Valued Logic (Native) vs 2-Valued Logic (Zombie) for joins with NULLs."
 
 dataset:
@@ -15,7 +15,8 @@ dataset:
 
 definitions:
   rows:
-    tiny: 1000
+    nano: 1000
+    micro: 10_000
     small: 100_000
     medium: 1_000_000
     large: 10_000_000
@@ -29,9 +30,9 @@ definitions:
     p_50: 0.5
 
 execution:
-  test_suite: "null_logic"
+  test_suite: "null_sentinel"
   engines: ["postgres", "duckdb"]
   replication: 1 
   matrix:
-    rows: [tiny, small] # 100k, 1M
+    rows: [nano, micro, small] # 100k, 1M
     null_probability: [p_0_1, p_1, p_25, p_50]

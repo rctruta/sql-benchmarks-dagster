@@ -23,7 +23,8 @@ class PostgresClient:
                     conn.execute(text(f"SET {key} = '{val}'"))
             
             start = time.time()
-            conn.execute(text(sql)) 
+            conn.execute(text(sql))
+            conn.commit() 
             return time.time() - start
 
     # Updated signature to accept partition_key (passed from factory), even if unused logic-wise

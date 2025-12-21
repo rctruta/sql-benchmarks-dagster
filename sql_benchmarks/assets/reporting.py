@@ -115,6 +115,38 @@ def performance_dashboard(context: AssetExecutionContext):
     df = df.unique(subset=unique_keys, keep="last").sort("Rows")
     pldf = df.to_pandas()
 
+    # 3.5 SANITIZE DATA (The "Gas in the Trunk")
+    # ------------------------------------------
+    # Drop columns that are effectively "Null" or "Default" across the entire dataset
+    # This prevents "Selectivity=0.0" from appearing in titles when it wasn't used.
+    
+    cols_to_drop = []
+    for col in pldf.columns:
+        if col in ["Asset", "System", "Engine", "Partition", "Duration"]:
+            continue
+            
+        # Check if column is all null or all default (0.0 for float, 0 for int)
+        is_all_null = pldf[col].isnull().all()
+        is_all_zero = (pldf[col] == 0).all() and pd.api.types.is_numeric_dtype(pldf[col])
+        is_single_value = pldf[col].nunique() <= 1
+        
+        # Heuristic: If it's 0 everywhere, it's likely a parser default, UNLESS it's "Rows" (which shouldn't be 0)
+        # or if the user explicitly set 0. But for Selectivity/Skew, 0 is often "Not Used".
+        if col != "Rows" and (is_all_null or is_all_zero):
+             cols_to_drop.append(col)
+        # Also drop constant columns from the "Matrix Params" consideration (but keep in DF for reference if needed?)
+        # Actually, simpler to just drop them from the DF used for plotting considerations.
+    
+    if cols_to_drop:
+        context.log.info(f"Dropping irrelevant/default columns: {cols_to_drop}")
+        pldf = pldf.drop(columns=cols_to_drop)
+
+    # Fill NaNs in remaining parameters to prevent fragmentation
+    # e.g. if 'null_probability' is present in some rows but NaN in others, fill with 0 via Polars upstream or Pandas here.
+    # For numeric params, 0 is usually safe default for "parameter not present".
+    numeric_cols = pldf.select_dtypes(include=['number']).columns
+    pldf[numeric_cols] = pldf[numeric_cols].fillna(0)
+
     # 4. RENDER (Visualization - Matrix Explorer)
     figures_html = []
     
@@ -122,10 +154,17 @@ def performance_dashboard(context: AssetExecutionContext):
     excluded_cols = {"Asset", "Partition", "Duration", "Engine", "System"}
     matrix_params = [c for c in pldf.columns if c not in excluded_cols and pd.api.types.is_numeric_dtype(pldf[c])]
     
+    context.log.info(f"Matrix Params Detected: {matrix_params}")
+    if "null_probability" in pldf.columns:
+         context.log.info(f"Unique Null Probs: {pldf['null_probability'].unique().tolist()}")
+
+    # 1. Comparison by System (The Basics)
+    # -------------------------------------------------------------------------
     # 1. Comparison by System (The Basics)
     # -------------------------------------------------------------------------
     try:
         # Side-by-Side System Comparison (Fixed Rows Scaling)
+        # Check if "Rows" is a parameter, as it's the standard X-axis
         if "Rows" in matrix_params:
              fig_compare = px.line(
                 pldf, 
@@ -134,8 +173,6 @@ def performance_dashboard(context: AssetExecutionContext):
                 color="System", 
                 line_dash="Asset", 
                 symbol="System",
-                facet_col="null_probability" if "null_probability" in matrix_params else None, 
-                facet_col_wrap=2,
                 log_x=True,
                 log_y=True,
                 markers=True,
@@ -145,51 +182,126 @@ def performance_dashboard(context: AssetExecutionContext):
     except Exception as e:
          context.log.warning(f"Global Plot Error: {e}")
 
-    # 2. Slice and Dice (The "User Logic")
+    # 2. DYNAMIC DISCOVERY ENGINE (The "Smart Logic")
     # -------------------------------------------------------------------------
     unique_systems = sorted(pldf["System"].unique())
     
-    # For each Engine...
     for system in unique_systems:
-        system_df = pldf[pldf["System"] == system]
+        system_df = pldf[pldf["System"] == system].copy()
         
-        # For each Parameter we want to vary on X (e.g. Rows, NullProb)...
-        for param_x in matrix_params:
-            
-            # Find the "Other" parameters to fix (Facet By)
-            other_params = [p for p in matrix_params if p != param_x]
-            
-            # We can't facet by *all* other params if there are many, 
-            # so we pick the primary "Other" one (e.g. if X=Rows, Other=NullProb).
-            # If multiple, we might need a more complex strategy, but for now we take the first.
-            facet_col = other_params[0] if other_params else None
-            
-            title = f"<b>{system}</b>: Varying <b>{param_x}</b>"
-            if facet_col:
-                title += f" (Facetted by {facet_col})"
-            
-            try:
-                # Ensure we have data
-                if system_df.empty: continue
+        # A. Discover Roles
+        # -----------------
+        # Candidates for X-Axis: Numeric params with > 1 unique value
+        x_candidates = []
+        for p in matrix_params:
+            if system_df[p].nunique() > 1:
+                x_candidates.append(p)
+        
+        # Heuristic: Prefer "Rows" if available, else param with max cardinality
+        if "Rows" in x_candidates:
+            x_axis = "Rows"
+        elif x_candidates:
+            # Pick max cardinality
+            x_axis = max(x_candidates, key=lambda c: system_df[c].nunique())
+        else:
+            # Fallback if nothing varies (single point)
+            x_axis = matrix_params[0] if matrix_params else "Asset"
 
-                # Logic: X=Param, Y=Duration, Color=Asset (2VL vs 3VL)
+        # B. Classify Remaining Parameters (Series vs Slices)
+        # ---------------------------------------------------
+        other_params = [p for p in matrix_params if p != x_axis]
+        
+        # Slices: High Cardinality OR Orthogonal Dimensions we want to isolate
+        # Series: Low Cardinality dimensions we want to compare on one chart
+        
+        slice_params = []
+        series_params = ["Asset"] # Always compare Assets (Logic) on same chart
+        
+        for p in other_params:
+            # Exclude parameters that are just case variants of X-Axis (Rows vs rows)
+            if p.lower() == x_axis.lower():
+                continue
+                
+            unique_count = system_df[p].nunique()
+            # If it has only 1 value, it doesn't matter (it's fixed context), 
+            # but we can treat it as a Slice to be safe/explicit in title.
+            # If it has many values (>5), slice it to avoid clutter.
+            # If it has few values (2-5), add to SERIES (lines).
+            if unique_count > 5:
+                slice_params.append(p)
+            elif unique_count > 1:
+                series_params.append(p)
+            else:
+                # It's a fixed value, add to slice context implicitly
+                slice_params.append(p)
+
+        # C. Generate Plots via Slicing
+        # -----------------------------
+        # Group by all slice parameters to create distinct scenarios
+        if slice_params:
+            # Sort to ensure consistent grouping order
+            slice_params = sorted(slice_params)
+            grouped = system_df.groupby(slice_params)
+        else:
+            grouped = [((), system_df)]
+
+        for group_keys, slice_df in grouped:
+            if not isinstance(group_keys, tuple):
+                group_keys = (group_keys,)
+            
+            # 1. Build Title
+            title_parts = [f"<b>{system}</b>: Varying <b>{x_axis}</b>"]
+            if slice_params:
+                ctx_str = ", ".join([f"{k}={v}" for k, v in zip(slice_params, group_keys)])
+                title_parts.append(f"<span style='font-size:12px'>({ctx_str})</span>")
+            title = "<br>".join(title_parts)
+
+            # 2. Construct Series Column (Legend)
+            # Combine all series params into one string column "Series"
+            # e.g. "2VL - 10% Nulls"
+            slice_df = slice_df.copy()
+            
+            if len(series_params) > 1:
+                # We have multiple dimensions (Asset + NullProb + ...)
+                # Create a composite key
+                def make_series_label(row):
+                    parts = []
+                    for sp in series_params:
+                        val = row[sp]
+                        # Beautify: If val is float, format it? 
+                        # For now, simplistic str()
+                        parts.append(str(val))
+                    return " / ".join(parts)
+                
+                slice_df["_Series_"] = slice_df.apply(make_series_label, axis=1)
+                color_col = "_Series_"
+                symbol_col = "Asset" # Keep using Asset for symbol if present
+            else:
+                # Simple case: Only Asset varies
+                slice_df["_Series_"] = slice_df[series_params[0]].astype(str)
+                color_col = "_Series_"
+                symbol_col = "_Series_"
+
+            try:
+                # 3. Plot
+                scenario_df = slice_df
+                scenario_df = scenario_df.sort_values(by=x_axis)
+                
                 fig = px.line(
-                    system_df,
-                    x=param_x,
+                    scenario_df,
+                    x=x_axis,
                     y="Duration",
-                    color="Asset",
-                    symbol="Asset",
-                    facet_col=facet_col,
-                    facet_col_wrap=3,
+                    color=color_col,
+                    symbol=symbol_col if symbol_col in slice_df.columns else None,
                     markers=True,
-                    log_y=True, # Duration is exponential
-                    log_x=True if param_x == "Rows" or param_x == "null_probability" else False,
+                    log_y=True,
+                    log_x=True if "Rows" in x_axis or "null" in x_axis.lower() else False,
                     title=title,
-                    labels={param_x: param_x, "Duration": "Duration (s)"}
+                    labels={x_axis: x_axis, "Duration": "Duration (s)", "_Series_": " / ".join(series_params)}
                 )
                 figures_html.append(fig.to_html(full_html=False, include_plotlyjs=False))
             except Exception as e:
-                context.log.warning(f"Slice Plot Error ({system}, {param_x}): {e}")
+                context.log.warning(f"Dynamic Plot Error ({system}): {e}")
 
     # 3. 3D Landscape (The "Bonus")
     # -------------------------------------------------------------------------
@@ -216,6 +328,7 @@ def performance_dashboard(context: AssetExecutionContext):
     exp_folder = os.path.join(RESULTS_DIR, EXP_ID)
     os.makedirs(exp_folder, exist_ok=True)
     html_path = os.path.join(exp_folder, f"dashboard_{EXP_ID}.html")
+    print(f"DEBUG: Saving Dashboard to: {html_path}")
     
     with open(html_path, "w") as f:
         f.write(f"<h1>Benchmark: {EXP_ID}</h1>")

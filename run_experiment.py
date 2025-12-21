@@ -158,6 +158,11 @@ def process_queue(target_input, auto_mode=False):
             print(f"[INFO] Archived {exp_hash} to registry.")
             
         # E. ALWAYS Archive to Results folder (For traceability of failed runs)
+        # Fix: Ensure config.yaml is present alongside the dashboard/fragments
+        results_config_path = os.path.join(ROOT_DIR, "sql_benchmarks", "experiments", "results", exp_hash, "config.yaml")
+        os.makedirs(os.path.dirname(results_config_path), exist_ok=True)
+        shutil.copy(ACTIVE_CONFIG_PATH, results_config_path)
+        print(f"[INFO] Capsule: Config copied to {results_config_path}")
         results_exp_dir = os.path.join(ROOT_DIR, "sql_benchmarks", "experiments", "results", exp_hash)
         if os.path.exists(results_exp_dir):
             shutil.copy(ACTIVE_CONFIG_PATH, os.path.join(results_exp_dir, "config.yaml"))

@@ -8,7 +8,7 @@ import docker
 from docker.errors import NotFound, APIError
 from .base_engine import IBenchmarkEngine # We import it for type hinting, but don't inherit
 from .postgres_client import PostgresClient 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, PrivateAttr
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.exc import OperationalError
@@ -24,9 +24,13 @@ class PostgresEngine(ConfigurableResource):
     docker_image: str = "postgres:15" 
     model_config = ConfigDict(extra='forbid')
     
+    _runtime_connection_string: Optional[str] = PrivateAttr(default=None)
+
     # --- FACTORY METHOD ---
     def _get_client(self) -> PostgresClient:
-        return PostgresClient(self.connection_string)
+        # Use runtime string if set (dynamic port), else config default
+        target_conn = self._runtime_connection_string or self.connection_string
+        return PostgresClient(target_conn)
 
     # --- IBenchmarkEngine Implementation (Delegation) ---
     def run_query(self, sql: str, partition_key: str, scenario_params: Dict[str, Any]) -> Optional[float]:
@@ -46,19 +50,29 @@ class PostgresEngine(ConfigurableResource):
         return "postgres"
     
     def get_engine(self):
-        return create_engine(self.connection_string)
+        target_conn = self._runtime_connection_string or self.connection_string
+        return create_engine(target_conn)
 
     # --- EXTERNAL/SYSTEM/CONFIG HELPERS (Remain Here) ---
     def _get_port_from_url(self) -> int:
         try:
-            url = make_url(self.connection_string)
+            target_conn = self._runtime_connection_string or self.connection_string
+            url = make_url(target_conn)
             return url.port or 5432
         except Exception:
             return 5432
 
     def _check_port_available(self, port: int) -> bool:
+        """Returns True if port is free (connect returns non-zero)."""
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             return s.connect_ex(('localhost', port)) != 0
+
+    def _find_free_port(self, start_port: int = 5432) -> int:
+        port = start_port
+        while True:
+            if self._check_port_available(port):
+                return port
+            port += 1
 
     def clear_cache(self):
         """Restarts the container using Docker SDK to ensure cold cache."""
@@ -84,7 +98,8 @@ class PostgresEngine(ConfigurableResource):
         start = time.time()
         while time.time() - start < timeout:
             try:
-                engine = create_engine(self.connection_string)
+                # Use dynamic engine creation
+                engine = self.get_engine()
                 with engine.connect() as conn:
                     conn.execute(text("SELECT 1"))
                 return
@@ -114,21 +129,26 @@ class PostgresEngine(ConfigurableResource):
 
         target_port = self._get_port_from_url()
 
-        # 2. VALIDATE PORT (The logic you requested)
-        # We perform a small wait-loop to handle OS socket release time
-        port_free = False
+        # 2. DYNAMIC PORT ALLOCATION (Auto-Resolve Conflict)
+        # Check if the desired port is free. If not, find a new one.
+        is_free = False
         for _ in range(5):
-            if self._check_port_available(target_port):
-                port_free = True
-                break
-            time.sleep(1)
+             if self._check_port_available(target_port):
+                 is_free = True
+                 break
+             time.sleep(1)
 
-        if "localhost" in self.connection_string and not port_free:
-             raise RuntimeError(
-                f"Port {target_port} is occupied by another service. "
-                "Update POSTGRES_PORT env var or stop the local service."
-            )
-
+        if not is_free:
+            print(f"[WARN] Port {target_port} is busy. searching for free port...")
+            new_port = self._find_free_port(start_port=target_port + 1)
+            print(f"[INFO] Switched to available port: {new_port}")
+            target_port = new_port
+            
+            # CRITICAL: Update connection_string so clients connect to the new port
+            url = make_url(self.connection_string)
+            new_url = url.set(port=new_port)
+            self._runtime_connection_string = str(new_url)
+            
         # 3. PREPARE FILESYSTEM
         # A dedicated home for the DB files prevents "Directory not empty" errors.
         db_storage_path = os.path.join(DATA_DIR, "postgres_db")

@@ -55,7 +55,7 @@ def write_benchmark_fragment(experiment_id, run_id, engine, asset_name, pk, dura
         
     return fragment_path
 
-def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta):
+def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, extra_context=None):
     prefix = get_engine_asset_prefix(engine)
     deps = [f"{prefix}{t}_table" for t in used_tables]
     asset_name = f"{prefix}benchmark_{name}"
@@ -84,7 +84,10 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta):
         
         # 2. SQL Render
         render_ctx = {f"{t}_table": f"{t}_{pk}" for t in used_tables}
-        render_ctx.update(params)         
+        render_ctx.update(params)
+        if extra_context:
+            render_ctx.update(extra_context)
+            
         sql = jinja2.Template(raw_template).render(render_ctx)
         
         # 3. Execution Loop
@@ -160,7 +163,15 @@ def get_benchmark_assets():
             tables, raw = get_tables_used_in_sql(f, VALID_TABLES)
             static_meta = infer_metadata_from_sql(raw, dataset_cfg)
             
-            asset_wrapper = make_benchmark_asset(base, engine, tables, raw, static_meta)
+            # Context Injection: Enable {{ column_name }} in SQL
+            col_ctx = {}
+            if dataset_cfg and 'tables' in dataset_cfg:
+                for t in tables:
+                     t_def = dataset_cfg['tables'].get(t, {})
+                     for c in t_def.get('columns', []):
+                         col_ctx[c['name']] = c['name']
+            
+            asset_wrapper = make_benchmark_asset(base, engine, tables, raw, static_meta, extra_context=col_ctx)
             
             try:
                 asset_obj = asset_wrapper.to_asset_def()

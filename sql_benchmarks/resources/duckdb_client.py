@@ -22,6 +22,13 @@ class DuckDBClient:
     
     def bulk_load(self, filepath: str, target_table_name: str, partition_key: str) -> None:
         db_path = self._get_db_path(partition_key)
+        # Ensure fresh start to avoid locks or RO states
+        if os.path.exists(db_path):
+            try:
+                os.remove(db_path)
+            except OSError:
+                pass # Best effort
+
         # Ensure directory exists only for write/creation operations
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         sql = f"CREATE OR REPLACE TABLE {target_table_name} AS SELECT * FROM read_parquet('{filepath}')"
@@ -36,9 +43,11 @@ class DuckDBClient:
         
         db_path = self._get_db_path(partition_key)
         
-        with duckdb.connect(db_path, read_only=True) as con:
+        # Enable RW for Sentinel experiments (CREATE TABLE)
+        with duckdb.connect(db_path, read_only=False) as con:
             start = time.time()
-            # Use con.sql() which returns a DuckDBPyRelation, safer for result fetching
+            # In DuckDB, multiple statements in one string are executed if separated by semicolon
+            # .sql() executes them. 
             con.sql(sql).fetchall()
             end = time.time()
             
