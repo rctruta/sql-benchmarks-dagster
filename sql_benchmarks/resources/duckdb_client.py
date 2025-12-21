@@ -38,8 +38,8 @@ class DuckDBClient:
         
         with duckdb.connect(db_path, read_only=True) as con:
             start = time.time()
-            result = con.execute(sql)
-            result.fetchall()
+            # Use con.sql() which returns a DuckDBPyRelation, safer for result fetching
+            con.sql(sql).fetchall()
             end = time.time()
             
             return end - start

@@ -12,9 +12,14 @@ from sql_benchmarks.utils.schema import TableDef
 # 1. PROVIDER TESTS
 # ==========================================
 def test_provider_sequence():
+    # Test Init
     res = providers.generate_sequence(rows=5)
     assert len(res) == 5
     assert np.all(res == [1, 2, 3, 4, 5])
+    
+    # Test Offset
+    res_offset = providers.generate_sequence(rows=5, start=100)
+    assert np.all(res_offset == [100, 101, 102, 103, 104])
 
 def test_provider_choice():
     res = providers.generate_choice(rows=10, options=["A", "B"], weights=[0.5, 0.5])
@@ -104,3 +109,63 @@ def test_declarative_gen_foreign_key_flow(temp_output):
     df = pl.read_parquet(path)
     assert df.height == 50
     assert df["parent_id"].min() >= 1
+
+def test_declarative_gen_null_probability(temp_output):
+    config = {
+        "tables": {
+            "null_table": {
+                "rows": 1000,
+                "columns": [
+                    {
+                        "name": "col_null", 
+                        "provider": "sequence", 
+                        "null_probability": 0.5
+                    }
+                ]
+            }
+        }
+    }
+    
+    result = declarative_gen.generate({}, {}, "null_table", temp_output, config)
+    path = result.metadata["path"].value
+    df = pl.read_parquet(path)
+    
+    assert df.height == 1000
+    null_count = df["col_null"].null_count()
+    
+    # 50% probability should yield roughly 500 nulls
+    # Tolerating variance (e.g. 400-600)
+    assert 400 < null_count < 600
+    
+    # Verify dtype is NOT Object (should be Int64 or similar)
+    assert df["col_null"].dtype != pl.Object
+
+def test_declarative_gen_variable_null_prob(temp_output):
+    # Test matrix substitution for null_probability (string in config -> float in runtime)
+    config = {
+        "tables": {
+            "test_table": {
+                "rows": 100,
+                "columns": [
+                    {
+                        "name": "col_a",
+                        "provider": "sequence",
+                        "null_probability": "p_var"
+                    }
+                ]
+            }
+        }
+    }
+    
+    # Params dict simulating matrix expansion
+    params = {"p_var": 0.5, "rows": 100}
+    
+    context = MagicMock() # Mock dagster context if needed, though generate() doesn't strict type check it
+    
+    result = declarative_gen.generate(context, params, "test_table", temp_output, config)
+    path = result.metadata["path"].value
+    
+    df = pl.read_parquet(path)
+    null_count = df["col_a"].null_count()
+    # 40-60 range for 100 rows is valid
+    assert 40 <= null_count <= 60

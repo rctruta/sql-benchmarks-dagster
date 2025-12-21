@@ -8,19 +8,35 @@ from .providers import PROVIDER_REGISTRY
 # Batch generation to prevent OOM
 CHUNK_SIZE = 500_000
 
+def resolve_params_recursive(obj, params):
+    """Recursively replace string values in obj that match keys in params."""
+    if isinstance(obj, dict):
+        return {k: resolve_params_recursive(v, params) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [resolve_params_recursive(i, params) for i in obj]
+    elif isinstance(obj, str) and obj in params:
+        return params[obj]
+    # Handle Pydantic Models by dumping them first (if passed directly)
+    elif hasattr(obj, "model_dump"):
+        return resolve_params_recursive(obj.model_dump(), params)
+    return obj
+
 def generate(context, params, table_name, target_path, dataset_config):
     
     # 1. SCHEMA VALIDATION
     if 'tables' not in dataset_config:
         raise ValueError("Missing 'tables' section in dataset config.")
         
-    raw_table_def = dataset_config['tables'].get(table_name)
+    dataset_config = resolve_params_recursive(dataset_config, params)
+    
+    tables = dataset_config.get("tables", {})
+    raw_table_def = tables.get(table_name)
     if not raw_table_def:
         raise ValueError(f"Table '{table_name}' not defined in dataset config.")
 
     # Validate using Pydantic (Throws ValidationError if invalid)
     # We strip unknown fields if strict mode is issue, but Schema is set to 'allow' extra.
-    table_model = TableDef(**raw_table_def)
+    table_model = TableDef(**tables[table_name])
 
     # 2. RESOLVE ROW COUNT
     # Priority: Matrix Params > Table Config
@@ -65,42 +81,39 @@ def generate(context, params, table_name, target_path, dataset_config):
     if parent_dir:
         os.makedirs(parent_dir, exist_ok=True)
 
-    if row_count <= CHUNK_SIZE:
-        # Small data: Run normally (in-memory)
-        _generate_chunk(0, row_count, table_model, dataset_config, params, row_count, target_path)
-    else:
-        # Large data: Batch and Append
-        temp_dir = os.path.join(parent_dir, f"temp_{table_name}_{row_count}")
-        os.makedirs(temp_dir, exist_ok=True)
-        
-        md_files = []
-        remaining = row_count
-        offset = 0
-        part_idx = 0
-        
-        print(f"[Gen] Generating {row_count} rows in batches of {CHUNK_SIZE}...")
-        
-        while remaining > 0:
-            current_batch = min(CHUNK_SIZE, remaining)
-            part_path = os.path.join(temp_dir, f"part_{part_idx}.parquet")
-            
-            _generate_chunk(offset, current_batch, table_model, dataset_config, params, row_count, part_path)
-            
-            md_files.append(part_path)
-            remaining -= current_batch
-            offset += current_batch
-            part_idx += 1
-            print(f"[Gen] Batch {part_idx} done.")
+    # ... (rest of logic) ...
+    
+    chunk_size = 500_000
+    total_chunks = (row_count // chunk_size) + (1 if row_count % chunk_size > 0 else 0)
 
-        # Stream Merge to Single File (Memory Safe)
-        # scan_parquet is lazy. sink_parquet streams execution.
-        try:
-            pl.scan_parquet(os.path.join(temp_dir, "*.parquet")).sink_parquet(target_path)
-            print(f"[Gen] Merged to {target_path}")
-        finally:
-            # Cleanup temp files
+    print(f"[Gen] Generating {row_count} rows in batches of {chunk_size}...")
+
+    # Initialize empty list for temp chunks
+    temp_files = []
+    
+    try:
+        for i in range(total_chunks):
+            offset = i * chunk_size
+            current_size = min(chunk_size, row_count - offset)
+            
+            chunk_path = f"{target_path}.part_{i}"
+            _generate_chunk(offset, current_size, table_model, dataset_config, params, row_count, chunk_path)
+            temp_files.append(chunk_path)
+            print(f"[Gen] Batch {i+1} done.")
+            
+        # Merge efficiently using Polars scan
+        # If single chunk, just rename
+        if len(temp_files) == 1:
             import shutil
-            shutil.rmtree(temp_dir, ignore_errors=True)
+            shutil.move(temp_files[0], target_path)
+        else:
+            pl.scan_parquet(f"{target_path}.part_*").collect().write_parquet(target_path)
+            
+    finally:
+        # Cleanup
+        for f in temp_files:
+            if os.path.exists(f):
+                os.remove(f)
 
     return MaterializeResult(
         metadata={
@@ -111,6 +124,11 @@ def generate(context, params, table_name, target_path, dataset_config):
     )
 
 def _generate_chunk(offset, size, table_model, dataset_config, params, total_rows, output_path):
+    # Enable reproducible generation
+    # Use offset to ensure different chunks get different random sequences, 
+    # but same chunk always gets same sequence.
+    np.random.seed(42 + offset) 
+
     data = {}
     if not table_model.columns:
         # Empty table with rows?
@@ -124,13 +142,14 @@ def _generate_chunk(offset, size, table_model, dataset_config, params, total_row
                  raise ValueError(f"Unknown provider '{p_name}'")
 
             kwargs = col_def.model_dump()
+            # Note: kwargs are already resolved at the top level
             
-            # Dynamic Params substitution
-            for k, v in kwargs.items():
-                if isinstance(v, str) and v in params:
-                    kwargs[k] = params[v]
+            # Dynamic Params substitution - Removed as per instruction
+            # for k, v in kwargs.items():
+            #     if isinstance(v, str) and v in params:
+            #         kwargs[k] = params[v]
             
-            kwargs['table_name'] = params.get('table_name', 'unknown') # Contextual name?
+            kwargs['table_name'] = params.get('table_name', 'unknown') 
             
             # Contextual Handling
             # Foreign Key needs specific logic
@@ -152,8 +171,21 @@ def _generate_chunk(offset, size, table_model, dataset_config, params, total_row
                 results = generator_func(size, existing_data=data, **kwargs)
             else:
                 results = generator_func(size, **kwargs)
-                
+            
             data[col_def.name] = results
             
     df = pl.DataFrame(data)
+
+    # Apply Null Masks natively
+    for col_def in table_model.columns:
+        # null_probability will be a float here because it was resolved globally
+        if col_def.null_probability > 0:
+            mask = np.random.rand(size) < col_def.null_probability
+            
+            # Use Polars expression to nullify values
+            # This preserves the underlying Arrow type (Int64, Utf8) instead of casting to Object
+            df = df.with_columns(
+                pl.when(pl.lit(mask)).then(None).otherwise(pl.col(col_def.name)).alias(col_def.name)
+            )
+
     df.write_parquet(output_path)

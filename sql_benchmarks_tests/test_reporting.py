@@ -86,3 +86,34 @@ def test_parse_fragments_handles_corruption(mock_results_dir):
         
     records = parse_fragments_to_records(target_id)
     assert len(records) == 1 # Only the valid one survives
+
+def test_parse_fragments_multi_partition_flow(mock_results_dir):
+    """Test correctly distinguishing partitions for the same asset."""
+    exp_id = "test_multi_part"
+    
+    # Create Fragment 1 (Partition A) - filename format: asset__partition.json
+    create_fragment(mock_results_dir, exp_id, "my_asset__part_a.json", {
+        "meta": {"experiment_id": exp_id, "asset": "my_asset", "engine": "duckdb"},
+        "metrics": {"duration_seconds": 1.0},
+        "parameters": {"rows": 100, "null_prob": 0.1}
+    })
+    
+    # Create Fragment 2 (Partition B)
+    create_fragment(mock_results_dir, exp_id, "my_asset__part_b.json", {
+        "meta": {"experiment_id": exp_id, "asset": "my_asset", "engine": "duckdb"},
+        "metrics": {"duration_seconds": 2.0},
+        "parameters": {"rows": 100, "null_prob": 0.5}
+    })
+    
+    records = parse_fragments_to_records(exp_id)
+    assert len(records) == 2
+    
+    # Sort to ensure stable check
+    records.sort(key=lambda x: x["Duration"])
+    
+    # Verify Partition Extraction
+    assert records[0]["Partition"] == "part_a"
+    assert records[0]["null_prob"] == 0.1
+    
+    assert records[1]["Partition"] == "part_b"
+    assert records[1]["null_prob"] == 0.5

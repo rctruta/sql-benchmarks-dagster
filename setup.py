@@ -15,7 +15,9 @@ setup(
         "sqlalchemy",
         "psutil",
         "pyyaml",
-        "numpy"
+        "numpy",
+        "docker",
+        "plotly"
     ],
     extras_require={"dev": ["pytest"]},
 )

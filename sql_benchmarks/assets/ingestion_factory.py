@@ -37,7 +37,7 @@ def make_ingestion_asset(engine: str, table_name: str):
         name=asset_name,
         group_name="ingestion",
         partitions_def=partitions_def,
-        deps=[f"{table_name}_parquet"], 
+        deps=[f"{table_name}_parquet", f"{table_name}_quality"], 
         required_resource_keys={engine},
         op_tags=tags
     )

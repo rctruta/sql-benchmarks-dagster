@@ -152,6 +152,10 @@ def get_benchmark_assets():
         if not os.path.exists(path): continue
         
         for f in glob.glob(os.path.join(path, "*.sql")):
+            if os.path.getsize(f) == 0:
+                print(f"[WARN] Skipping empty benchmark file: {f}")
+                continue
+                
             base = os.path.basename(f).replace(".sql", "")
             tables, raw = get_tables_used_in_sql(f, VALID_TABLES)
             static_meta = infer_metadata_from_sql(raw, dataset_cfg)

@@ -12,6 +12,7 @@ from .assets.benchmark_factory import benchmark_assets
 # It creates duplicate keys because it scans imported variables.
 from .assets.reporting import performance_dashboard
 from .assets.maintenance import cleanup_staging_data
+from .assets.data_quality import quality_assets
 
 # 3. RESOURCES & INFRA
 from .resources.postgres import PostgresEngine
@@ -35,7 +36,8 @@ all_assets = [
     *ingestion_assets,
     *benchmark_assets,
     performance_dashboard,
-    cleanup_staging_data
+    cleanup_staging_data,
+    *quality_assets
 ]
 
 defs = Definitions(

@@ -34,23 +34,42 @@ def parse_fragments_to_records(experiment_id):
             metrics = data.get("metrics", {})
             params = data.get("parameters", {})
             
-            # Check ID consistency (optional but good sanity check)
             if meta.get("experiment_id") != experiment_id:
                 continue
 
             asset_name = meta.get("asset", "unknown_asset")
+            
+            # Extract Partition from Filename: asset_name__PARTITION.json
+            filename = os.path.basename(fpath)
+            partition_name = "default"
+            
+            # Logic: Split by asset_name + "__"
+            # It's safer to use the known separator "__"
+            if "__" in filename:
+                # Remove extension
+                name_no_ext = os.path.splitext(filename)[0]
+                parts = name_no_ext.split("__")
+                if len(parts) >= 2:
+                    partition_name = parts[-1]
+            
             row = {
                 "Asset": asset_name,
+                "Partition": partition_name,
                 "Duration": float(metrics.get("duration_seconds", 0.0)),
                 "Engine": str(meta.get("engine", "Unknown")),
-                "Rows": int(params.get("rows", 0)), # Assuming 'rows' is in params
-                "Selectivity": float(params.get("derived_selectivity", 0.0) or 0.0), # Assuming this might be explicitly passed or derived
-                "System": str(meta.get("engine"))
+                "System": str(meta.get("engine")),
+                "Rows": int(params.get("rows", 0)) if "rows" in params else 0,
+                "Selectivity": float(params.get("derived_selectivity", 0.0) or 0.0)
             }
 
-            # Handle Dimensions broadly if needed, but for now stick to the plan:
             if "disk_type" in params:
                  row["System"] += f" ({params['disk_type']})"
+
+            # Merge ALL parameters into the row (Dynamic Columns)
+            # This ensures 'null_probability' etc appear in CSV
+            for k, v in params.items():
+                if k not in row:
+                    row[k] = v
 
             records.append(row)
             
@@ -86,20 +105,112 @@ def performance_dashboard(context: AssetExecutionContext):
 
     # 3. PREPARE DATA
     df = pl.DataFrame(records)
-    df = df.unique(subset=["Asset", "System", "Rows"], keep="last").sort("Rows")
+    
+    # Deduplicate: Keep last run for same (Asset, Partition, Engine)
+    # Rows might technically differ but Partition should cover it.
+    unique_keys = ["Asset", "Partition", "System", "Rows"]
+    # Filter keys that actually exist (to be safe if Partition is missing in legacy)
+    unique_keys = [k for k in unique_keys if k in df.columns]
+    
+    df = df.unique(subset=unique_keys, keep="last").sort("Rows")
     pldf = df.to_pandas()
 
-    # 4. RENDER (Visualization)
+    # 4. RENDER (Visualization - Matrix Explorer)
     figures_html = []
-    unique_assets = sorted(pldf["Asset"].unique())
     
-    for asset_name in unique_assets:
-        subset = pldf[pldf["Asset"] == asset_name]
-        fig = px.line(
-            subset, x="Rows", y="Duration", color="System", markers=True, 
-            log_x=True, title=f"Scaling: {asset_name}", symbol="System"
-        )
-        figures_html.append(fig.to_html(full_html=False, include_plotlyjs='cdn'))
+    # Identify Matrix Parameters (Columns that are not "System", "Asset", "Duration", "Engine", "Partition")
+    excluded_cols = {"Asset", "Partition", "Duration", "Engine", "System"}
+    matrix_params = [c for c in pldf.columns if c not in excluded_cols and pd.api.types.is_numeric_dtype(pldf[c])]
+    
+    # 1. Comparison by System (The Basics)
+    # -------------------------------------------------------------------------
+    try:
+        # Side-by-Side System Comparison (Fixed Rows Scaling)
+        if "Rows" in matrix_params:
+             fig_compare = px.line(
+                pldf, 
+                x="Rows", 
+                y="Duration", 
+                color="System", 
+                line_dash="Asset", 
+                symbol="System",
+                facet_col="null_probability" if "null_probability" in matrix_params else None, 
+                facet_col_wrap=2,
+                log_x=True,
+                log_y=True,
+                markers=True,
+                title="<b>Global Comparison</b>: System Scaling (Rows vs Duration)"
+            )
+             figures_html.append(fig_compare.to_html(full_html=False, include_plotlyjs='cdn'))
+    except Exception as e:
+         context.log.warning(f"Global Plot Error: {e}")
+
+    # 2. Slice and Dice (The "User Logic")
+    # -------------------------------------------------------------------------
+    unique_systems = sorted(pldf["System"].unique())
+    
+    # For each Engine...
+    for system in unique_systems:
+        system_df = pldf[pldf["System"] == system]
+        
+        # For each Parameter we want to vary on X (e.g. Rows, NullProb)...
+        for param_x in matrix_params:
+            
+            # Find the "Other" parameters to fix (Facet By)
+            other_params = [p for p in matrix_params if p != param_x]
+            
+            # We can't facet by *all* other params if there are many, 
+            # so we pick the primary "Other" one (e.g. if X=Rows, Other=NullProb).
+            # If multiple, we might need a more complex strategy, but for now we take the first.
+            facet_col = other_params[0] if other_params else None
+            
+            title = f"<b>{system}</b>: Varying <b>{param_x}</b>"
+            if facet_col:
+                title += f" (Facetted by {facet_col})"
+            
+            try:
+                # Ensure we have data
+                if system_df.empty: continue
+
+                # Logic: X=Param, Y=Duration, Color=Asset (2VL vs 3VL)
+                fig = px.line(
+                    system_df,
+                    x=param_x,
+                    y="Duration",
+                    color="Asset",
+                    symbol="Asset",
+                    facet_col=facet_col,
+                    facet_col_wrap=3,
+                    markers=True,
+                    log_y=True, # Duration is exponential
+                    log_x=True if param_x == "Rows" or param_x == "null_probability" else False,
+                    title=title,
+                    labels={param_x: param_x, "Duration": "Duration (s)"}
+                )
+                figures_html.append(fig.to_html(full_html=False, include_plotlyjs=False))
+            except Exception as e:
+                context.log.warning(f"Slice Plot Error ({system}, {param_x}): {e}")
+
+    # 3. 3D Landscape (The "Bonus")
+    # -------------------------------------------------------------------------
+    if "null_probability" in matrix_params and "Rows" in matrix_params:
+         try:
+             fig_3d = px.scatter_3d(
+                 pldf, 
+                 x="Rows", 
+                 y="null_probability", 
+                 z="Duration", 
+                 color="System",
+                 symbol="Asset",
+                 log_x=True,
+                 log_z=True,
+                 title="<b>3D Landscape</b>: Rows x Nulls x Duration",
+                 height=800
+             )
+             figures_html.append(fig_3d.to_html(full_html=False, include_plotlyjs=False))
+         except Exception as e:
+             # Just skip if 3D fails
+             pass
 
     # 5. SAVE (Side Effect)
     exp_folder = os.path.join(RESULTS_DIR, EXP_ID)
@@ -107,9 +218,9 @@ def performance_dashboard(context: AssetExecutionContext):
     html_path = os.path.join(exp_folder, f"dashboard_{EXP_ID}.html")
     
     with open(html_path, "w") as f:
-
-        f.write(f"<h1>Benchmark: {EXP_ID}</h1><hr>")
-        f.write("<br>".join(figures_html))
+        f.write(f"<h1>Benchmark: {EXP_ID}</h1>")
+        f.write(f"<p>Generated at: {pd.Timestamp.now()}</p><hr>")
+        f.write("<br><hr><br>".join(figures_html))
 
     # 6. WRITE CSV (Legacy Support / Unified Output)
     # Replaces the partial logic in extract_results.py

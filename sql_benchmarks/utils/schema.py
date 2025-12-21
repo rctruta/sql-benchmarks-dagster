@@ -26,6 +26,9 @@ class ColumnDef(BaseModel):
     min_value: Optional[Union[int, float]] = None
     max_value: Optional[Union[int, float]] = None
     
+    # Nullability Control
+    null_probability: Union[float, str] = 0.0  # Default 0.0 (No NULLs)
+    
     # Type override for DB DDL (e.g., "double precision")
     type: Optional[str] = None
     

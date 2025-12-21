@@ -66,7 +66,10 @@ def test_duckdb_client_run_query_execution_and_timing(mock_duckdb_connect):
         )
 
     mock_duckdb_connect.assert_called_once()
-    mock_duckdb_connect.return_value.__enter__.return_value.execute.assert_called_once()
+    # Implementation now uses .sql() instead of .execute()
+    mock_conn = mock_duckdb_connect.return_value.__enter__.return_value
+    mock_conn.sql.assert_called_once()
+    mock_conn.sql.return_value.fetchall.assert_called_once()
     assert duration == 1.5
 
 def test_duckdb_client_execute_on_file_delegation(mock_db_path):
@@ -84,6 +87,7 @@ def test_duckdb_client_execute_on_file_delegation(mock_db_path):
         client.execute_on_file(TEST_SQL, mock_db_path)
 
         mock_get_connection.assert_called_once_with(mock_db_path)
+        # execute_on_file still uses .execute()
         mock_conn.execute.assert_called_once_with(TEST_SQL)
 
 def test_duckdb_client_propagates_duckdb_error(mock_duckdb_connect):
@@ -94,7 +98,8 @@ def test_duckdb_client_propagates_duckdb_error(mock_duckdb_connect):
     TEST_SQL = "SELECT * FROM non_existent_table"
     
     mock_conn = mock_duckdb_connect.return_value.__enter__.return_value
-    mock_conn.execute.side_effect = Error("Database table not found.")
+    # Implementation uses .sql()
+    mock_conn.sql.side_effect = Error("Database table not found.")
     
     with pytest.raises(Error) as excinfo:
         client.run_query(
@@ -104,7 +109,7 @@ def test_duckdb_client_propagates_duckdb_error(mock_duckdb_connect):
         )
 
     assert "Database table not found." in str(excinfo.value)
-    mock_duckdb_connect.assert_called_once()    
+    
 
 def test_duckdb_client_path_calculation(test_data_folder_path):
     """

@@ -152,13 +152,19 @@ def process_queue(target_input, auto_mode=False):
             input("Press Enter when done...")
             success = True
 
-        # D. Archive
+        # D. Archive to Registry (Only on success to avoid pollution)
         if success:
             shutil.copy(ACTIVE_CONFIG_PATH, registry_path)
             print(f"[INFO] Archived {exp_hash} to registry.")
-        elif not auto_mode:
-            sys.exit(0) # Interactive user cancelled
-        else:
+            
+        # E. ALWAYS Archive to Results folder (For traceability of failed runs)
+        results_exp_dir = os.path.join(ROOT_DIR, "sql_benchmarks", "experiments", "results", exp_hash)
+        if os.path.exists(results_exp_dir):
+            shutil.copy(ACTIVE_CONFIG_PATH, os.path.join(results_exp_dir, "config.yaml"))
+        
+        if not success and not auto_mode:
+             sys.exit(0) # Interactive user cancelled
+        elif not success and auto_mode:
             # Automated mode failure
             overall_queue_success = False
 

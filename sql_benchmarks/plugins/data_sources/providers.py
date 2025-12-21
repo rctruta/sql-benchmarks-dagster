@@ -1,7 +1,9 @@
 import numpy as np
 
 def generate_sequence(rows: int, **kwargs):
-    return np.arange(1, rows + 1)
+    start = kwargs.get("start", 1)
+    step = kwargs.get("step", 1)
+    return np.arange(start, start + (rows * step), step)
 
 def generate_random_int(rows: int, **kwargs):
     mn = kwargs.get("min_value", 0)
