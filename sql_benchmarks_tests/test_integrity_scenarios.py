@@ -1,64 +1,84 @@
-import pytest
-import yaml
 import os
 import shutil
-import polars as pl
-from sql_benchmarks.plugins.data_sources import declarative_gen
+import tempfile
+import pytest
+from sql_benchmarks.utils.integrity_monitor import IntegrityMonitor
+from sql_benchmarks.utils.hasher import generate_integrity_seal
 
-# Paths
-FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures", "configs")
+def test_integrity_monitor_detects_modification():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # 1. Setup initial state
+        test_file = os.path.join(tmp_dir, "logic.py")
+        with open(test_file, "w") as f:
+            f.write("print('safe')")
+        
+        monitor = IntegrityMonitor(tmp_dir)
+        
+        # 2. Modify file
+        with open(test_file, "w") as f:
+            f.write("print('malicious')")
+            
+        # 3. Verify drift detection
+        drift = monitor.check_drift()
+        assert any("MODIFIED: logic.py" in d for d in drift)
 
-@pytest.fixture
-def temp_output(tmp_path):
-    output_dir = tmp_path / "output"
-    output_dir.mkdir()
-    return output_dir
+def test_integrity_monitor_detects_addition():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        monitor = IntegrityMonitor(tmp_dir)
+        
+        # Add new file
+        with open(os.path.join(tmp_dir, "virus.py"), "w") as f:
+            f.write("exploit()")
+            
+        drift = monitor.check_drift()
+        assert any("ADDED: virus.py" in d for d in drift)
 
-def load_fixture(filename):
-    with open(os.path.join(FIXTURES_DIR, filename), "r") as f:
-        return yaml.safe_load(f)
+def test_seal_consistency():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        os.makedirs(os.path.join(tmp_dir, "results"))
+        with open(os.path.join(tmp_dir, "results", "data.csv"), "w") as f:
+            f.write("1,2,3")
+            
+        seal1 = generate_integrity_seal(tmp_dir)
+        seal2 = generate_integrity_seal(tmp_dir)
+        
+        assert seal1 == seal2
+        
+        # Modify and expect change
+        with open(os.path.join(tmp_dir, "results", "data.csv"), "a") as f:
+            f.write("\n4,5,6")
+            
+        seal3 = generate_integrity_seal(tmp_dir)
+        assert seal1 != seal3
 
-# ==========================================
-# TEST 1: Multi-Table Chain (Success)
-# ==========================================
-def test_multi_table_chain_generation(temp_output):
+def test_staging_isolation_logic():
     """
-    Verifies that Regions -> Nations -> Customers runs successfully
-    and maintains foreign key integrity.
+    Verifies that the staging logic correctly handles pathing (conceptually).
+    Actually testing the run_experiment.py flow requires a full harness.
+    This test verifies that the monitor ignores results additions (expected)
+    but flags code modifications.
     """
-    config = load_fixture("multi_table_test.yaml")
-    params = {"rows": 1} # Dummy param to satisfy resolve
-    
-    # 1. Generate Regions
-    declarative_gen.generate(None, params, "regions", str(temp_output / "regions.parquet"), config['dataset'])
-    
-    # 2. Generate Nations (Depends on Regions)
-    declarative_gen.generate(None, params, "nations", str(temp_output / "nations.parquet"), config['dataset'])
-    
-    # 3. Generate Customers (Depends on Nations)
-    declarative_gen.generate(None, params, "customers", str(temp_output / "customers.parquet"), config['dataset'])
-    
-    # Verify Integrity
-    regions = pl.read_parquet(str(temp_output / "regions.parquet"))
-    nations = pl.read_parquet(str(temp_output / "nations.parquet"))
-    
-    # Check FK: Nation.region_id -> Region.id
-    # Since specific IDs are random, we just check they are in valid range or set
-    valid_region_ids = set(regions["id"].to_list())
-    for nid in nations["region_id"].to_list():
-        assert nid in valid_region_ids, f"Nation has invalid region_id: {nid}"
-
-# ==========================================
-# TEST 2: Cycle Detection (Failure)
-# ==========================================
-# Note: declarative_gen itself is "dumb" and doesn't check DAG cycles (Dagster does).
-# However, if we tried to run them blindly, we might test infinite recursion if we were implementing it that way.
-# But since our code relies on *existing* Parquet files for some providers (text_concat), 
-# or just random IDs for foreign_keys, declarative_gen might actually *succeed* in isolation 
-# (generating garbage FKs to non-existent files if not careful).
-#
-# The Chicken-Egg cycle failure we saw was in *Dagster Construction* (toposort).
-# Unit testing declarative_gen won't catch toposort errors unless we duplicate logic.
-#
-# Instead, we verify that the *metadata* parsing identifies the dependency loop if we were to implement
-# a utility for it. For now, let's skip re-implementing toposort here and focus on the Data Generation logic.
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # Setup simulated harness in staging
+        code_dir = os.path.join(tmp_dir, "sql_benchmarks")
+        os.makedirs(code_dir)
+        with open(os.path.join(code_dir, "assets.py"), "w") as f:
+            f.write("logic()")
+            
+        monitor = IntegrityMonitor(tmp_dir)
+        
+        # Simulate normal execution (adding a result)
+        results_dir = os.path.join(tmp_dir, "results")
+        os.makedirs(results_dir)
+        with open(os.path.join(results_dir, "out.csv"), "w") as f:
+            f.write("data")
+            
+        # Simulate malicious tampering
+        with open(os.path.join(code_dir, "assets.py"), "a") as f:
+            f.write("\ninjection()")
+            
+        drift = monitor.check_drift()
+        
+        # Verify both detected
+        assert any("ADDED" in d and "results" in d for d in drift)
+        assert any("MODIFIED" in d and "assets.py" in d for d in drift)

@@ -1,0 +1,22 @@
+meta:
+  scenario_path: infection
+  experiment_id: b7459ace
+execution:
+  engines:
+  - duckdb
+  matrix:
+    scale:
+    - stable
+  replication: 20
+dataset:
+  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  tables:
+    heartbeat:
+      rows: scale
+      columns:
+      - name: id
+        provider: sequence
+        primary_key: true
+definitions:
+  scale:
+    stable: 100

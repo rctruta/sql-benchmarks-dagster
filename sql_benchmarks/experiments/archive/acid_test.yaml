@@ -1,0 +1,23 @@
+meta:
+  scenario_path: acid_test
+  experiment_id: 6beb5587
+execution:
+  engines:
+  - postgres
+  - duckdb
+  matrix:
+    scale:
+    - tiny
+  replication: 1
+dataset:
+  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  tables:
+    test_table:
+      rows: scale
+      columns:
+      - name: id
+        provider: sequence
+        primary_key: true
+definitions:
+  scale:
+    tiny: 100

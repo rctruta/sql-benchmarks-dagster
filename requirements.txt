@@ -1,0 +1,15 @@
+dagster
+dagster-webserver
+dagster-postgres
+dagster-duckdb
+pandas
+polars
+pyarrow
+psycopg2-binary
+sqlalchemy
+psutil
+pyyaml
+numpy
+docker
+plotly
+pytest

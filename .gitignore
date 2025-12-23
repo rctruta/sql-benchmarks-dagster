@@ -31,9 +31,15 @@ data/
 # Block the results folders so we don't push 100MB CSVs
 sql_benchmarks/results/
 sql_benchmarks/experiments/results/
+sql_benchmarks/experiments/configs/
+sql_benchmarks/experiments/violations/
+sql_benchmarks/experiments/reports/
 *.csv
 *.html
 
 # --- Internal Storage (Indirected) ---
 dagster_home/
 .telemetry/
+
+# --- Local Guidance (Do not commit) ---
+resume_guidance.md

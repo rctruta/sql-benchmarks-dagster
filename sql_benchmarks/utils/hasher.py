@@ -78,3 +78,30 @@ def generate_experiment_hash(config_dict, root_dir):
     hash_folder(assets_dir, ".py", normalizer=normalize_python)
 
     return hasher.hexdigest()[:8]
+
+def generate_integrity_seal(results_dir):
+    """
+    Generates a SHA-256 seal for the entire results capsule.
+    Hashes the src snapshot + the results CSV/fragments.
+    """
+    hasher = hashlib.sha256()
+    
+    # 1. Walk results_dir and hash all files
+    # This includes the 'src' snapshot and the generated CSV/JSON
+    for root, dirs, files in os.walk(results_dir):
+        # Sort files to ensure deterministic hashing
+        for file in sorted(files):
+            if file == "integrity.seal": continue # Don't hash the seal itself
+            
+            file_path = os.path.join(root, file)
+            rel_path = os.path.relpath(file_path, results_dir)
+            
+            # Hash metadata
+            hasher.update(rel_path.encode('utf-8'))
+            
+            # Hash content
+            with open(file_path, 'rb') as f:
+                while chunk := f.read(8192):
+                    hasher.update(chunk)
+                    
+    return hasher.hexdigest()

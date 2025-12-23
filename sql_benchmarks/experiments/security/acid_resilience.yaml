@@ -1,0 +1,20 @@
+meta:
+  scenario_path: "final_proof"
+execution:
+  engines: ["duckdb"]
+  matrix:
+    rows: [1000]
+  replication: 100
+dataset:
+  source: "sql_benchmarks.plugins.data_sources.declarative_gen"
+  tables:
+    heartbeat:
+      rows: "rows"
+      columns:
+        - name: id
+          provider: sequence
+          primary_key: true
+definitions:
+  scale:
+    stable: 1000
+ where "stupid comment" is not null
