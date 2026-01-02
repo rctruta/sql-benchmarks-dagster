@@ -1,0 +1,32 @@
+meta:
+  experiment_id: "local_metal_verification"
+  description: "Native Verification: DuckDB vs Postgres (Final Scoped Fix)"
+
+dataset:
+  source: "sql_benchmarks.plugins.data_sources.declarative_gen"
+  tables:
+    verified_data:
+      rows: "rows"
+      columns:
+        - name: id
+          provider: sequence
+          primary_key: true
+        - name: category
+          provider: choice
+          options: ["Verified", "Liquid", "Solid", "Gas"]
+        - name: metric
+          provider: random_float
+          min: 0.1
+          max: 99.9
+
+definitions:
+  rows:
+    smoke: 100_000
+    verification: 1_000_000
+
+execution:
+  test_suite: "analytical_wall"
+  replication: 1
+  engines: ["postgres", "duckdb"] # Actian omitted as it requires x86
+  matrix:
+    rows: [smoke, verification]

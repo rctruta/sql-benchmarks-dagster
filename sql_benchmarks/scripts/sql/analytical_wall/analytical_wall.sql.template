@@ -1,0 +1,19 @@
+-- analytical_wall.sql
+-- Goal: Demonstrate Actian's X100 Vectorized Engine vs. Postgres Row-based Execution.
+-- Scenario: Calculating Weighted Net Revenue Across Regions and Categories for 10M+ rows.
+
+SELECT 
+    region,
+    category,
+    COUNT(*) as transaction_count,
+    ROUND(SUM(price * quantity * (1 - discount)), 2) as net_revenue,
+    ROUND(AVG(price * quantity * (1 - discount)), 2) as avg_transaction_value,
+    -- Complex aggregation that forces per-row math
+    ROUND(SUM(CASE WHEN discount > 0.15 THEN price * quantity ELSE 0 END) / SUM(price * quantity + 0.00001) * 100, 2) as high_discount_impact_pct
+FROM 
+    analytical_data
+GROUP BY 
+    region, 
+    category
+ORDER BY 
+    net_revenue DESC;

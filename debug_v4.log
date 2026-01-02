@@ -1,0 +1,94 @@
+/Users/ramona/anaconda3/lib/python3.10/site-packages/dagster/_core/definitions/definitions_class.py:480: UserWarning: Found asset job named benchmark_job of type <class 'dagster._core.definitions.unresolved_asset_job_definition.UnresolvedAssetJobDefinition'> passed to `jobs` parameter. Starting in dagster 1.11, you must now use Definitions.resolve_job_def to correctly retrieve this job definition.
+  warnings.warn(warning)
+2026-01-01 22:23:15 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - RUN_START - Started execution of run for "benchmark_job".
+2026-01-01 22:23:15 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - ENGINE_EVENT - Executing steps in process (pid: 78111)
+2026-01-01 22:23:15 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - RESOURCE_INIT_STARTED - Starting initialization of resources [duckdb, io_manager].
+2026-01-01 22:23:15 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - RESOURCE_INIT_SUCCESS - Finished initialization of resources [duckdb, io_manager].
+2026-01-01 22:23:15 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - LOGS_CAPTURED - Started capturing logs in process (pid: 78111).
+2026-01-01 22:23:15 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__skewed_data_parquet - STEP_START - Started execution of step "e_3395f19b__skewed_data_parquet".
+2026-01-01 22:23:15 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__skewed_data_parquet - STEP_OUTPUT - Yielded output "result" of type "Any". (Type check passed).
+2026-01-01 22:23:15 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__skewed_data_parquet - ASSET_MATERIALIZATION - Materialized value e_3395f19b__skewed_data_parquet.
+2026-01-01 22:23:15 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__skewed_data_parquet - STEP_SUCCESS - Finished execution of step "e_3395f19b__skewed_data_parquet" in 37ms.
+2026-01-01 22:23:15 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__skewed_data_quality - STEP_START - Started execution of step "e_3395f19b__skewed_data_quality".
+2026-01-01 22:23:15 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__skewed_data_quality - STEP_OUTPUT - Yielded output "result" of type "Any". (Type check passed).
+2026-01-01 22:23:15 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - e_3395f19b__skewed_data_quality - Writing file at: /var/folders/fn/f9_8r_cj7cb6ffsgnzdj0yw40000gn/T/tmpry51x0k_/storage/e_3395f19b__skewed_data_quality/tiny using PickledObjectFilesystemIOManager...
+2026-01-01 22:23:15 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__skewed_data_quality - ASSET_MATERIALIZATION - Materialized value e_3395f19b__skewed_data_quality.
+2026-01-01 22:23:15 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__skewed_data_quality - HANDLED_OUTPUT - Handled output "result" using IO manager "io_manager"
+2026-01-01 22:23:15 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__skewed_data_quality - STEP_SUCCESS - Finished execution of step "e_3395f19b__skewed_data_quality" in 39ms.
+2026-01-01 22:23:15 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_skewed_data_table - STEP_START - Started execution of step "e_3395f19b__duckdb_skewed_data_table".
+2026-01-01 22:23:15 -0500 - dagster - INFO - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - e_3395f19b__duckdb_skewed_data_table - Ingesting /Users/ramona/Projects/sql-benchmarks-dagster/data/staging/skewed_data_tiny.parquet into duckdb table 'skewed_data_tiny'...
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_skewed_data_table - STEP_OUTPUT - Yielded output "result" of type "Any". (Type check passed).
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - e_3395f19b__duckdb_skewed_data_table - Writing file at: /var/folders/fn/f9_8r_cj7cb6ffsgnzdj0yw40000gn/T/tmpry51x0k_/storage/e_3395f19b__duckdb_skewed_data_table/tiny using PickledObjectFilesystemIOManager...
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_skewed_data_table - ASSET_MATERIALIZATION - Materialized value e_3395f19b__duckdb_skewed_data_table.
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_skewed_data_table - HANDLED_OUTPUT - Handled output "result" using IO manager "io_manager"
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_skewed_data_table - STEP_SUCCESS - Finished execution of step "e_3395f19b__duckdb_skewed_data_table" in 101ms.
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_benchmark_q_0_1_percent - STEP_START - Started execution of step "e_3395f19b__duckdb_benchmark_q_0_1_percent".
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_benchmark_q_0_1_percent - STEP_OUTPUT - Yielded output "result" of type "Any". (Type check passed).
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_benchmark_q_0_1_percent - ASSET_MATERIALIZATION - Materialized value e_3395f19b__duckdb_benchmark_q_0_1_percent.
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_benchmark_q_0_1_percent - STEP_SUCCESS - Finished execution of step "e_3395f19b__duckdb_benchmark_q_0_1_percent" in 52ms.
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_benchmark_q_10_percent - STEP_START - Started execution of step "e_3395f19b__duckdb_benchmark_q_10_percent".
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_benchmark_q_10_percent - STEP_OUTPUT - Yielded output "result" of type "Any". (Type check passed).
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_benchmark_q_10_percent - ASSET_MATERIALIZATION - Materialized value e_3395f19b__duckdb_benchmark_q_10_percent.
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_benchmark_q_10_percent - STEP_SUCCESS - Finished execution of step "e_3395f19b__duckdb_benchmark_q_10_percent" in 34ms.
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_benchmark_q_1_percent - STEP_START - Started execution of step "e_3395f19b__duckdb_benchmark_q_1_percent".
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_benchmark_q_1_percent - STEP_OUTPUT - Yielded output "result" of type "Any". (Type check passed).
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_benchmark_q_1_percent - ASSET_MATERIALIZATION - Materialized value e_3395f19b__duckdb_benchmark_q_1_percent.
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_benchmark_q_1_percent - STEP_SUCCESS - Finished execution of step "e_3395f19b__duckdb_benchmark_q_1_percent" in 33ms.
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_benchmark_q_20_percent - STEP_START - Started execution of step "e_3395f19b__duckdb_benchmark_q_20_percent".
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_benchmark_q_20_percent - STEP_OUTPUT - Yielded output "result" of type "Any". (Type check passed).
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_benchmark_q_20_percent - ASSET_MATERIALIZATION - Materialized value e_3395f19b__duckdb_benchmark_q_20_percent.
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_benchmark_q_20_percent - STEP_SUCCESS - Finished execution of step "e_3395f19b__duckdb_benchmark_q_20_percent" in 33ms.
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_benchmark_q_5_percent - STEP_START - Started execution of step "e_3395f19b__duckdb_benchmark_q_5_percent".
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_benchmark_q_5_percent - STEP_OUTPUT - Yielded output "result" of type "Any". (Type check passed).
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_benchmark_q_5_percent - ASSET_MATERIALIZATION - Materialized value e_3395f19b__duckdb_benchmark_q_5_percent.
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_benchmark_q_5_percent - STEP_SUCCESS - Finished execution of step "e_3395f19b__duckdb_benchmark_q_5_percent" in 33ms.
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_benchmark_q_filler - STEP_START - Started execution of step "e_3395f19b__duckdb_benchmark_q_filler".
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_benchmark_q_filler - STEP_OUTPUT - Yielded output "result" of type "Any". (Type check passed).
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_benchmark_q_filler - ASSET_MATERIALIZATION - Materialized value e_3395f19b__duckdb_benchmark_q_filler.
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - e_3395f19b__duckdb_benchmark_q_filler - STEP_SUCCESS - Finished execution of step "e_3395f19b__duckdb_benchmark_q_filler" in 33ms.
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - ENGINE_EVENT - Finished steps in process (pid: 78111) in 503ms
+2026-01-01 22:23:16 -0500 - dagster - DEBUG - benchmark_job - c9531912-eb94-44f9-866f-390e3038ceae - 78111 - RUN_SUCCESS - Finished execution of run for "benchmark_job".
+[SUCCESS] Contract '/Users/ramona/Projects/sql-benchmarks-dagster/sql_benchmarks/experiments/active.yaml' validated.
+[SUCCESS] Contract '/Users/ramona/Projects/sql-benchmarks-dagster/sql_benchmarks/experiments/active.yaml' validated.
+[SDK] Executing job 'benchmark_job' with partition='tiny'...
+[Gen] Generating 100 rows in batches of 500000...
+[Gen] Batch 1 done.
+[SDK] Job Success.
+/Users/ramona/anaconda3/lib/python3.10/site-packages/dagster/_core/definitions/definitions_class.py:480: UserWarning: Found asset job named benchmark_job of type <class 'dagster._core.definitions.unresolved_asset_job_definition.UnresolvedAssetJobDefinition'> passed to `jobs` parameter. Starting in dagster 1.11, you must now use Definitions.resolve_job_def to correctly retrieve this job definition.
+  warnings.warn(warning)
+2026-01-01 22:23:18 -0500 - dagster - DEBUG - benchmark_job - edc03cba-54f3-41ec-89af-8fa6974cc276 - 78121 - RUN_START - Started execution of run for "benchmark_job".
+2026-01-01 22:23:18 -0500 - dagster - DEBUG - benchmark_job - edc03cba-54f3-41ec-89af-8fa6974cc276 - 78121 - ENGINE_EVENT - Executing steps in process (pid: 78121)
+2026-01-01 22:23:18 -0500 - dagster - DEBUG - benchmark_job - edc03cba-54f3-41ec-89af-8fa6974cc276 - 78121 - performance_dashboard - RESOURCE_INIT_STARTED - Starting initialization of resources [io_manager].
+2026-01-01 22:23:18 -0500 - dagster - DEBUG - benchmark_job - edc03cba-54f3-41ec-89af-8fa6974cc276 - 78121 - performance_dashboard - RESOURCE_INIT_SUCCESS - Finished initialization of resources [io_manager].
+2026-01-01 22:23:18 -0500 - dagster - DEBUG - benchmark_job - edc03cba-54f3-41ec-89af-8fa6974cc276 - 78121 - LOGS_CAPTURED - Started capturing logs in process (pid: 78121).
+2026-01-01 22:23:18 -0500 - dagster - DEBUG - benchmark_job - edc03cba-54f3-41ec-89af-8fa6974cc276 - 78121 - performance_dashboard - STEP_START - Started execution of step "performance_dashboard".
+2026-01-01 22:23:18 -0500 - dagster - INFO - benchmark_job - edc03cba-54f3-41ec-89af-8fa6974cc276 - performance_dashboard - Dropping irrelevant/default columns: ['Selectivity']
+2026-01-01 22:23:18 -0500 - dagster - INFO - benchmark_job - edc03cba-54f3-41ec-89af-8fa6974cc276 - performance_dashboard - Matrix Params Detected: ['Rows', 'rows']
+2026-01-01 22:23:19 -0500 - dagster - DEBUG - benchmark_job - edc03cba-54f3-41ec-89af-8fa6974cc276 - 78121 - performance_dashboard - STEP_OUTPUT - Yielded output "result" of type "Any". (Type check passed).
+2026-01-01 22:23:19 -0500 - dagster - DEBUG - benchmark_job - edc03cba-54f3-41ec-89af-8fa6974cc276 - 78121 - performance_dashboard - ASSET_MATERIALIZATION - Materialized value performance_dashboard.
+2026-01-01 22:23:19 -0500 - dagster - DEBUG - benchmark_job - edc03cba-54f3-41ec-89af-8fa6974cc276 - 78121 - performance_dashboard - STEP_SUCCESS - Finished execution of step "performance_dashboard" in 774ms.
+2026-01-01 22:23:19 -0500 - dagster - DEBUG - benchmark_job - edc03cba-54f3-41ec-89af-8fa6974cc276 - 78121 - ENGINE_EVENT - Finished steps in process (pid: 78121) in 846ms
+2026-01-01 22:23:19 -0500 - dagster - DEBUG - benchmark_job - edc03cba-54f3-41ec-89af-8fa6974cc276 - 78121 - RUN_SUCCESS - Finished execution of run for "benchmark_job".
+[SUCCESS] Contract '/Users/ramona/Projects/sql-benchmarks-dagster/sql_benchmarks/experiments/active.yaml' validated.
+[SUCCESS] Contract '/Users/ramona/Projects/sql-benchmarks-dagster/sql_benchmarks/experiments/active.yaml' validated.
+[SDK] Executing job 'benchmark_job' with partition='None'...
+DEBUG: Saving Dashboard to: /Users/ramona/Projects/sql-benchmarks-dagster/sql_benchmarks/experiments/reports/dashboard_3395f19b.html
+[SDK] Job Success.
+[SUCCESS] Contract '/Users/ramona/Projects/sql-benchmarks-dagster/sql_benchmarks/experiments/active.yaml' validated.
+[RUNNER] Processing 1 targets...
+
+>>> COORDINATING: smoke_v8.yaml
+[SUCCESS] Contract 'smoke_v8.yaml' validated.
+[INFO] Executing 3395f19b directly...
+       -> Partition: tiny
+[DEBUG] Running command: /Users/ramona/anaconda3/bin/python execute_run.py --partition tiny
+Traceback (most recent call last):
+  File "/Users/ramona/Projects/sql-benchmarks-dagster/run_experiment.py", line 54, in <module>
+    main()
+  File "/Users/ramona/Projects/sql-benchmarks-dagster/run_experiment.py", line 46, in main
+    if not coordinator.run():
+  File "/Users/ramona/Projects/sql-benchmarks-dagster/sql_benchmarks/coordinator.py", line 73, in run
+    return self._finalize_results()
+  File "/Users/ramona/Projects/sql-benchmarks-dagster/sql_benchmarks/coordinator.py", line 109, in _finalize_results
+    dashboard_target = os.path.join(REPORTS_DIR, f"dashboard_{self.exp_id}.html")
+NameError: name 'REPORTS_DIR' is not defined. Did you mean: 'RESULTS_DIR'?

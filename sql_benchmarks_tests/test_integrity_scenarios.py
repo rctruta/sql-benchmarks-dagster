@@ -51,15 +51,14 @@ def test_seal_consistency():
         seal3 = generate_integrity_seal(tmp_dir)
         assert seal1 != seal3
 
-def test_staging_isolation_logic():
+def test_zero_copy_integrity_logic():
     """
-    Verifies that the staging logic correctly handles pathing (conceptually).
-    Actually testing the run_experiment.py flow requires a full harness.
-    This test verifies that the monitor ignores results additions (expected)
-    but flags code modifications.
+    Verifies that the monitor flags ANY drift in the monitored directory.
+    In the Zero-Copy model, the executing process should have NO side effects
+    on the root project. Any addition (even in results) is a violation.
     """
     with tempfile.TemporaryDirectory() as tmp_dir:
-        # Setup simulated harness in staging
+        # Setup simulated package in root
         code_dir = os.path.join(tmp_dir, "sql_benchmarks")
         os.makedirs(code_dir)
         with open(os.path.join(code_dir, "assets.py"), "w") as f:
@@ -67,11 +66,9 @@ def test_staging_isolation_logic():
             
         monitor = IntegrityMonitor(tmp_dir)
         
-        # Simulate normal execution (adding a result)
-        results_dir = os.path.join(tmp_dir, "results")
-        os.makedirs(results_dir)
-        with open(os.path.join(results_dir, "out.csv"), "w") as f:
-            f.write("data")
+        # Simulate unauthorized execution side-effect (adding a file)
+        with open(os.path.join(tmp_dir, "unauthorized.txt"), "w") as f:
+            f.write("leaked byte")
             
         # Simulate malicious tampering
         with open(os.path.join(code_dir, "assets.py"), "a") as f:
@@ -79,6 +76,6 @@ def test_staging_isolation_logic():
             
         drift = monitor.check_drift()
         
-        # Verify both detected
-        assert any("ADDED" in d and "results" in d for d in drift)
-        assert any("MODIFIED" in d and "assets.py" in d for d in drift)
+        # Verify both are detected
+        assert any("ADDED: unauthorized.txt" in d for d in drift)
+        assert any("MODIFIED: sql_benchmarks/assets.py" in d for d in drift)

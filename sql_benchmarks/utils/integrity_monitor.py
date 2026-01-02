@@ -17,8 +17,8 @@ class IntegrityMonitor:
                 path = os.path.join(root, file)
                 rel_path = os.path.relpath(path, self.target_dir)
                 
-                # Ignore runtime artifacts and transient directories
-                if "__pycache__" in rel_path or rel_path.endswith(".pyc"):
+                # Ignore runtime artifacts, transient directories, and experiment outputs
+                if any(x in rel_path for x in ["__pycache__", ".pyc", "experiments/results", "experiments/violations"]):
                     continue
                     
                 try:
@@ -47,3 +47,9 @@ class IntegrityMonitor:
                 drift.append(f"ADDED: {path}")
                 
         return drift
+
+    def get_current_hash(self) -> str:
+        """Returns a single aggregate hash of the current directory state."""
+        state = self._compute_state()
+        combined = "".join(sorted(state.values()))
+        return hashlib.sha256(combined.encode()).hexdigest()

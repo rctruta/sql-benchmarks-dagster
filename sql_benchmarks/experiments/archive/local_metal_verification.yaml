@@ -1,0 +1,38 @@
+meta:
+  experiment_id: ff866263
+  description: 'Native Verification: DuckDB (Process) vs Postgres (Container) on Local
+    Silicon'
+dataset:
+  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  tables:
+    verified_data:
+      rows: rows
+      columns:
+      - name: id
+        provider: sequence
+        primary_key: true
+      - name: category
+        provider: choice
+        options:
+        - Verified
+        - Liquid
+        - Solid
+        - Gas
+      - name: metric
+        provider: random_float
+        min: 0.1
+        max: 99.9
+definitions:
+  rows:
+    smoke: 100000
+    verification: 1000000
+execution:
+  test_suite: analytical_wall
+  replication: 1
+  engines:
+  - postgres
+  - duckdb
+  matrix:
+    rows:
+    - smoke
+    - verification

@@ -28,22 +28,24 @@ class ConfigLoader:
             with open(self.config_path, "r") as f:
                 self._raw_config = yaml.safe_load(f) or {}
         except Exception as e:
-            raise ValueError(f"CRITICAL: Failed to parse active.yaml: {e}")
+            raise ValueError(f"CRITICAL: Failed to parse {self.config_path}: {e}")
+
+        # --- STRICT SCHEMA & SEMANTIC VALIDATION ---
+        from .validator import ExperimentValidator
+        ExperimentValidator.validate(self._raw_config, source_label=self.config_path)
 
         self.execution = self._raw_config.get("execution", {})
         self.definitions = self._raw_config.get("definitions", {})
         self.dataset = self._raw_config.get("dataset", {})
-
-        if not self.execution.get("matrix"):
-            raise ValueError(
-                "CRITICAL: Experiment must define a 'matrix' strictly under 'execution.matrix'."
-            )
 
     def _compile_scenario_config(self) -> None:
         """
         Translates the symbolic matrix into numeric parameters and generates partition keys.
         This is the consolidated logic from partitions.py.
         """
+        if "matrix" not in self.execution:
+             raise ValueError("CRITICAL: Experiment must define a 'matrix' strictly under 'execution.matrix'.")
+             
         matrix = self.execution["matrix"]
         keys = sorted(list(matrix.keys()))
         symbolic_values = [matrix[k] for k in keys]

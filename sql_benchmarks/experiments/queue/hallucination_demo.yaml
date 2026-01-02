@@ -1,0 +1,22 @@
+dataset:
+  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  tables:
+    hallucination_data:
+      columns:
+      - name: id
+        provider: sequence
+      rows: 10
+execution:
+  engines:
+  - duckdb
+  matrix:
+    total_count:
+    - -500  # This will trigger the Semantic Firewall
+    rows:
+    - 10
+  replication: 1
+  test_suite: selectivity
+meta:
+  description: Demonstration of Semantic Firewall detecting hallucinations
+  experiment_id: hallucination_demo
+  scenario_path: selectivity/duckdb

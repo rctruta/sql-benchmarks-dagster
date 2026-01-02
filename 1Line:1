@@ -1,0 +1,32 @@
+Traceback (most recent call last):
+Traceback (most recent call last):
+  File "/private/var/folders/fn/f9_8r_cj7cb6ffsgnzdj0yw40000gn/T/tmpp0zrw82j/execute_run.py", line 5, in <module>
+  File "/private/var/folders/fn/f9_8r_cj7cb6ffsgnzdj0yw40000gn/T/tmpp0zrw82j/execute_run.py", line 5, in <module>
+    from sql_benchmarks.definitions import defs, all_assets
+  File "/private/var/folders/fn/f9_8r_cj7cb6ffsgnzdj0yw40000gn/T/tmpp0zrw82j/sql_benchmarks/definitions.py", line 16, in <module>
+    from sql_benchmarks.definitions import defs, all_assets
+  File "/private/var/folders/fn/f9_8r_cj7cb6ffsgnzdj0yw40000gn/T/tmpp0zrw82j/sql_benchmarks/definitions.py", line 16, in <module>
+    from .assets.semantic_gate import semantic_gate_assets
+  File "/private/var/folders/fn/f9_8r_cj7cb6ffsgnzdj0yw40000gn/T/tmpp0zrw82j/sql_benchmarks/assets/semantic_gate.py", line 99, in <module>
+    from .assets.semantic_gate import semantic_gate_assets
+  File "/private/var/folders/fn/f9_8r_cj7cb6ffsgnzdj0yw40000gn/T/tmpp0zrw82j/sql_benchmarks/assets/semantic_gate.py", line 99, in <module>
+    semantic_gate_assets = [make_semantic_gate_asset(k) for k in [b.key for b in benchmark_assets]]
+    semantic_gate_assets = [make_semantic_gate_asset(k) for k in [b.key for b in benchmark_assets]]
+NameError: name 'benchmark_assets' is not defined
+NameError: name 'benchmark_assets' is not defined
+Traceback (most recent call last):
+Traceback (most recent call last):
+  File "/private/var/folders/fn/f9_8r_cj7cb6ffsgnzdj0yw40000gn/T/tmpp0zrw82j/execute_run.py", line 5, in <module>
+  File "/private/var/folders/fn/f9_8r_cj7cb6ffsgnzdj0yw40000gn/T/tmpp0zrw82j/execute_run.py", line 5, in <module>
+    from sql_benchmarks.definitions import defs, all_assets
+    from sql_benchmarks.definitions import defs, all_assets
+  File "/private/var/folders/fn/f9_8r_cj7cb6ffsgnzdj0yw40000gn/T/tmpp0zrw82j/sql_benchmarks/definitions.py", line 16, in <module>
+  File "/private/var/folders/fn/f9_8r_cj7cb6ffsgnzdj0yw40000gn/T/tmpp0zrw82j/sql_benchmarks/definitions.py", line 16, in <module>
+    from .assets.semantic_gate import semantic_gate_assets
+    from .assets.semantic_gate import semantic_gate_assets
+  File "/private/var/folders/fn/f9_8r_cj7cb6ffsgnzdj0yw40000gn/T/tmpp0zrw82j/sql_benchmarks/assets/semantic_gate.py", line 99, in <module>
+  File "/private/var/folders/fn/f9_8r_cj7cb6ffsgnzdj0yw40000gn/T/tmpp0zrw82j/sql_benchmarks/assets/semantic_gate.py", line 99, in <module>
+    semantic_gate_assets = [make_semantic_gate_asset(k) for k in [b.key for b in benchmark_assets]]
+    semantic_gate_assets = [make_semantic_gate_asset(k) for k in [b.key for b in benchmark_assets]]
+NameError: name 'benchmark_assets' is not defined
+NameError: name 'benchmark_assets' is not defined

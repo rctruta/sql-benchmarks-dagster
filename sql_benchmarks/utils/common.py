@@ -125,6 +125,12 @@ def normalize_distribution(options: list, weights: list):
     
     # Normalize to sum to 1.0
     norm_weights = w_arr / w_arr.sum()
+    
+    # THE FIX: Handle floating point drift (numpy strict division)
+    # Guaranteed to sum to exactly 1.0
+    if len(norm_weights) > 0:
+        norm_weights[-1] = 1.0 - norm_weights[:-1].sum()
+        
     return options, norm_weights
 
 # ==========================================
@@ -195,3 +201,12 @@ def get_engine_asset_prefix(engine_name: str) -> str:
         return 'pg_'
     # Default: Use the engine name itself followed by an underscore
     return f'{engine_name}_'
+
+def get_scoped_asset_name(base_name: str, exp_id: str) -> str:
+    """
+    Generates a globally unique asset name prefixed by the experiment ID.
+    Format: e_<exp_id>__<base_name>
+    """
+    if not exp_id or exp_id == "unknown":
+        return base_name
+    return f"e_{exp_id}__{base_name}"

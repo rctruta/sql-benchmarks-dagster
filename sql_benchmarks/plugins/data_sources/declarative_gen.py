@@ -3,10 +3,9 @@ import polars as pl
 import numpy as np
 from dagster import MaterializeResult, MetadataValue
 from ...utils.schema import TableDef  # Strict Pydantic Model
-from .providers import PROVIDER_REGISTRY
+from ...utils.providers import PROVIDER_REGISTRY
+from ...constants import DEFAULT_CHUNK_SIZE
 
-# Batch generation to prevent OOM
-CHUNK_SIZE = 500_000
 
 def resolve_params_recursive(obj, params):
     """Recursively replace string values in obj that match keys in params."""
@@ -83,18 +82,17 @@ def generate(context, params, table_name, target_path, dataset_config):
 
     # ... (rest of logic) ...
     
-    chunk_size = 500_000
-    total_chunks = (row_count // chunk_size) + (1 if row_count % chunk_size > 0 else 0)
+    chunk_count = (row_count // DEFAULT_CHUNK_SIZE) + (1 if row_count % DEFAULT_CHUNK_SIZE > 0 else 0)
 
-    print(f"[Gen] Generating {row_count} rows in batches of {chunk_size}...")
+    print(f"[Gen] Generating {row_count} rows in batches of {DEFAULT_CHUNK_SIZE}...")
 
     # Initialize empty list for temp chunks
     temp_files = []
     
     try:
-        for i in range(total_chunks):
-            offset = i * chunk_size
-            current_size = min(chunk_size, row_count - offset)
+        for i in range(chunk_count):
+            offset = i * DEFAULT_CHUNK_SIZE
+            current_size = min(DEFAULT_CHUNK_SIZE, row_count - offset)
             
             chunk_path = f"{target_path}.part_{i}"
             _generate_chunk(offset, current_size, table_model, dataset_config, params, row_count, chunk_path)

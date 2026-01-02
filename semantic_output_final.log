@@ -1,0 +1,19 @@
+[SDK] Executing job 'benchmark_job' with partition='1'...
+[Gen] Generating 1 rows in batches of 500000...
+[Gen] Batch 1 done.
+[SDK] Job Success.
+[SDK] Executing job 'benchmark_job' with partition='None'...
+[SDK] Job Success.
+[INFO] Queue size: 1
+[INFO] Mode: AUTOMATED
+
+------------------------------------------------------------
+[1/1] PREPARING: semantic_violation.yaml
+[INFO] Entering Staging Area: /var/folders/fn/f9_8r_cj7cb6ffsgnzdj0yw40000gn/T/tmps5kx2usm
+[INFO] Launching ab69f9cb (Automated)...
+       -> Environment: ACID Isolated Staging (/var/folders/fn/f9_8r_cj7cb6ffsgnzdj0yw40000gn/T/tmps5kx2usm)
+       -> Triggering Partition: 1...
+          [SUCCESS] Done.
+       -> Triggering Reporting...
+          [SUCCESS] Done.
+[INFO] ACID Run Complete (9.3s)

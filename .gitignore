@@ -43,3 +43,4 @@ dagster_home/
 
 # --- Local Guidance (Do not commit) ---
 resume_guidance.md
+audit.lock

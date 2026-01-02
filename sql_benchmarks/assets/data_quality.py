@@ -5,12 +5,13 @@ import json
 import os
 
 from ..constants import DATA_DIR, RESULTS_DIR
-from ..utils.common import load_context
+from ..utils.common import load_context, get_scoped_asset_name
 from ..partitions import partitions_def
 
-STAGING_DIR = os.path.join(DATA_DIR, "staging")
+# Resolved inside assets to stay dynamic
 
 CTX = load_context()
+EXP_ID = CTX['meta'].get("experiment_id", "unknown")
 
 quality_assets: List[object] = []
 
@@ -19,25 +20,28 @@ def make_quality_asset(table_name):
     Creates a validation asset for a specific table.
     Reads the staging Parquet file and verifies stats.
     """
+    scoped_name = get_scoped_asset_name(f"{table_name}_quality", EXP_ID)
+    deps = [get_scoped_asset_name(f"{table_name}_parquet", EXP_ID)]
+
     @asset(
-        name=f"{table_name}_quality",
+        name=scoped_name,
         group_name="data_generation",
         partitions_def=partitions_def,
-        deps=[f"{table_name}_parquet"],
+        deps=deps,
         description=f"Validates {table_name} distribution."
     )
     def _validate(context: AssetExecutionContext):
         partition_key = context.partition_key
         
-        # Construct Path
+        # 2. LOAD DATA
         filename = f"{table_name}_{partition_key}.parquet"
-        staging_file = os.path.join(STAGING_DIR, filename)
+        parquet_path = os.path.join(DATA_DIR, "staging", filename)
         
-        if not os.path.exists(staging_file):
-            raise FileNotFoundError(f"Staging file not found: {staging_file}")
+        if not os.path.exists(parquet_path):
+            raise FileNotFoundError(f"Staging file not found: {parquet_path}")
 
         # Read Data
-        df = pl.read_parquet(staging_file)
+        df = pl.read_parquet(parquet_path)
         row_count = df.height
         
         stats = {
@@ -68,21 +72,19 @@ def make_quality_asset(table_name):
         # Let's trust CTX loaded at module level OR fetch from experiment config file if we needed 100% purity.
         # Given current architecture, CTX should be valid.
         
-        exp_id = CTX['meta'].get("experiment_id", "unknown_exp")
-        
-        stats_dir = os.path.join(RESULTS_DIR, exp_id, "data_stats")
+        # Results are already isolated by the orchestrator in RESULTS_DIR
+        target_path = os.path.join(RESULTS_DIR, "data_stats", f"{table_name}_{partition_key}.stats.json")
+        stats_dir = os.path.dirname(target_path)
         os.makedirs(stats_dir, exist_ok=True)
         
-        profile_path = os.path.join(stats_dir, f"{table_name}_{partition_key}.stats.json")
-        
-        with open(profile_path, "w") as f:
+        with open(target_path, "w") as f:
             json.dump(stats, f, indent=2)
 
         return Output(
-            value=profile_path,
+            value=target_path,
             metadata={
                 "stats": MetadataValue.json(stats),
-                "profile_path": MetadataValue.path(profile_path),
+                "profile_path": MetadataValue.path(target_path),
                 "archive_location": MetadataValue.path(stats_dir)
             }
         )

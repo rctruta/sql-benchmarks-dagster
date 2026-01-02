@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 from dagster import asset, AssetExecutionContext, MetadataValue, MaterializeResult, DagsterEventType, EventRecordsFilter
 
-from ..constants import RESULTS_DIR
+from ..constants import RESULTS_DIR, REPORTS_DIR
 from ..utils.common import load_context
 from .benchmark_factory import benchmark_assets
 import glob
@@ -15,12 +15,13 @@ all_benchmark_keys = [k.key for k in benchmark_assets]
 # ==========================================
 # 1. PURE LOGIC (Testable)
 # ==========================================
+    # Use environment-aware path resolution
 def parse_fragments_to_records(experiment_id):
     """
     Scans the results directory for the given experiment_id
     and parses all fragment JSONs into a flat list of records.
     """
-    fragments_pattern = os.path.join(RESULTS_DIR, experiment_id, "fragments", "*.json")
+    fragments_pattern = os.path.join(RESULTS_DIR, "fragments", "*.json")
     fragment_files = glob.glob(fragments_pattern)
     
     records = []
@@ -325,9 +326,9 @@ def performance_dashboard(context: AssetExecutionContext):
              pass
 
     # 5. SAVE (Side Effect)
-    exp_folder = os.path.join(RESULTS_DIR, EXP_ID)
-    os.makedirs(exp_folder, exist_ok=True)
-    html_path = os.path.join(exp_folder, f"dashboard_{EXP_ID}.html")
+    # Using dynamic reports dir for isolated safety
+    os.makedirs(REPORTS_DIR, exist_ok=True)
+    html_path = os.path.join(REPORTS_DIR, f"dashboard_{EXP_ID}.html")
     print(f"DEBUG: Saving Dashboard to: {html_path}")
     
     with open(html_path, "w") as f:
@@ -337,7 +338,7 @@ def performance_dashboard(context: AssetExecutionContext):
 
     # 6. WRITE CSV (Legacy Support / Unified Output)
     # Replaces the partial logic in extract_results.py
-    csv_path = os.path.join(exp_folder, f"results_{EXP_ID}.csv")
+    csv_path = os.path.join(RESULTS_DIR, f"results_{EXP_ID}.csv")
     df.write_csv(csv_path)
     
     return MaterializeResult(

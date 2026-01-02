@@ -24,8 +24,6 @@ definitions:
     mlarge: 50_000_000
     xlarge: 100_000_000
 
-dimensions:
-  size: [tiny, medium, large, xlarge]
 
 execution:
   test_suite: "selectivity"

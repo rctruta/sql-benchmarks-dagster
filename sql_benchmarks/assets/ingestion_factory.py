@@ -2,16 +2,17 @@ import os
 import yaml
 from dagster import asset, AssetExecutionContext
 from typing import List
-from ..constants import DATA_DIR, EXPERIMENTS_DIR
+from ..constants import DATA_DIR, EXPERIMENTS_DIR, ACTIVE_CONFIG_PATH
 from ..partitions import partitions_def
-from ..utils.common import load_context, get_engine_asset_prefix 
+from ..utils.common import load_context, get_engine_asset_prefix, get_scoped_asset_name
 
 CTX = load_context()
 ACTIVE_ENGINES = CTX.get('engines', []) 
+EXP_ID = CTX['meta'].get("experiment_id", "unknown")
 
 def load_dataset_config():
     """Reads the active experiment YAML to find the tables configured for the dataset."""
-    config_path = os.path.join(EXPERIMENTS_DIR, "active.yaml")
+    config_path = ACTIVE_CONFIG_PATH
     if not os.path.exists(config_path):
         return {}
     with open(config_path, "r") as f:
@@ -28,16 +29,22 @@ def make_ingestion_asset(engine: str, table_name: str):
     delegating execution to the engine's bulk_load method.
     """
     prefix = get_engine_asset_prefix(engine)
-    asset_name = f"{prefix}{table_name}_table"
+    base_asset_name = f"{prefix}{table_name}_table"
+    scoped_name = get_scoped_asset_name(base_asset_name, EXP_ID)
 
     tags = {}
     tags["experiment_scope"] = "partitioned"  
     
+    deps = [
+        get_scoped_asset_name(f"{table_name}_parquet", EXP_ID),
+        get_scoped_asset_name(f"{table_name}_quality", EXP_ID)
+    ]
+
     @asset(
-        name=asset_name,
+        name=scoped_name,
         group_name="ingestion",
         partitions_def=partitions_def,
-        deps=[f"{table_name}_parquet", f"{table_name}_quality"], 
+        deps=deps, 
         required_resource_keys={engine},
         op_tags=tags
     )

@@ -8,11 +8,12 @@ import statistics
 from dagster import asset, AssetExecutionContext, MaterializeResult, MetadataValue
 from ..partitions import partitions_def, SCENARIO_CONFIG
 from ..constants import RESULTS_DIR
-from ..utils.common import load_context, get_tables_used_in_sql, get_target_sql_dir, infer_metadata_from_sql, get_engine_asset_prefix
+from ..utils.common import load_context, get_tables_used_in_sql, get_target_sql_dir, infer_metadata_from_sql, get_engine_asset_prefix, get_scoped_asset_name
 
 CTX = load_context()
 ACTIVE_ENGINES = CTX['engines']
 EXPERIMENT_META = CTX['meta'] 
+EXP_ID = EXPERIMENT_META.get("experiment_id", "unknown")
 VALID_TABLES = set(CTX['tables'])
 FULL_CONFIG = CTX['full_config']
 REPLICATION_FACTOR = FULL_CONFIG.get("execution", {}).get("replication", 1)
@@ -26,10 +27,11 @@ def write_benchmark_fragment(experiment_id, run_id, engine, asset_name, pk, dura
     Writes the atomic result fragment to disk. 
     Isolates the 'Scientific Proof' logic from the Dagster asset.
     """
-    # Use global RESULTS_DIR and f-string as requested
+    # Results are already isolated by the orchestrator in RESULTS_DIR
     fragment_path = os.path.join(
         RESULTS_DIR, 
-        f"{experiment_id}/fragments/{asset_name}__{pk}.json"
+        "fragments",
+        f"{asset_name}__{pk}.json"
     )
     
     os.makedirs(os.path.dirname(fragment_path), exist_ok=True)
@@ -57,8 +59,9 @@ def write_benchmark_fragment(experiment_id, run_id, engine, asset_name, pk, dura
 
 def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, extra_context=None):
     prefix = get_engine_asset_prefix(engine)
-    deps = [f"{prefix}{t}_table" for t in used_tables]
-    asset_name = f"{prefix}benchmark_{name}"
+    deps = [get_scoped_asset_name(f"{prefix}{t}_table", EXP_ID) for t in used_tables]
+    asset_base_name = f"{prefix}benchmark_{name}"
+    asset_scoped_name = get_scoped_asset_name(asset_base_name, EXP_ID)
     tags = {}
     
     # Condition: If this is Postgres, enforce the Single-Lane Limit
@@ -67,7 +70,7 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
     tags["experiment_scope"] = "partitioned"    
 
     @asset(
-        name=asset_name,
+        name=asset_scoped_name,
         partitions_def=partitions_def,
         deps=deps,
         group_name=f"dynamic_bench_{engine}",
@@ -83,26 +86,17 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
         params = SCENARIO_CONFIG.get(pk, {})
         
         # 2. SQL Render
+        # Standard Resolution: {{ table_table }} -> table_partitionlabel
         render_ctx = {f"{t}_table": f"{t}_{pk}" for t in used_tables}
         render_ctx.update(params)
-        if extra_context:
-            render_ctx.update(extra_context)
-            
         sql = jinja2.Template(raw_template).render(render_ctx)
         
-        # 3. Execution Loop
+        # 3. Execution (Replicated)
         durations = []
         for _ in range(REPLICATION_FACTOR):
-            duration = db.run_query(
-                sql=sql, 
-                partition_key=pk, 
-                scenario_params=params
-            )
-            
-            # Fail hard if the engine does not return a duration (violating the contract)
+            duration = db.run_query(sql=sql, partition_key=pk, scenario_params=params)
             if duration is None:
-                raise ValueError(f"Engine '{engine}' execution returned None. ensure run_query returns a float duration.")
-            
+                raise ValueError(f"Engine '{engine}' execution returned None.")
             durations.append(duration)
 
         # 4. Write Fragment (The Isolated Call)
@@ -112,7 +106,7 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
             experiment_id=experiment_id,
             run_id=context.run.run_id,
             engine=engine,
-            asset_name=asset_name,
+            asset_name=asset_scoped_name,
             pk=pk,
             durations=durations,
             params=params

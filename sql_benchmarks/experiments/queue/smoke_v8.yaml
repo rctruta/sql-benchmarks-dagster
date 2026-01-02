@@ -1,6 +1,7 @@
 meta:
-  experiment_id: d925caae
+  experiment_id: smoke_v8
   description: Smoke test using original naming and semantic labels
+
 dataset:
   source: sql_benchmarks.plugins.data_sources.declarative_gen
   tables:
@@ -10,29 +11,17 @@ dataset:
         provider: sequence
       - name: selectivity_code
         provider: choice
-        options:
-        - sel_0_1
-        - sel_1
-        - sel_5
-        - sel_10
-        - sel_20
-        - filler
-        weights:
-        - 0.01
-        - 0.09
-        - 4
-        - 5
-        - 10
-        - 80
-      rows: rows
+        options: ["sel_0_1", "sel_1", "sel_5", "sel_10", "sel_20", "filler"]
+        weights: [0.01, 0.09, 4, 5, 10, 80]
+      rows: "rows"
+
 definitions:
   rows:
     tiny: 100
+
 execution:
-  engines:
-  - duckdb
+  engines: [duckdb]
   matrix:
-    rows:
-    - tiny
+    rows: [tiny]
   replication: 3
   test_suite: selectivity

@@ -3,22 +3,24 @@ import os
 from dagster import asset, AssetExecutionContext
 from ..partitions import partitions_def, SCENARIO_CONFIG
 from ..constants import DATA_DIR
-from ..utils.common import load_context, get_data_dependencies
+from ..utils.common import load_context, get_data_dependencies, get_scoped_asset_name
 
 from ..plugins.data_sources import declarative_gen
 
 # 1. LOAD CONTEXT
 CTX = load_context()
+EXP_ID = CTX['meta'].get("experiment_id", "unknown")
 
 OUTPUT_DIR = os.path.join(DATA_DIR, "staging")
 
 def make_data_asset(table_name):
 
     raw_deps = get_data_dependencies(table_name, CTX['table_defs'])
-    asset_deps = [f"{d}_parquet" for d in raw_deps]
+    asset_deps = [get_scoped_asset_name(f"{d}_parquet", EXP_ID) for d in raw_deps]
+    scoped_name = get_scoped_asset_name(f"{table_name}_parquet", EXP_ID)
 
     @asset(
-        name=f"{table_name}_parquet",
+        name=scoped_name,
         partitions_def=partitions_def,
         group_name="data_generation",
         deps=asset_deps,

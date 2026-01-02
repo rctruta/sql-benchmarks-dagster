@@ -3,6 +3,7 @@ import sys
 import argparse
 from dagster import AssetSelection
 from sql_benchmarks.definitions import defs, all_assets
+from sql_benchmarks.utils.common import load_context
 
 def run_job(partition=None, reporting=False, run_all=False, dry_run=False):
     """
@@ -53,11 +54,21 @@ def run_job(partition=None, reporting=False, run_all=False, dry_run=False):
             "dynamic_bench_duckdb"
         )
 
-    # EXECUTE VIA SDK
-    # EXECUTE VIA SDK
+    # RESOLVE SELECTION
     try:
+        ctx = load_context()
+        exp_id = ctx['meta'].get("experiment_id", "unknown")
+        target_prefix = f"e_{exp_id}__"
+        
         # Resolve Selection to List[AssetKey] as execute_in_process requires Sequence
-        resolved_keys = list(selection.resolve(all_assets))
+        raw_keys = list(selection.resolve(all_assets))
+        
+        # Mandatory Scoping: Only run assets belonging to THIS experiment
+        resolved_keys = [k for k in raw_keys if k.path[-1].startswith(target_prefix)]
+        
+        # Exception: Reporting assets might not be scoped or use a different convention
+        if reporting:
+            resolved_keys = raw_keys # Reporting is global for now or handles internal filtering
         
         if not resolved_keys:
             print("[SDK] Warning: Asset selection resolved to empty set.")

@@ -33,10 +33,18 @@ class PostgresEngine(ConfigurableResource):
         return PostgresClient(target_conn)
 
     # --- IBenchmarkEngine Implementation (Delegation) ---
-    def run_query(self, sql: str, partition_key: str, scenario_params: Dict[str, Any]) -> Optional[float]:
-        self.setup_docker(scenario_params.get("pg_settings"))
+    def clear_cache(self, settings: dict = None):
+        """
+        Enforces a multi-layer Cold Cache:
+        1. Host Layer: Floods host RAM to evict OS Page Cache.
+        2. Database Layer: Recreates the container to wipe DBMS buffer pools.
+        """
         thrash_os_cache()
+        self.setup_docker(settings)
         self._wait_for_ready()
+
+    def run_query(self, sql: str, partition_key: str, scenario_params: Dict[str, Any]) -> Optional[float]:
+        self.clear_cache(scenario_params.get("pg_settings"))
         client = self._get_client() 
         return client.run_query(sql=sql, scenario_params=scenario_params)
 
@@ -53,7 +61,7 @@ class PostgresEngine(ConfigurableResource):
         target_conn = self._runtime_connection_string or self.connection_string
         return create_engine(target_conn)
 
-    # --- EXTERNAL/SYSTEM/CONFIG HELPERS (Remain Here) ---
+    # --- EXTERNAL/SYSTEM/CONFIG HELPERS ---
     def _get_port_from_url(self) -> int:
         try:
             target_conn = self._runtime_connection_string or self.connection_string
@@ -73,26 +81,6 @@ class PostgresEngine(ConfigurableResource):
             if self._check_port_available(port):
                 return port
             port += 1
-
-    def clear_cache(self):
-        """Restarts the container using Docker SDK to ensure cold cache."""
-        client = docker.from_env()
-        try:
-            container = client.containers.get(self.container_name)
-            container.restart()
-        except NotFound:
-            # If it doesn't exist, we can't restart it. Setup should have caught this.
-            raise RuntimeError(f"Container {self.container_name} not found during cache clear.")
-        
-        # Retry loop to wait for DB to come up
-        retries = 15
-        while retries > 0:
-            try:
-                with self.get_engine().connect() as conn: conn.execute(text("SELECT 1"))
-                return
-            except OperationalError:
-                time.sleep(1); retries -= 1
-        raise Exception("Postgres failed to restart.")
 
     def _wait_for_ready(self, timeout=30):
         start = time.time()

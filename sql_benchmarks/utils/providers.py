@@ -6,13 +6,23 @@ def generate_sequence(rows: int, **kwargs):
     return np.arange(start, start + (rows * step), step)
 
 def generate_random_int(rows: int, **kwargs):
-    mn = kwargs.get("min_value", 0)
-    mx = kwargs.get("max_value", 100)
+    # Support both canonical (min_value) and YAML-style (min)
+    mn = kwargs.get("min_value") or kwargs.get("min")
+    mx = kwargs.get("max_value") or kwargs.get("max")
+    
+    # Fallback to defaults if still None
+    if mn is None: mn = 0
+    if mx is None: mx = 100
     return np.random.randint(mn, mx, size=rows)
 
 def generate_random_float(rows: int, **kwargs):
-    mn = kwargs.get("min_value", 0.0)
-    mx = kwargs.get("max_value", 1.0)
+    # Support both canonical (min_value) and YAML-style (min)
+    mn = kwargs.get("min_value") or kwargs.get("min")
+    mx = kwargs.get("max_value") or kwargs.get("max")
+    
+    # Fallback to defaults if still None
+    if mn is None: mn = 0.0
+    if mx is None: mx = 1.0
     return np.random.uniform(mn, mx, size=rows)
 
 def generate_choice(rows: int, **kwargs):
@@ -20,7 +30,20 @@ def generate_choice(rows: int, **kwargs):
     weights = kwargs.get("weights", None)
     if not options:
         raise ValueError("Provider 'choice' requires 'options' list.")
-    return np.random.choice(options, size=rows, p=weights)
+    
+    if weights is not None:
+        # Robust Normalization (Restore your fixed arithmetic)
+        w = np.array(weights, dtype=float)
+        if w.sum() <= 0:
+            raise ValueError("Weights must sum to a positive value.")
+        p = w / w.sum()
+        # Force strict 1.0 sum to satisfy numpy
+        if len(p) > 0:
+            p[-1] = 1.0 - p[:-1].sum()
+    else:
+        p = None
+        
+    return np.random.choice(options, size=rows, p=p)
 
 def generate_text_concat(rows: int, existing_data: dict, **kwargs):
     source_col = kwargs.get("source")

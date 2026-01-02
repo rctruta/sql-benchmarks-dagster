@@ -1,0 +1,20 @@
+meta:
+  description: "Testing if the runner still crashes with recursive copies"
+dataset:
+  source: "sql_benchmarks.plugins.data_sources.declarative_gen"
+  tables: 
+    verify:
+      rows: 1
+      columns:
+        - name: id
+          provider: sequence
+execution:
+  test_suite: "null_logic"
+  engines: [duckdb]
+  matrix:
+    size: [default]
+definitions:
+  rows:
+    default: 1
+    size:
+      default: 1
