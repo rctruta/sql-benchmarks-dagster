@@ -24,7 +24,7 @@ from .resources.duckdb import DuckDBEngine
 from .resources.actian import ActianEngine
 from .constants import DATA_DIR
 from .jobs import benchmark_job
-from .sensors import experiment_queue_sensor
+# from .sensors import experiment_queue_sensor
 
 # 4. CONFIG
 pg_user = os.getenv("POSTGRES_USER", "postgres")
@@ -54,5 +54,4 @@ defs = Definitions(
         "actian": ActianEngine()
     },
     jobs=[benchmark_job],
-    sensors=[experiment_queue_sensor]
 )

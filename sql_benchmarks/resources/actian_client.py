@@ -9,18 +9,65 @@ class ActianClient:
     Uses the native 'actian-python-connector' for high-performance vectorized access.
     """
     
-    def __init__(self, connection_params: Dict[str, Any]):
+    def __init__(self, connection_params: Dict[str, Any], container_name: str = "sql_bench_actian"):
         self.connection_params = connection_params
+        self.container_name = container_name
         # Performance Note: In a production scenario, we'd use a connection pool.
         # For benchmarking, we use discrete connections to ensure 'Cold Cache' isolation.
         self.connection = None
 
     def _connect(self):
         try:
-            import actian.native as actian
-            self.connection = actian.connect(**self.connection_params)
+            import pyodbc
+            # Standard Actian/Ingres ODBC Connection String
+            # Requires Actian Client (Ingres Net) installed on the host or in the container.
+            # Since we are running on Host but DB is in Container, we need the ODBC Driver.
+            # However, for this POC, we can try using the `ingresdbi` logic if available, 
+            # BUT standard ODBC is safer.
+            
+            # NOTE: We are assuming `pyodbc` is available.
+            # Connection String format: "DRIVER={Ingres};SERVER=@localhost,27832;DATABASE=bench_db;UID=actian;PWD=actian"
+            
+            # Construct standard ODBC string
+            conn_str = (
+                f"DRIVER={{Ingres}};SERVER=@{self.connection_params.get('host', 'localhost')},II7;"
+                f"DATABASE={self.connection_params.get('database')};"
+                f"UID={self.connection_params.get('user')};PWD={self.connection_params.get('password')}"
+            )
+            self.connection = pyodbc.connect(conn_str, autocommit=True)
+            
         except ImportError:
-            raise RuntimeError("actian-python-connector not installed. Please run 'pip install actian-python-connector'")
+            raise RuntimeError("pyodbc not installed. Please run 'pip install pyodbc'")
+        except Exception as e:
+            # Fallback/Debug: Print error clearly
+            print(f"❌ Actian Connection Failed: {e}")
+            raise
+
+    def _run_query_exec(self, sql: str) -> float:
+        """
+        Executes query via 'docker exec' and 'iiquery' native utility.
+        This bypasses the need for a host-side ODBC driver.
+        """
+        import subprocess
+        import time
+
+        # We use a temporary file inside the container to avoid shell escaping issues with complex SQL
+        # But for this POC, we'll pipe simple SQL.
+        cmd = [
+            "sudo", "docker", "exec", "-i", self.container_name,
+            "/opt/Actian/Vector/ingres/bin/iiquery", 
+            "-uactian", "-p", self.connection_params["database"], "-s"
+        ]
+        
+        start = time.time()
+        process = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        stdout, stderr = process.communicate(input=sql)
+        duration = time.time() - start
+
+        if process.returncode != 0:
+            raise RuntimeError(f"Actian Exec Error: {stderr}")
+        
+        return duration
 
     def run_query(self, sql: str, scenario_params: Dict[str, Any]) -> Optional[float]:
         self._connect()

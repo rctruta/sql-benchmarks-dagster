@@ -1,5 +1,5 @@
 meta:
-  description: "Actian X100 vs. Postgres vs. DuckDB: Analytical Wall (10M Rows)"
+  description: "Debug Version of Competitive Baseline (Small Data)"
 
 dataset:
   source: "sql_benchmarks.plugins.data_sources.declarative_gen"
@@ -12,14 +12,14 @@ dataset:
           primary_key: true
         - name: region
           provider: choice
-          options: ["North", "South", "East", "West", "Central", "EMEA", "APAC", "LATAM"]
+          options: ["North", "South", "East", "West"]
         - name: category
           provider: choice
-          options: ["Hardware", "Software", "Cloud", "Consulting", "Support", "Training"]
+          options: ["A", "B", "C"]
         - name: price
           provider: random_float
           min: 10.0
-          max: 5000.0
+          max: 50.0
         - name: quantity
           provider: random_int
           min: 1
@@ -31,15 +31,12 @@ dataset:
 
 definitions:
   rows:
-    small: 100_000
-    medium: 1_000_000
-    large: 10_000_000
-    xlarge: 50_000_000
+    tiny: 100
 
 execution:
   test_suite: "analytical_wall"
-  replication: 3
+  replication: 1
   engines: ["postgres", "duckdb", "actian"]
   matrix:
-    rows: [medium, large]
+    rows: [tiny]
     disk_type: ["ssd"]

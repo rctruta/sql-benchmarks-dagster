@@ -27,9 +27,10 @@ def write_benchmark_fragment(experiment_id, run_id, engine, asset_name, pk, dura
     Writes the atomic result fragment to disk. 
     Isolates the 'Scientific Proof' logic from the Dagster asset.
     """
-    # Results are already isolated by the orchestrator in RESULTS_DIR
+    # Results are isolated by experiment_id in RESULTS_DIR
     fragment_path = os.path.join(
         RESULTS_DIR, 
+        experiment_id,
         "fragments",
         f"{asset_name}__{pk}.json"
     )

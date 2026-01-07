@@ -1,7 +1,11 @@
 # --- Python & Environment ---
 __pycache__/
 *.py[cod]
-*$py.class
+*.pyo
+*.pyd
+*.so
+.Python
+env/
 venv/
 .venv/
 .env
@@ -36,11 +40,19 @@ sql_benchmarks/experiments/violations/
 sql_benchmarks/experiments/reports/
 *.csv
 *.html
+*.log
+.logs_queue/
+
+# --- Infrastructure ---
+terraform.tfstate*
+.terraform/
 
 # --- Internal Storage (Indirected) ---
 dagster_home/
 .telemetry/
 
 # --- Local Guidance (Do not commit) ---
-resume_guidance.md
+*.md
+!README.md
+!AGENTS.md
 audit.lock

@@ -102,9 +102,16 @@ def test_ingestion_factory_structure():
     
     assert key is not None
     
-    # FIX: Check if the key path starts with the engine prefix OR the generic prefix
-    # This makes the test less brittle against minor changes.
-    assert key.path[0].startswith("pg_") or key.path[0].startswith("duckdb_") or key.path[0].startswith("ingest_")
+    # FIX: Account for the experiment scope prefix 'e_{SHA}__'
+    # We strip the prefix if it exists to verify the base name.
+    key_name = key.path[0]
+    if key_name.startswith("e_"):
+        # Split by __ and take the second part
+        parts = key_name.split("__", 1)
+        if len(parts) > 1:
+            key_name = parts[1]
+
+    assert key_name.startswith("pg_") or key_name.startswith("duckdb_") or key_name.startswith("ingest_")
 
 
 def test_benchmark_factory_produces_assets(loaded_benchmark_assets):

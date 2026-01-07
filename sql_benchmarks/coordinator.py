@@ -36,8 +36,9 @@ class ExperimentCoordinator:
             
             ExperimentValidator.validate(self.config, source_label=os.path.basename(self.target_yaml))
             
-            # Derive Identity
+            # Derive Identity (STRICT SHA-BASED)
             self.exp_id = generate_experiment_hash(self.config, ROOT_DIR)
+            
             self.config["meta"] = self.config.get("meta", {})
             self.config["meta"]["experiment_id"] = self.exp_id
             
@@ -102,30 +103,31 @@ class ExperimentCoordinator:
         return overall_success and p_report.returncode == 0
 
     def _finalize_results(self) -> bool:
-        """Verifies that results were successfully generated in the main repository."""
+        """Verifies that results were successfully generated in the isolated experiment folder."""
         
-        # New "No Bloat" Architecture: Flat files
-        csv_target = os.path.join(RESULTS_DIR, f"results_{self.exp_id}.csv")
-        dashboard_target = os.path.join(REPORTS_DIR, f"dashboard_{self.exp_id}.html")
+        # Isolated Architecture: results/{exp_id}/{exp_id}.csv and .html
+        exp_folder = os.path.join(RESULTS_DIR, self.exp_id)
+        csv_target = os.path.join(exp_folder, f"{self.exp_id}.csv")
+        dashboard_target = os.path.join(exp_folder, f"{self.exp_id}.html")
         
         if not os.path.exists(csv_target) and not os.path.exists(dashboard_target):
             print(f"[ERROR] Run finished but no results found (Checked {csv_target} and {dashboard_target})")
             return False
 
-        # 1. Capture Metadata (Flat)
+        # 1. Capture Metadata (Isolated)
         metadata = {
             "experiment_id": self.exp_id,
             "timestamp": time.time(),
             "config_id": f"config_{self.exp_id}"
         }
-        with open(os.path.join(RESULTS_DIR, f"metadata_{self.exp_id}.json"), "w") as f:
+        with open(os.path.join(exp_folder, f"metadata_{self.exp_id}.json"), "w") as f:
             json.dump(metadata, f, indent=4)
 
         # 1.5 Semantic Audit
         auditor = SemanticAuditor()
         violations = []
-        # Audit shared fragment directory
-        fragments_dir = os.path.join(RESULTS_DIR, "fragments")
+        # Audit isolated fragment directory
+        fragments_dir = os.path.join(exp_folder, "fragments")
         
         if os.path.exists(fragments_dir):
              for filename in os.listdir(fragments_dir):
@@ -134,12 +136,11 @@ class ExperimentCoordinator:
                     with open(file_path, 'r') as f:
                         try:
                             data = json.load(f)
-                            # Only audit fragments belonging to this experiment
-                            if data.get("meta", {}).get("experiment_id") == self.exp_id:
-                                audit_res = auditor.audit_fragment(data)
-                                if not audit_res["success"]:
-                                    violations.append(f"JSON {filename} failed audit: {audit_res['violations']}")
-                        except: pass
+                            # Audit fragments in this isolated folder
+                            audit_res = auditor.audit_fragment(data)
+                            if not audit_res["success"]:
+                                violations.append(f"JSON {filename} failed audit: {audit_res['violations']}")
+                        except Exception: pass
 
         is_semantically_valid = len(violations) == 0
         if not is_semantically_valid:

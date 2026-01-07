@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from sql_benchmarks.plugins.data_sources import providers
+from sql_benchmarks.utils import providers
 
 def test_chain_distribution():
     # Chain: parent = id - 1 (with 1->1 handling)

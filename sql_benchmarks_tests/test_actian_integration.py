@@ -17,10 +17,10 @@ def test_actian_engine_name():
 
 def test_actian_client_run_query_mock():
     # Setup mock manually for Method-level import
-    mock_actian = MagicMock()
-    with patch.dict("sys.modules", {"actian": mock_actian, "actian.native": mock_actian}):
+    mock_pyodbc = MagicMock()
+    with patch.dict("sys.modules", {"pyodbc": mock_pyodbc}):
         mock_conn_obj = MagicMock()
-        mock_actian.connect.return_value = mock_conn_obj
+        mock_pyodbc.connect.return_value = mock_conn_obj
         mock_cursor = mock_conn_obj.cursor.return_value
         
         # Execute
@@ -68,7 +68,7 @@ def test_actian_engine_clear_cache_lifecycle():
         
         # We patch thrash_os_cache to avoid OOM in test
         with patch("sql_benchmarks.utils.system.thrash_os_cache") as mock_thrash:
-            engine = ActianEngine(container_name="test_actian")
+            engine = ActianEngine(container_name="test_actian", use_existing_container=False)
             
             # We need to mock _wait_for_ready to avoid the socket timeout
             with patch.object(ActianEngine, "_wait_for_ready") as mock_wait:

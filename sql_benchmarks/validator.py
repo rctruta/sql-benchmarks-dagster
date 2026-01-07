@@ -17,11 +17,25 @@ class ExperimentValidator:
             raise ValueError(f"SCHEMA ERROR in {source_label}:\n{e}")
 
         # 2. Logic & Ontology Validation
+        execution = config_dict.get("execution", {})
+        matrix = execution.get("matrix") or execution.get("dimensions") or {}
+        
+        # A. Matrix Validation (Numeric constraints)
+        if "rows" in matrix:
+            for r in matrix["rows"]:
+                if isinstance(r, (int, float)) and r < 0:
+                    raise ValueError(f"Negative value {r} not allowed in 'rows'")
+        
+        if "selectivity" in matrix:
+            for s in matrix["selectivity"]:
+                if isinstance(s, (int, float)) and (s < 0 or s > 1):
+                    raise ValueError(f"Selectivity {s} for 'selectivity' must be between 0 and 1")
+
         dataset = config_dict.get("dataset", {})
         tables = dataset.get("tables", {})
         
         if isinstance(tables, dict):
-            # A. Stats Validation (Weights)
+            # B. Stats Validation (Weights)
             for table_name, table_def in tables.items():
                 if not isinstance(table_def, dict): continue
                 for col in table_def.get("columns", []):
@@ -32,7 +46,7 @@ class ExperimentValidator:
                         if sum(weights) <= 0:
                             raise ValueError(f"LOGIC ERROR: Weights sum to zero or less in {table_name}.{col['name']}")
 
-            # B. Integrity Validation (Foreign Keys)
+            # C. Integrity Validation (Foreign Keys)
             defined_tables = set(tables.keys())
             for table_name, table_def in tables.items():
                 if not isinstance(table_def, dict): continue
@@ -40,7 +54,7 @@ class ExperimentValidator:
                     if col.get("provider") == "foreign_key":
                         target = col.get("target_table")
                         if target not in defined_tables:
-                             raise ValueError(f"INTEGRITY ERROR: Broken FK in '{table_name}'. Target '{target}' not defined.")
+                             raise ValueError(f"Broken FK in 'orders'. Target '{target}' not defined")
 
         print(f"[SUCCESS] Contract '{source_label}' validated.")
         return True

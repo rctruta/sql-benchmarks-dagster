@@ -1,5 +1,4 @@
 meta:
-  experiment_id: "v7_refactor"
   description: "Clean architecture test"
 
 dataset:
@@ -28,7 +27,7 @@ definitions:
 execution:
   test_suite: "selectivity"
   replication: 3
-  engines: ["postgres", "duckdb"]
+  engines: ["postgres", "duckdb", "actian"]
   matrix:
-    rows: [tiny, small, medium, large, xlarge]
+    rows: [tiny, small, medium]
     disk_type: ["ssd", "hdd"]

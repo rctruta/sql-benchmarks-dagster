@@ -87,13 +87,13 @@ class ExecutionConfig(BaseModel):
 class MetaInfo(BaseModel):
     # --- V2 MIGRATION: Replaces class Config: extra = 'allow' ---
     model_config = ConfigDict(extra='allow')
-    experiment_id: str
+    experiment_id: Optional[str] = None
     description: Optional[str] = None
 
 class ExperimentSchema(BaseModel):
-    meta: Dict[str, str]
-    dataset: DatasetConfig
-    execution: ExecutionConfig 
+    meta: Optional[Dict[str, Optional[str]]] = None
+    dataset: Optional[DatasetConfig] = None
+    execution: Optional[ExecutionConfig] = None
 
 # ==========================================
 # 5. PUBLIC INTERFACE

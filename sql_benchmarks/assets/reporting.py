@@ -21,7 +21,8 @@ def parse_fragments_to_records(experiment_id):
     Scans the results directory for the given experiment_id
     and parses all fragment JSONs into a flat list of records.
     """
-    fragments_pattern = os.path.join(RESULTS_DIR, "fragments", "*.json")
+    # Look into the isolated experiment folder as per specification
+    fragments_pattern = os.path.join(RESULTS_DIR, experiment_id, "fragments", "*.json")
     fragment_files = glob.glob(fragments_pattern)
     
     records = []
@@ -321,24 +322,22 @@ def performance_dashboard(context: AssetExecutionContext):
                  height=800
              )
              figures_html.append(fig_3d.to_html(full_html=False, include_plotlyjs=False))
-         except Exception as e:
-             # Just skip if 3D fails
-             pass
+         except Exception: pass
 
-    # 5. SAVE (Side Effect)
-    # Using dynamic reports dir for isolated safety
-    os.makedirs(REPORTS_DIR, exist_ok=True)
-    html_path = os.path.join(REPORTS_DIR, f"dashboard_{EXP_ID}.html")
-    print(f"DEBUG: Saving Dashboard to: {html_path}")
+    # 4. SAVE (Side Effect)
+    # Using isolated experiment folder for guaranteed safety
+    exp_dir = os.path.join(RESULTS_DIR, EXP_ID)
+    os.makedirs(exp_dir, exist_ok=True)
+    
+    html_path = os.path.join(exp_dir, f"{EXP_ID}.html")
+    csv_path = os.path.join(exp_dir, f"{EXP_ID}.csv")
     
     with open(html_path, "w") as f:
         f.write(f"<h1>Benchmark: {EXP_ID}</h1>")
         f.write(f"<p>Generated at: {pd.Timestamp.now()}</p><hr>")
         f.write("<br><hr><br>".join(figures_html))
 
-    # 6. WRITE CSV (Legacy Support / Unified Output)
-    # Replaces the partial logic in extract_results.py
-    csv_path = os.path.join(RESULTS_DIR, f"results_{EXP_ID}.csv")
+    # 5. WRITE CSV
     df.write_csv(csv_path)
     
     return MaterializeResult(

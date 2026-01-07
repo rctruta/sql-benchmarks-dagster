@@ -9,7 +9,7 @@ from sql_benchmarks.assets.data_quality import make_quality_asset
 @pytest.fixture
 def mock_dirs(tmpdir, monkeypatch):
     """Mocks STAGING_DIR and RESULTS_DIR."""
-    monkeypatch.setattr("sql_benchmarks.assets.data_quality.STAGING_DIR", str(tmpdir))
+    monkeypatch.setattr("sql_benchmarks.assets.data_quality.DATA_DIR", str(tmpdir))
     monkeypatch.setattr("sql_benchmarks.assets.data_quality.RESULTS_DIR", str(tmpdir))
     return str(tmpdir)
 
@@ -19,9 +19,11 @@ def test_quality_asset_success(mock_dirs, monkeypatch):
     partition = "defaults"
     exp_id = "test_exp"
     
-    # 1. Create Mock Parquet
+    # 1. Create Mock Parquet in staging
+    staging_dir = os.path.join(mock_dirs, "staging")
+    os.makedirs(staging_dir, exist_ok=True)
     df = pl.DataFrame({"a": [1, 2, None], "b": ["x", "y", "z"]})
-    file_path = os.path.join(mock_dirs, f"{table_name}_{partition}.parquet")
+    file_path = os.path.join(staging_dir, f"{table_name}_{partition}.parquet")
     df.write_parquet(file_path)
     
     # 2. Build Asset & Context
@@ -33,10 +35,8 @@ def test_quality_asset_success(mock_dirs, monkeypatch):
         resources={"io_manager": MagicMock()} 
     )
 
-    # CTX is a global variable instantiated at import time.
-    # Patching load_context doesn't update CTX if it's already loaded.
-    # We must patch CTX directly.
-    monkeypatch.setattr("sql_benchmarks.assets.data_quality.CTX", {"meta": {"experiment_id": exp_id}})
+    # Patch load_context to return our test experiment ID
+    monkeypatch.setattr("sql_benchmarks.assets.data_quality.load_context", lambda: {"meta": {"experiment_id": exp_id}})
         
     # Run
     result = asset_factory(context)
@@ -86,9 +86,11 @@ def test_quality_asset_fails_on_empty_table(mock_dirs):
     table_name = "test_empty"
     partition = "defaults"
     
-    # Write empty DF
+    # Write empty DF in staging
+    staging_dir = os.path.join(mock_dirs, "staging")
+    os.makedirs(staging_dir, exist_ok=True)
     df = pl.DataFrame({"col1": []})
-    file_path = os.path.join(mock_dirs, f"{table_name}_{partition}.parquet")
+    file_path = os.path.join(staging_dir, f"{table_name}_{partition}.parquet")
     df.write_parquet(file_path)
     
     asset_factory = make_quality_asset(table_name)

@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: sql_bench_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: benchmark_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  actian:
+    image: local-actian:7.0
+    container_name: sql_bench_actian
+    environment:
+      # Accept license agreement required for community edition
+      II_SYSTEM_PASS: "password" 
+      ACTIAN_VECTOR_COMMUNITY_LICENSE: "Y"
+    ports:
+      - "27832:27832" # Standard Actian/Ingres port
+    volumes:
+      - actian_data:/var/lib/actian
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/Actian/Vector/ingres/bin/iiquery -uactian -p benchmark_db -s <<<'select 1'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  actian_data:
+    name: sql_bench_actian_data
+
+

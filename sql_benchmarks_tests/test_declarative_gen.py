@@ -5,7 +5,8 @@ import polars as pl
 import numpy as np
 from unittest.mock import MagicMock, patch
 
-from sql_benchmarks.plugins.data_sources import declarative_gen, providers
+from sql_benchmarks.plugins.data_sources import declarative_gen
+from sql_benchmarks.utils import providers
 from sql_benchmarks.utils.schema import TableDef
 
 # ==========================================

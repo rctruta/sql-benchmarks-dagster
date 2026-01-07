@@ -80,14 +80,17 @@ def test_thrash_os_cache_safety(mock_psutil, mock_mmap):
     Verify safety logic. 
     Mocks a tiny computer (100MB RAM) so the test runs instantly.
     """
-    # 1. Mock Tiny RAM (100 MB)
+    # 1. Mock Tiny RAM (100 MB available)
     mock_mem = MagicMock()
-    mock_mem.total = 100 * 1024 * 1024 
+    mock_mem.available = 100 * 1024 * 1024 
     mock_psutil.virtual_memory.return_value = mock_mem
     
-    thrash_os_cache(override_gb=None)
+    # 2. Ensure Silicon Safe is OFF for this test
+    with patch.dict("os.environ", {"SB_SILICON_SAFE": "0"}):
+        thrash_os_cache(override_gb=None)
     
-    expected_bytes = int(0.75 * 100 * 1024 * 1024)
+    # Code uses min(available * 0.5, 4.0)
+    expected_bytes = int(0.5 * 100 * 1024 * 1024)
     
     mock_mmap.mmap.assert_called()
     call_args = mock_mmap.mmap.call_args

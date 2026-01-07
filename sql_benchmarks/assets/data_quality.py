@@ -33,6 +33,10 @@ def make_quality_asset(table_name):
     def _validate(context: AssetExecutionContext):
         partition_key = context.partition_key
         
+        # Resolve EXP_ID inside the function for dynamic behavior (essential for testing)
+        ctx = load_context()
+        current_exp_id = ctx['meta'].get("experiment_id", "unknown")
+        
         # 2. LOAD DATA
         filename = f"{table_name}_{partition_key}.parquet"
         parquet_path = os.path.join(DATA_DIR, "staging", filename)
@@ -63,17 +67,8 @@ def make_quality_asset(table_name):
         if row_count == 0:
              raise ValueError(f"Table {table_name} is empty!")
 
-        # Save Profile to RESULTS Directory (Consolidation)
-        # We need the Experiment ID to find the folder.
-        # CTX is loaded globally, but for safety in the op we can reload or rely on CTX if it's dynamic enough.
-        # Dagster context 'run_id' is dynamic, but 'experiment_id' is from env/config.
-        # Best to reload context inside op if we think it changes per run, 
-        # BUT 'make_quality_asset' is defined at import time. CTX global defaults are loaded then.
-        # Let's trust CTX loaded at module level OR fetch from experiment config file if we needed 100% purity.
-        # Given current architecture, CTX should be valid.
-        
-        # Results are already isolated by the orchestrator in RESULTS_DIR
-        target_path = os.path.join(RESULTS_DIR, "data_stats", f"{table_name}_{partition_key}.stats.json")
+        # Results are isolated by current_exp_id in RESULTS_DIR
+        target_path = os.path.join(RESULTS_DIR, current_exp_id, "data_stats", f"{table_name}_{partition_key}.stats.json")
         stats_dir = os.path.dirname(target_path)
         os.makedirs(stats_dir, exist_ok=True)
         

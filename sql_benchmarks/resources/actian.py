@@ -17,10 +17,11 @@ class ActianEngine(ConfigurableResource):
     host: str = "localhost"
     port: int = 27832
     user: str = "actian"
-    password: str = "password"
-    database: str = "db"
+    password: str = "actian"
+    database: str = "bench_db"
     container_name: str = "benchmark_actian"
     docker_image: str = "actian/vector-ce:latest"
+    use_existing_container: bool = True
     model_config = ConfigDict(extra='forbid')
 
     # --- FACTORY METHOD ---
@@ -73,6 +74,8 @@ class ActianEngine(ConfigurableResource):
         raise TimeoutError(f"Actian container '{self.container_name}' failed to come online at {self.host}:{self.port}")
 
     def _kill_zombie_container(self):
+        if self.use_existing_container:
+            return
         client = docker.from_env()
         try:
             container = client.containers.get(self.container_name)
@@ -84,6 +87,9 @@ class ActianEngine(ConfigurableResource):
         """
         Robust Provisioning: Recreates the container to ensure a Cold Cache.
         """
+        if self.use_existing_container:
+            return
+
         # 1. CLEANUP
         self._kill_zombie_container()
 

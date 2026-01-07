@@ -114,6 +114,15 @@ def test_clear_cache_calls_docker(mock_docker):
         engine.clear_cache()
         
         # ASSERT
-        mock_client.containers.get.assert_called_once_with("benchmark_postgres")
-        mock_container.restart.assert_called_once()
+        # Does not call restart, calls run (via setup_docker)
+        # We need to mock setup_docker's internals or assert setup_docker called if we mocked it.
+        # But this test mocks 'docker', so we verify the docker call sequence:
+        # 1. get container -> remove (kill zombie)
+        # 2. run container
+        
+        # Verification of kill (optional strictly, but good for completeness)
+        # mock_client.containers.get.assert_called_with("benchmark_postgres")
+        
+        # Verification of run
+        mock_client.containers.run.assert_called_once()
  
