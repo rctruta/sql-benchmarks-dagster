@@ -43,9 +43,13 @@ sql_benchmarks/experiments/reports/
 *.log
 .logs_queue/
 
-# --- Infrastructure ---
-terraform.tfstate*
+# --- Infrastructure & Secrets ---
 .terraform/
+terraform.tfstate*
+*.tfvars
+*.tfvars.json
+*.pem
+license.xml
 
 # --- Internal Storage (Indirected) ---
 dagster_home/

@@ -9,6 +9,7 @@ from .validator import ExperimentValidator
 from .constants import ROOT_DIR, CONFIG_ARCHIVE_DIR, EXPERIMENTS_DIR, PROCESSED_SUFFIX, RESULTS_DIR, VIOLATIONS_DIR, REPORTS_DIR, AUDIT_LOCK_PATH, ACTIVE_CONFIG_PATH
 from .utils.hasher import generate_experiment_hash, generate_integrity_seal
 from .utils.semantic_auditor import SemanticAuditor
+from .harness import IsolationHarness
 
 class ExperimentCoordinator:
     """
@@ -51,27 +52,37 @@ class ExperimentCoordinator:
             print(f"[REJECTED] Experiment contract failed validation: {e}")
             return False
 
-        # Phase 2: PREPARE EXECUTION (Direct)
-        # Write ACTIVE config to the standard location
-        os.makedirs(os.path.dirname(ACTIVE_CONFIG_PATH), exist_ok=True)
-        with open(ACTIVE_CONFIG_PATH, 'w') as f:
+        # Phase 2: PREPARE EXECUTION (Isolated)
+        harness = IsolationHarness(self.exp_id)
+        redirects = harness.provision()
+        os.environ.update(redirects)
+        
+        # Manually redirect active.yaml to the scratchpad within Phase 2
+        active_path = os.path.join(redirects["SCRATCHPAD_ROOT"], "active.yaml")
+        os.environ["ACTIVE_CONFIG_PATH"] = active_path
+        
+        # Write ACTIVE config to the redirected scratchpad location
+        os.makedirs(os.path.dirname(active_path), exist_ok=True)
+        with open(active_path, 'w') as f:
             yaml.dump(self.config, f, sort_keys=False)
 
         # Phase 3: EXECUTION
-        print(f"[INFO] Executing {self.exp_id} directly...")
+        print(f"[INFO] Executing {self.exp_id} in isolated scratchpad...")
         
-        # Prepare environment (Standard)
-        local_env = os.environ.copy()
-        # We rely on constants.py picking up defaults or existing env vars
-        
-        success = self._execute_direct(local_env)
-        
-        if not success:
-            print(f"[FAILURE] Technical execution failed.")
-            return False
+        try:
+            # Prepare environment
+            local_env = os.environ.copy()
+            success = self._execute_direct(local_env)
+            
+            if not success:
+                print(f"[FAILURE] Technical execution failed.")
+                return False
 
-        # Phase 5: FINAL VERIFICATION & REGISTRY
-        return self._finalize_results()
+            # Phase 5: FINAL VERIFICATION & REGISTRY
+            return self._finalize_results()
+            
+        finally:
+            harness.cleanup()
 
     def _execute_direct(self, local_env: dict) -> bool:
         from .utils.common import generate_partition_keys
@@ -155,14 +166,14 @@ class ExperimentCoordinator:
         # 2. Archive Config
         registry_path = os.path.join(CONFIG_ARCHIVE_DIR, f"config_{self.exp_id}.yaml")
         os.makedirs(os.path.dirname(registry_path), exist_ok=True)
-        shutil.copy(ACTIVE_CONFIG_PATH, registry_path)
+        shutil.copy(os.environ["ACTIVE_CONFIG_PATH"], registry_path)
         
         # 3. Archive copy in experiments/archive
         filename = os.path.basename(self.target_yaml)
         clean_name = filename if not filename.endswith(PROCESSED_SUFFIX) else filename[:-len(PROCESSED_SUFFIX)]
         archive_dest = os.path.join(EXPERIMENTS_DIR, "archive", clean_name)
         os.makedirs(os.path.dirname(archive_dest), exist_ok=True)
-        shutil.copy(ACTIVE_CONFIG_PATH, archive_dest)
+        shutil.copy(os.environ["ACTIVE_CONFIG_PATH"], archive_dest)
 
         print(f"[SUCCESS] Experiment {self.exp_id} finalized. Results at {csv_target}")
         return is_semantically_valid

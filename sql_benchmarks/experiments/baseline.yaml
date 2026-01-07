@@ -1,5 +1,4 @@
 meta:
-  experiment_id: "v7_refactor"
   description: "Clean architecture test"
 
 dataset:
