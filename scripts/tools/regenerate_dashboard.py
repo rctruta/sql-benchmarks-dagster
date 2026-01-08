@@ -20,7 +20,7 @@ print(f"[DEBUG] Loaded reporting from: {sql_benchmarks.assets.reporting.__file__
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 
 def regenerate(exp_id):
-    print(f"🔄 Regenerating Dashboard for: {exp_id}")
+    print(f"Regenerating Dashboard for: {exp_id}")
     
     # 1. Mock Context for Experiment ID
     import sql_benchmarks.assets.reporting
@@ -41,9 +41,9 @@ def regenerate(exp_id):
         result = performance_dashboard(context)
         
         if result:
-            print("✅ Dashboard Generated Successfully!")
+            print("Dashboard Generated Successfully!")
     except Exception as e:
-        print(f"❌ Failed: {e}")
+        print(f"Failed: {e}")
         import traceback
         traceback.print_exc()
     finally:

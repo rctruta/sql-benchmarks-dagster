@@ -48,10 +48,10 @@ run_in_sim "
 
 echo "[3/3] Verifying Result..."
 if run_in_sim "[ -f ${APP_DIR}/venv/bin/activate ]"; then
-    echo "✅ SUCCESS: Virtual Environment was successfully repaired & created."
-    echo "   Validation: $(run_in_sim '${APP_DIR}/venv/bin/python3 --version')"
+    echo "SUCCESS: Virtual Environment was successfully repaired & created."
+    echo "Validation: $(run_in_sim '${APP_DIR}/venv/bin/python3 --version')"
     exit 0
 else
-    echo "❌ FAILURE: venv/bin/activate still missing."
+    echo "FAILURE: venv/bin/activate still missing."
     exit 1
 fi

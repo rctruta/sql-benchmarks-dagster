@@ -9,10 +9,10 @@ def check_python_version():
     print("[1/5] Checking Python Version...")
     major, minor = sys.version_info[:2]
     if major == 3 and minor >= 10:
-        print(f"      ✅ Python {major}.{minor} detected.")
+        print(f"      Python {major}.{minor} detected.")
         return True
     else:
-        print(f"      ❌ ERROR: Python 3.10+ required (Detected {major}.{minor})")
+        print(f"      ERROR: Python 3.10+ required (Detected {major}.{minor})")
         return False
 
 def check_dependencies():
@@ -22,12 +22,12 @@ def check_dependencies():
     for lib in required:
         try:
             importlib.import_module(lib if lib != "yaml" else "yaml")
-            print(f"      ✅ {lib} is installed.")
+            print(f"      {lib} is installed.")
         except ImportError:
             missing.append(lib)
     
     if missing:
-        print(f"      ❌ MISSING: {', '.join(missing)}")
+        print(f"      MISSING: {', '.join(missing)}")
         return False
     return True
 
@@ -37,10 +37,10 @@ def check_docker():
         import docker
         client = docker.from_env()
         client.ping()
-        print("      ✅ Docker daemon is reachable.")
+        print("      Docker daemon is reachable.")
         return True
     except Exception as e:
-        print(f"      ❌ ERROR: Docker daemon not running or unreachable: {e}")
+        print(f"      ERROR: Docker daemon not running or unreachable: {e}")
         return False
 
 def check_filesystem():
@@ -53,15 +53,15 @@ def check_filesystem():
         if not os.path.exists(path):
             try:
                 os.makedirs(path, exist_ok=True)
-                print(f"      ✅ Created {d}/")
+                print(f"      Created {d}/")
             except Exception as e:
-                print(f"      ❌ FAILED to create {d}/: {e}")
+                print(f"      FAILED to create {d}/: {e}")
                 return False
         else:
             if os.access(path, os.W_OK):
-                print(f"      ✅ {d}/ is writable.")
+                print(f"      {d}/ is writable.")
             else:
-                print(f"      ❌ {d}/ is NOT writable.")
+                print(f"      {d}/ is NOT writable.")
                 return False
     return True
 
@@ -75,10 +75,10 @@ def check_dagster_definitions():
         # Import definitions to see if assets/factories fail to initialize
         sys.path.append(root)
         from sql_benchmarks.definitions import defs
-        print("      ✅ Dagster definitions loaded successfully.")
+        print("      Dagster definitions loaded successfully.")
         return True
     except Exception as e:
-        print(f"      ❌ ERROR: Definitions failed to load: {e}")
+        print(f"      ERROR: Definitions failed to load: {e}")
         return False
 
 def run_all():
@@ -93,10 +93,10 @@ def run_all():
     
     print("-" * 60)
     if all(results):
-        print("🎉 SUCCESS: Environment is ready for benchmarking.")
+        print("SUCCESS: Environment is ready for benchmarking.")
         sys.exit(0)
     else:
-        print("⚠️ FAILURE: Please fix the issues above before running.")
+        print("FAILURE: Please fix the issues above before running.")
         sys.exit(1)
 
 if __name__ == "__main__":

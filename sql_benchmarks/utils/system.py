@@ -19,16 +19,16 @@ def thrash_os_cache(override_gb=None):
         # 1. AUTO-DETECT RAM (Safety First)
         if os.getenv("SB_SILICON_SAFE") == "1":
             target_gb = 0.1 # Minimal thrash for flow verification
-            log_msg = "🛟 SILICON SAFE MODE: Minimal Cache Thrash (100MB)"
+            log_msg = "SILICON SAFE MODE: Minimal Cache Thrash (100MB)"
         elif override_gb:
             target_gb = float(override_gb)
-            log_msg = f"🌊 Manual Flood: {target_gb} GB"
+            log_msg = f"Manual Flood: {target_gb} GB"
         else:
             # We use 'available' memory to stay within system limits
             available_gb = psutil.virtual_memory().available / (1024 ** 3)
             # Cap at 50% of available OR 4GB, whichever is smaller
             target_gb = min(available_gb * 0.5, 4.0)
-            log_msg = f"🌊 Auto-Flood: {target_gb:.2f} GB (Available: {available_gb:.2f} GB)"
+            log_msg = f"Auto-Flood: {target_gb:.2f} GB (Available: {available_gb:.2f} GB)"
 
         logger.info(log_msg)
 
@@ -44,7 +44,7 @@ def thrash_os_cache(override_gb=None):
             for i in range(0, size_bytes, page_size * 4):
                 mm[i] = 1
             
-        logger.info("✅ OS Cache Thrashed.")
+        logger.info("OS Cache Thrashed.")
         
     except Exception as e:
-        logger.warning(f"❌ Cache thrash failed: {e}")
+        logger.warning(f"Cache thrash failed: {e}")

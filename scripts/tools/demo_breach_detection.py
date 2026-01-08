@@ -46,10 +46,10 @@ def demonstrate_security():
         success = coord.run()
         
         if not success:
-            print("\n✅ SUCCESS: SYSTEM DETECTED THE BREACH!")
+            print("\nSUCCESS: SYSTEM DETECTED THE BREACH!")
             print("The results were DISCARDED and NOT committed to the repo.")
         else:
-            print("\n❌ FAILURE: SYSTEM ALLOWED THE BREACH TO COMMIT!")
+            print("\nFAILURE: SYSTEM ALLOWED THE BREACH TO COMMIT!")
             
     finally:
         # Restore the file

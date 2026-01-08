@@ -17,7 +17,10 @@ dependencies = [
     "sqlalchemy",
     "psutil",
     "pyyaml",
-    "numpy"
+    "numpy",
+    "paramiko>=3.0.0",
+    "sshtunnel>=0.4.0",
+    "scp>=0.14.0",
 ]
 
 [project.optional-dependencies]

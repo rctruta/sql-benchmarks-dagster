@@ -19,13 +19,13 @@ def extract_and_snapshot():
         with open(ACTIVE_CONFIG_PATH, "r") as f:
             config = yaml.safe_load(f)
         target_id = config.get("meta", {}).get("experiment_id")
-        print(f"🎯 Target Experiment ID: {target_id}")
+        print(f"Target Experiment ID: {target_id}")
     except FileNotFoundError:
-        print(f"❌ Config not found at {ACTIVE_CONFIG_PATH}")
+        print(f"Config not found at {ACTIVE_CONFIG_PATH}")
         return
 
     # 2. EXTRACT RECORDS (Via Shared Logic)
-    print(f"🔎 Scanning fragments for experiment: {target_id}...")
+    print(f"Scanning fragments for experiment: {target_id}...")
     records = parse_fragments_to_records(target_id)
     
     # 3. SAVE RESULTS
@@ -47,11 +47,11 @@ def extract_and_snapshot():
         df.write_csv(csv_path)
         shutil.copy(ACTIVE_CONFIG_PATH, registry_path)
 
-        print(f"\n✅ SUCCESS!")
-        print(f"   📊 Extracted {len(df)} rows")
-        print(f"   📂 Saved to: {csv_path}")
+        print(f"\nSUCCESS!")
+        print(f"   Extracted {len(df)} rows")
+        print(f"   Saved to: {csv_path}")
     else:
-        print(f"\n❌ FAILURE: Scanned fragments but found 0 matches for ID '{target_id}'.")
+        print(f"\nFAILURE: Scanned fragments but found 0 matches for ID '{target_id}'.")
 
 if __name__ == "__main__":
     extract_and_snapshot()
