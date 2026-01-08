@@ -26,8 +26,8 @@ class DuckDBClient:
         if os.path.exists(db_path):
             try:
                 os.remove(db_path)
-            except OSError:
-                pass # Best effort
+            except OSError as e:
+                print(f"[WARN] Could not remove existing DB file {db_path}: {e}")
 
         # Ensure directory exists only for write/creation operations
         os.makedirs(os.path.dirname(db_path), exist_ok=True)

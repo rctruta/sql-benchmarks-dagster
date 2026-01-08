@@ -160,7 +160,6 @@ def performance_dashboard(context: AssetExecutionContext):
     if "null_probability" in pldf.columns:
          context.log.info(f"Unique Null Probs: {pldf['null_probability'].unique().tolist()}")
 
-    # 1. Comparison by System (The Basics)
     # -------------------------------------------------------------------------
     # 1. Comparison by System (The Basics)
     # -------------------------------------------------------------------------
@@ -184,6 +183,7 @@ def performance_dashboard(context: AssetExecutionContext):
     except Exception as e:
          context.log.warning(f"Global Plot Error: {e}")
 
+    # -------------------------------------------------------------------------
     # 2. DYNAMIC DISCOVERY ENGINE (The "Smart Logic")
     # -------------------------------------------------------------------------
     unique_systems = sorted(pldf["System"].unique())
@@ -305,6 +305,7 @@ def performance_dashboard(context: AssetExecutionContext):
             except Exception as e:
                 context.log.warning(f"Dynamic Plot Error ({system}): {e}")
 
+    # -------------------------------------------------------------------------
     # 3. 3D Landscape (The "Bonus")
     # -------------------------------------------------------------------------
     if "null_probability" in matrix_params and "Rows" in matrix_params:
@@ -322,10 +323,12 @@ def performance_dashboard(context: AssetExecutionContext):
                  height=800
              )
              figures_html.append(fig_3d.to_html(full_html=False, include_plotlyjs=False))
-         except Exception: pass
+         except Exception as e:
+             context.log.warning(f"3D Plot Error: {e}")
 
+    # -------------------------------------------------------------------------
     # 4. SAVE (Side Effect)
-    # Using isolated experiment folder for guaranteed safety
+    # -------------------------------------------------------------------------
     exp_dir = os.path.join(RESULTS_DIR, EXP_ID)
     os.makedirs(exp_dir, exist_ok=True)
     
@@ -337,7 +340,9 @@ def performance_dashboard(context: AssetExecutionContext):
         f.write(f"<p>Generated at: {pd.Timestamp.now()}</p><hr>")
         f.write("<br><hr><br>".join(figures_html))
 
+    # -------------------------------------------------------------------------
     # 5. WRITE CSV
+    # -------------------------------------------------------------------------
     df.write_csv(csv_path)
     
     return MaterializeResult(

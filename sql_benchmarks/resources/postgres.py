@@ -166,7 +166,7 @@ class PostgresEngine(ConfigurableResource):
                         DATA_DIR: {'bind': '/mnt/data', 'mode': 'rw'}
                     },
                     environment={
-                        "POSTGRES_PASSWORD": "password",
+                        "POSTGRES_PASSWORD": make_url(self.connection_string).password or "password",
                         "POSTGRES_HOST_AUTH_METHOD": "trust",
                         "POSTGRES_DB": make_url(self.connection_string).database
                     },

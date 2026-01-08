@@ -14,7 +14,6 @@ from .assets.semantic_gate import get_semantic_gate_assets
 from .assets.reporting import performance_dashboard
 from .assets.maintenance import cleanup_staging_data
 from .assets.data_quality import quality_assets
-from .assets.semantic_gate import get_semantic_gate_assets
 
 semantic_gate_assets = get_semantic_gate_assets(benchmark_assets)
 

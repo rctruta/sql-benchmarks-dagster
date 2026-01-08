@@ -54,7 +54,7 @@ class ExperimentValidator:
                     if col.get("provider") == "foreign_key":
                         target = col.get("target_table")
                         if target not in defined_tables:
-                             raise ValueError(f"Broken FK in 'orders'. Target '{target}' not defined")
+                             raise ValueError(f"Broken FK in '{table_name}.{col['name']}'. Target table '{target}' not defined")
 
         print(f"[SUCCESS] Contract '{source_label}' validated.")
         return True

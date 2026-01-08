@@ -78,4 +78,4 @@ def test_validator_broken_integrity():
     with pytest.raises(ValueError) as excinfo:
         ExperimentValidator.validate(bad_fk_config)
     
-    assert "Broken FK in 'orders'. Target 'customers' not defined" in str(excinfo.value)
+    assert "Broken FK in 'orders.cust_id'. Target table 'customers' not defined" in str(excinfo.value)

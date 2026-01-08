@@ -41,9 +41,6 @@ def make_data_asset(table_name):
         # 2. Ensure folder exists
         os.makedirs(os.path.dirname(target_path), exist_ok=True)
 
-        # 2. Ensure folder exists
-        os.makedirs(os.path.dirname(target_path), exist_ok=True)
-
         # 3. Call Plugin
         return module.generate(
             context=context, 

@@ -150,12 +150,24 @@ def _generate_chunk(offset, size, table_model, dataset_config, params, total_row
             kwargs['table_name'] = params.get('table_name', 'unknown') 
             
             # Contextual Handling
-            # Foreign Key needs specific logic
+            # Foreign Key needs target_rows to generate valid IDs
             if p_name in ["foreign_key", "foreign key"]:
-                 # ... (Same logic as before, passed down) ...
-                 # Ideally, generator_func handles 'offset' if needed?
-                 # No, providers are stateless usually.
-                 pass
+                target_table = col_def.target_table
+                if target_table:
+                    tables = dataset_config.get("tables", {})
+                    target_def = tables.get(target_table, {})
+                    target_rows = None
+
+                    # Resolve target table's row count
+                    target_row_val = target_def.get('rows') or params.get('rows')
+                    if isinstance(target_row_val, str) and target_row_val in params:
+                        target_rows = int(params[target_row_val])
+                    elif target_row_val is not None:
+                        target_rows = int(target_row_val)
+                    else:
+                        target_rows = total_rows  # Fallback to current table's row count
+
+                    kwargs['target_rows'] = target_rows
 
             # EXECUTE PROVIDER
             # Note: Most providers don't care about offset (random). 

@@ -102,7 +102,6 @@ class ExperimentCoordinator:
             else:
                 cmd.append("--all")
             
-            print(f"[DEBUG] Running command: {' '.join(cmd)}")
             p = subprocess.run(cmd, cwd=ROOT_DIR, env=local_env)
             if p.returncode != 0:
                 overall_success = False
@@ -151,7 +150,8 @@ class ExperimentCoordinator:
                             audit_res = auditor.audit_fragment(data)
                             if not audit_res["success"]:
                                 violations.append(f"JSON {filename} failed audit: {audit_res['violations']}")
-                        except Exception: pass
+                        except json.JSONDecodeError as e:
+                            violations.append(f"JSON {filename} is malformed: {e}")
 
         is_semantically_valid = len(violations) == 0
         if not is_semantically_valid:

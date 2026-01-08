@@ -15,10 +15,10 @@ def mock_results_dir(tmpdir, monkeypatch):
 
 def create_fragment(base_dir, exp_id, filename, content):
     """Helper to create a fragment file."""
-    # Structure: base_dir / fragments / filename (Flat Architecture)
-    fragment_dir = os.path.join(base_dir, "fragments")
+    # Structure: base_dir / exp_id / fragments / filename (Isolated Architecture)
+    fragment_dir = os.path.join(base_dir, exp_id, "fragments")
     os.makedirs(fragment_dir, exist_ok=True)
-    
+
     path = os.path.join(fragment_dir, filename)
     with open(path, "w") as f:
         json.dump(content, f)
@@ -80,7 +80,7 @@ def test_parse_fragments_handles_corruption(mock_results_dir):
     })
     
     # Corrupt File
-    f_path = os.path.join(mock_results_dir, "fragments", "garbage.json")
+    f_path = os.path.join(mock_results_dir, target_id, "fragments", "garbage.json")
     with open(f_path, "w") as f:
         f.write("{ invalid json ...")
         

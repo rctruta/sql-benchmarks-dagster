@@ -29,7 +29,7 @@ class PostgresClient:
 
     # Updated signature to accept partition_key (passed from factory), even if unused logic-wise
     def bulk_load(self, file_path: str, table_name: str, partition_key: str = None):
-        print(f"🚀 Streaming {file_path} to {table_name}...")
+        print(f"Streaming {file_path} to {table_name}...")
 
         if file_path.endswith(".parquet"):
             # 1. Infer Schema using Polars (Fixes UndefinedTable error)

@@ -40,7 +40,7 @@ class ActianClient:
             raise RuntimeError("pyodbc not installed. Please run 'pip install pyodbc'")
         except Exception as e:
             # Fallback/Debug: Print error clearly
-            print(f"❌ Actian Connection Failed: {e}")
+            print(f"Actian Connection Failed: {e}")
             raise
 
     def _run_query_exec(self, sql: str) -> float:
@@ -92,7 +92,7 @@ class ActianClient:
         High-performance bulk load into Actian Vector.
         We leverage the 'COPY' command for maximum throughput.
         """
-        print(f"🚀 Vectorizing {file_path} into Actian table '{table_name}'...")
+        print(f"Vectorizing {file_path} into Actian table '{table_name}'...")
         
         self._connect()
         try:

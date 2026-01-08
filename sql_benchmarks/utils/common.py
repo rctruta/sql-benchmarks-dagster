@@ -73,7 +73,7 @@ def get_tables_used_in_sql(sql_path, valid_tables_set):
         ast = env.parse(raw_template)
         required_vars = jinja2.meta.find_undeclared_variables(ast)
     except Exception as e:
-        print(f"⚠️ Jinja Parse Error {sql_path}: {e}")
+        print(f"Jinja Parse Error {sql_path}: {e}")
         return [], raw_template
 
     used_tables = [
