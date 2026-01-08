@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "--- 🛠 SQL Benchmarking Laboratory: Environment Setup ---"
+echo "--- SQL Benchmarking Laboratory: Environment Setup ---"
 
 # 1. Create Virtual Environment
 if [ ! -d "venv" ]; then
@@ -15,7 +15,7 @@ fi
 echo "[2/4] Installing dependencies..."
 source venv/bin/activate
 pip install --upgrade pip
-pip install -e ".[dev]"
+pip install -r requirements.txt
 
 # 3. Create Required Directories
 echo "[3/4] Initializing filesystem..."
@@ -31,7 +31,7 @@ echo "[4/4] Running portability audit..."
 python scripts/verify_portability.py
 
 echo "--------------------------------------------------------"
-echo "🎉 SETUP COMPLETE!"
+echo "SETUP COMPLETE!"
 echo "To start benchmarking:"
 echo "  1. source venv/bin/activate"
 echo "  2. ./run.sh queue --auto"

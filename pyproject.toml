@@ -18,7 +18,7 @@ dependencies = [
     "psutil",
     "pyyaml",
     "numpy",
-    "paramiko>=3.0.0",
+    "paramiko<4.0.0",
     "sshtunnel>=0.4.0",
     "scp>=0.14.0",
 ]
