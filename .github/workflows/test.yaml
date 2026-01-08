@@ -29,4 +29,6 @@ jobs:
         # This makes 'sql_benchmarks' importable without 'pip install -e .'
         PYTHONPATH: ${{ github.workspace }}
       run: |
-        pytest sql_benchmarks_tests -v
+        # This tells pytest to ignore the Actian test file 
+        # that requires the SSH key.
+        pytest sql_benchmarks_tests/ --ignore=sql_benchmarks_tests/test_actian_integration.py -v
