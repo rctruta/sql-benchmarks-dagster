@@ -59,7 +59,7 @@ def write_benchmark_fragment(experiment_id, run_id, engine, asset_name, pk, dura
         
     return fragment_path
 
-def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, extra_context=None, pg_settings_builder=None):
+def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, extra_context=None, pg_settings_by_partition=None):
     prefix = get_engine_asset_prefix(engine)
     deps = [get_scoped_asset_name(f"{prefix}{t}_table", EXP_ID) for t in used_tables]
     asset_base_name = f"{prefix}benchmark_{name}"
@@ -71,7 +71,7 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
         tags["dagster/concurrency_key"] = "postgres_exclusive"
     tags["experiment_scope"] = "partitioned"
 
-    _build_pg_settings = pg_settings_builder or (lambda params: {})
+    _pg_settings = pg_settings_by_partition or {}
 
     @asset(
         name=asset_scoped_name,
@@ -85,7 +85,7 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
         db = getattr(context.resources, engine)
         pk = context.partition_key
         params = SCENARIO_CONFIG.get(pk, {})
-        pg_settings = _build_pg_settings(params)
+        pg_settings = _pg_settings.get(pk, {})
 
         # SQL render — params feeds template variables; pg_settings stays out of it
         render_ctx = {f"{t}_table": f"{t}_{pk}" for t in used_tables}
@@ -145,17 +145,16 @@ def get_benchmark_assets():
         path = os.path.join(target_dir, engine)
         if not os.path.exists(path): continue
 
-        # Pre-compute the pg_settings builder once per engine.
-        # Merges static execution.pg_settings with any matrix dimension keys that
-        # are also Postgres session settings. Built here so _benchmark stays free
-        # of config logic — it just calls the builder with the partition's params.
+        # Pre-compute pg_settings for every partition once, at asset-creation time.
+        # _benchmark does a plain dict lookup — no derivation, no config logic.
         if engine == "postgres":
             static_pg = dict(FULL_CONFIG.get("execution", {}).get("pg_settings", {}))
-            all_dim_keys = set().union(*SCENARIO_CONFIG.values()) if SCENARIO_CONFIG else set()
-            pg_dim_keys = frozenset(k for k in all_dim_keys if k in PG_SETTING_KEYS)
-            pg_settings_builder = lambda p, _s=static_pg, _k=pg_dim_keys: {**_s, **{k: p[k] for k in _k if k in p}}
+            pg_settings_by_partition = {
+                pk: {**static_pg, **{k: v for k, v in scenario.items() if k in PG_SETTING_KEYS}}
+                for pk, scenario in SCENARIO_CONFIG.items()
+            }
         else:
-            pg_settings_builder = lambda p: {}
+            pg_settings_by_partition = {}
 
         for f in glob.glob(os.path.join(path, "*.sql")):
             if os.path.getsize(f) == 0:
@@ -174,7 +173,7 @@ def get_benchmark_assets():
                      for c in t_def.get('columns', []):
                          col_ctx[c['name']] = c['name']
 
-            asset_wrapper = make_benchmark_asset(base, engine, tables, raw, static_meta, extra_context=col_ctx, pg_settings_builder=pg_settings_builder)
+            asset_wrapper = make_benchmark_asset(base, engine, tables, raw, static_meta, extra_context=col_ctx, pg_settings_by_partition=pg_settings_by_partition)
             
             try:
                 asset_obj = asset_wrapper.to_asset_def()
