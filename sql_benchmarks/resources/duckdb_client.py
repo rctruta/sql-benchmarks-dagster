@@ -1,10 +1,18 @@
 import duckdb
 import os
+import re
 import time
 from contextlib import contextmanager
 from typing import Dict, Any, Optional
-from ..utils.system import thrash_os_cache 
-from .base_engine import IBenchmarkEngine 
+from ..utils.system import thrash_os_cache
+from .base_engine import IBenchmarkEngine
+
+_SAFE_IDENTIFIER = re.compile(r"^\w+$")  # letters, digits, underscores only
+
+
+def _assert_safe_identifier(value: str, label: str) -> None:
+    if not _SAFE_IDENTIFIER.match(value):
+        raise ValueError(f"Unsafe {label}: '{value}'. Only word characters allowed.")
 
 # Note: DuckDBClient does NOT inherit ConfigurableResource
 
@@ -29,12 +37,20 @@ class DuckDBClient:
             except OSError as e:
                 print(f"[WARN] Could not remove existing DB file {db_path}: {e}")
 
+        # Validate inputs before constructing SQL.
+        # Table name: DuckDB doesn't support parameterized identifiers, so we validate
+        # with a strict allowlist regex (word chars only) before interpolation.
+        # Filepath: use read_parquet(?) parameterized binding for the value.
+        _assert_safe_identifier(target_table_name, "table name")
+        filepath = os.path.realpath(filepath)  # resolve symlinks / traversal
+
         # Ensure directory exists only for write/creation operations
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
-        sql = f"CREATE OR REPLACE TABLE {target_table_name} AS SELECT * FROM read_parquet('{filepath}')"
-        
         with duckdb.connect(db_path, read_only=False) as con:
-             con.execute(sql)
+            con.execute(
+                f"CREATE OR REPLACE TABLE {target_table_name} AS SELECT * FROM read_parquet(?)",
+                [filepath],
+            )
              
     def run_query(self, 
                   sql: str, 

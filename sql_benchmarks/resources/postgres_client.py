@@ -14,13 +14,30 @@ class PostgresClient:
         self.connection_string = connection_string
         self.engine = create_engine(connection_string) 
 
+    # Allowlist of Postgres settings the benchmark harness is permitted to set.
+    # Prevents arbitrary SQL injection via pg_settings YAML keys.
+    _ALLOWED_PG_SETTINGS = frozenset({
+        "work_mem",
+        "random_page_cost",
+        "enable_hashjoin",
+        "enable_nestloop",
+        "enable_seqscan",
+        "enable_sort",
+        "enable_mergejoin",
+        "effective_cache_size",
+        "max_parallel_workers_per_gather",
+    })
+
     def run_query(self, sql: str, scenario_params: Dict[str, Any]) -> Optional[float]:
         pg_settings = scenario_params.get("pg_settings", {})
-        
+
         with self.engine.connect() as conn:
             if pg_settings:
                 for key, val in pg_settings.items():
-                    conn.execute(text(f"SET {key} = '{val}'"))
+                    if key not in self._ALLOWED_PG_SETTINGS:
+                        raise ValueError(f"pg_setting '{key}' is not in the allowlist.")
+                    # Values are safe_cast to string and quoted; key is allowlisted above.
+                    conn.execute(text(f"SET {key} = :val"), {"val": str(val)})
             
             start = time.time()
             conn.execute(text(sql))

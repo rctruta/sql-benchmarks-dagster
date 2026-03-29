@@ -85,7 +85,18 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
         
         pk = context.partition_key
         params = SCENARIO_CONFIG.get(pk, {})
-        
+
+        # Build pg_settings: start from static execution.pg_settings, then let
+        # matrix dimensions override. Any dimension key that matches an allowed
+        # pg_setting (e.g. work_mem) is folded in so it varies per partition.
+        from ..resources.postgres_client import PostgresClient
+        pg_settings = dict(FULL_CONFIG.get("execution", {}).get("pg_settings", {}))
+        for key in list(params.keys()):
+            if key in PostgresClient._ALLOWED_PG_SETTINGS:
+                pg_settings[key] = params[key]
+        if pg_settings:
+            params = {**params, "pg_settings": pg_settings}
+
         # 2. SQL Render
         # Standard Resolution: {{ table_table }} -> table_partitionlabel
         render_ctx = {f"{t}_table": f"{t}_{pk}" for t in used_tables}
@@ -102,7 +113,9 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
 
         # 4. Write Fragment (The Isolated Call)
         experiment_id = EXPERIMENT_META.get("experiment_id", "unknown")
-        
+        # pg_settings is config, not a measured dimension — exclude from fragment
+        fragment_params = {k: v for k, v in params.items() if k != "pg_settings"}
+
         saved_path = write_benchmark_fragment(
             experiment_id=experiment_id,
             run_id=context.run.run_id,
@@ -110,7 +123,7 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
             asset_name=asset_scoped_name,
             pk=pk,
             durations=durations,
-            params=params
+            params=fragment_params
         )
 
         # 4. Return Dagster Metadata

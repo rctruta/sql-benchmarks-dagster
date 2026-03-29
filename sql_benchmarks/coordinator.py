@@ -113,10 +113,20 @@ class ExperimentCoordinator:
         return overall_success and p_report.returncode == 0
 
     def _finalize_results(self) -> bool:
-        """Verifies that results were successfully generated in the isolated experiment folder."""
-        
-        # Isolated Architecture: results/{exp_id}/{exp_id}.csv and .html
-        exp_folder = os.path.join(RESULTS_DIR, self.exp_id)
+        """Verifies results in the scratchpad and copies them to the permanent RESULTS_DIR."""
+
+        # Results were written to the scratchpad (SB_RESULTS_DIR), not the constant RESULTS_DIR,
+        # because constants.py evaluates os.getenv() at import time before the harness sets the env var.
+        scratchpad_results = os.environ.get("SB_RESULTS_DIR", RESULTS_DIR)
+        scratch_exp_folder = os.path.join(scratchpad_results, self.exp_id)
+        permanent_exp_folder = os.path.join(RESULTS_DIR, self.exp_id)
+
+        # Copy from scratchpad to permanent location before cleanup runs
+        if os.path.isdir(scratch_exp_folder) and scratch_exp_folder != permanent_exp_folder:
+            os.makedirs(permanent_exp_folder, exist_ok=True)
+            shutil.copytree(scratch_exp_folder, permanent_exp_folder, dirs_exist_ok=True)
+
+        exp_folder = permanent_exp_folder
         csv_target = os.path.join(exp_folder, f"{self.exp_id}.csv")
         dashboard_target = os.path.join(exp_folder, f"{self.exp_id}.html")
         

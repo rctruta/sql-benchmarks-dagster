@@ -18,5 +18,5 @@ execution:
   test_suite: selectivity
 meta:
   description: Demonstration of Semantic Firewall detecting hallucinations
-  experiment_id: hallucination_demo
+  name: hallucination_demo
   scenario_path: selectivity/duckdb

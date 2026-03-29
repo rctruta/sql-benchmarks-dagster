@@ -1,5 +1,5 @@
 meta:
-  experiment_id: smoke_v8
+  name: smoke_v8
   description: Smoke test using original naming and semantic labels
 
 dataset:

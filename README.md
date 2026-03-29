@@ -61,9 +61,14 @@ source venv/bin/activate
 While the system is powered by Dagster, the primary interface is the CLI for automated workflows.
 
 ```bash
-# RUNNING AN EXPERIMENT
-# Pass 'queue' to run all new configs, or a specific path.
-./run.sh experiments/queue/baseline.yaml --auto
+# QUICKSTART: DuckDB only, no Docker required — runs in seconds
+./run.sh sql_benchmarks/experiments/queue/quickstart.yaml --auto
+
+# FULL BENCHMARK: Run all queued experiments (requires Docker for Postgres)
+./run.sh queue --auto
+
+# SINGLE EXPERIMENT: Pass a specific config path
+./run.sh sql_benchmarks/experiments/queue/baseline.yaml --auto
 ```
 
 ---
@@ -93,7 +98,7 @@ Managed with a strict separation between Harness and Scenario:
 | Experiment | YAML Config | SQL Scenario | Description |
 | :--- | :--- | :--- | :--- |
 | **Selectivity Cliff** | [selectivity_test.yaml](sql_benchmarks/experiments/archive/selectivity_test.yaml) | `/selectivity/` | Testing row-store vs columnar on varying scan selectivity. |
-| **Null Density** | [null_logic_test.yaml](sql_benchmarks/experiments/queue/null_logic_test.yaml) | `/null_logic/` | Benchmarking 3-Valued Logic vs Identity Logic in Joins. |
+| **Null Density** | [null_identity.yaml](sql_benchmarks/experiments/queue/null_identity.yaml) | `/null_logic/` | Benchmarking 3-Valued Logic vs Identity Logic in Joins. |
 | **Sentinel Optimization**| [null_sentinel.yaml](sql_benchmarks/experiments/queue/null_sentinel.yaml) | `/null_sentinel/` | Testing materialization prep vs query-time 2VL logic. |
 | **Recursive Depth** | [recursivity_test.yaml](sql_benchmarks/experiments/archive/recursivity_test.yaml) | `/recursion/` | Measuring the performance of deep Recursive CTEs. |
 

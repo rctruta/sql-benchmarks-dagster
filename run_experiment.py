@@ -4,26 +4,31 @@ import sys
 from sql_benchmarks.coordinator import ExperimentCoordinator
 from sql_benchmarks.constants import EXPERIMENTS_DIR, EXPERIMENT_EXTENSIONS, PROCESSED_SUFFIX
 
+def _is_safe_path(path: str, base: str) -> bool:
+    """Returns True only if path is within base (prevents directory traversal)."""
+    return os.path.realpath(path).startswith(os.path.realpath(base) + os.sep)
+
+
 def resolve_targets(target_input: str) -> list:
     """Resolves input string to a list of YAML files."""
+    # Absolute or relative path to a specific file
     if os.path.isfile(target_input):
-        return [os.path.abspath(target_input)]
-        
-    # Check for symbolic names (queue, archive)
+        abs_path = os.path.abspath(target_input)
+        # Must live within the experiments directory
+        if not _is_safe_path(abs_path, EXPERIMENTS_DIR):
+            print(f"[ERROR] Path '{target_input}' is outside the experiments directory.")
+            return []
+        return [abs_path]
+
+    # Symbolic name (e.g. "queue", "archive") — resolved relative to EXPERIMENTS_DIR only
     symbolic_path = os.path.join(EXPERIMENTS_DIR, target_input)
-    if os.path.isdir(symbolic_path):
+    if os.path.isdir(symbolic_path) and _is_safe_path(symbolic_path, EXPERIMENTS_DIR):
         return sorted([
-            os.path.join(symbolic_path, f) 
-            for f in os.listdir(symbolic_path) 
+            os.path.join(symbolic_path, f)
+            for f in os.listdir(symbolic_path)
             if f.endswith(EXPERIMENT_EXTENSIONS) and not f.endswith(PROCESSED_SUFFIX)
         ])
-        
-    if os.path.isdir(target_input):
-         return sorted([
-            os.path.join(target_input, f) 
-            for f in os.listdir(target_input) 
-            if f.endswith(EXPERIMENT_EXTENSIONS) and not f.endswith(PROCESSED_SUFFIX)
-        ])
+
     return []
 
 def main():
