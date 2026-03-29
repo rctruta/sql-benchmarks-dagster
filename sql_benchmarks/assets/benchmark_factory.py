@@ -59,17 +59,19 @@ def write_benchmark_fragment(experiment_id, run_id, engine, asset_name, pk, dura
         
     return fragment_path
 
-def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, extra_context=None):
+def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, extra_context=None, pg_settings_builder=None):
     prefix = get_engine_asset_prefix(engine)
     deps = [get_scoped_asset_name(f"{prefix}{t}_table", EXP_ID) for t in used_tables]
     asset_base_name = f"{prefix}benchmark_{name}"
     asset_scoped_name = get_scoped_asset_name(asset_base_name, EXP_ID)
     tags = {}
-    
+
     # Condition: If this is Postgres, enforce the Single-Lane Limit
     if engine == "postgres":
         tags["dagster/concurrency_key"] = "postgres_exclusive"
-    tags["experiment_scope"] = "partitioned"    
+    tags["experiment_scope"] = "partitioned"
+
+    _build_pg_settings = pg_settings_builder or (lambda params: {})
 
     @asset(
         name=asset_scoped_name,
@@ -82,16 +84,8 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
     def _benchmark(context: AssetExecutionContext):
         db = getattr(context.resources, engine)
         pk = context.partition_key
-        # params: pure benchmark dimensions — never mutated, never contaminated with config
         params = SCENARIO_CONFIG.get(pk, {})
-
-        # pg_settings: execution config, separate from dimensions, only built for Postgres.
-        # Merges static execution.pg_settings from YAML with any dimension keys that are
-        # also Postgres settings (e.g. work_mem, max_parallel_workers_per_gather).
-        pg_settings = {}
-        if engine == "postgres":
-            pg_settings = dict(FULL_CONFIG.get("execution", {}).get("pg_settings", {}))
-            pg_settings.update({k: v for k, v in params.items() if k in PG_SETTING_KEYS})
+        pg_settings = _build_pg_settings(params)
 
         # SQL render — params feeds template variables; pg_settings stays out of it
         render_ctx = {f"{t}_table": f"{t}_{pk}" for t in used_tables}
@@ -150,16 +144,28 @@ def get_benchmark_assets():
     for engine in ACTIVE_ENGINES:
         path = os.path.join(target_dir, engine)
         if not os.path.exists(path): continue
-        
+
+        # Pre-compute the pg_settings builder once per engine.
+        # Merges static execution.pg_settings with any matrix dimension keys that
+        # are also Postgres session settings. Built here so _benchmark stays free
+        # of config logic — it just calls the builder with the partition's params.
+        if engine == "postgres":
+            static_pg = dict(FULL_CONFIG.get("execution", {}).get("pg_settings", {}))
+            all_dim_keys = set().union(*SCENARIO_CONFIG.values()) if SCENARIO_CONFIG else set()
+            pg_dim_keys = frozenset(k for k in all_dim_keys if k in PG_SETTING_KEYS)
+            pg_settings_builder = lambda p, _s=static_pg, _k=pg_dim_keys: {**_s, **{k: p[k] for k in _k if k in p}}
+        else:
+            pg_settings_builder = lambda p: {}
+
         for f in glob.glob(os.path.join(path, "*.sql")):
             if os.path.getsize(f) == 0:
                 print(f"[WARN] Skipping empty benchmark file: {f}")
                 continue
-                
+
             base = os.path.basename(f).replace(".sql", "")
             tables, raw = get_tables_used_in_sql(f, VALID_TABLES)
             static_meta = infer_metadata_from_sql(raw, dataset_cfg)
-            
+
             # Context Injection: Enable {{ column_name }} in SQL
             col_ctx = {}
             if dataset_cfg and 'tables' in dataset_cfg:
@@ -167,8 +173,8 @@ def get_benchmark_assets():
                      t_def = dataset_cfg['tables'].get(t, {})
                      for c in t_def.get('columns', []):
                          col_ctx[c['name']] = c['name']
-            
-            asset_wrapper = make_benchmark_asset(base, engine, tables, raw, static_meta, extra_context=col_ctx)
+
+            asset_wrapper = make_benchmark_asset(base, engine, tables, raw, static_meta, extra_context=col_ctx, pg_settings_builder=pg_settings_builder)
             
             try:
                 asset_obj = asset_wrapper.to_asset_def()
