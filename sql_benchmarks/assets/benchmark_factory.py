@@ -13,11 +13,16 @@ from ..resources.postgres_client import PG_SETTING_KEYS
 
 CTX = load_context()
 ACTIVE_ENGINES = CTX['engines']
-EXPERIMENT_META = CTX['meta'] 
+EXPERIMENT_META = CTX['meta']
 EXP_ID = EXPERIMENT_META.get("experiment_id", "unknown")
 VALID_TABLES = set(CTX['tables'])
 FULL_CONFIG = CTX['full_config']
 REPLICATION_FACTOR = FULL_CONFIG.get("execution", {}).get("replication", 1)
+_STATIC_PG = dict(FULL_CONFIG.get("execution", {}).get("pg_settings", {}))
+PG_SETTINGS_BY_PARTITION = {
+    pk: {**_STATIC_PG, **{k: v for k, v in scenario.items() if k in PG_SETTING_KEYS}}
+    for pk, scenario in SCENARIO_CONFIG.items()
+}
 
 def _smart_cast(val):
     if isinstance(val, (int, float, bool)): return val
@@ -59,7 +64,7 @@ def write_benchmark_fragment(experiment_id, run_id, engine, asset_name, pk, dura
         
     return fragment_path
 
-def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, extra_context=None, pg_settings_by_partition=None):
+def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, extra_context=None):
     prefix = get_engine_asset_prefix(engine)
     deps = [get_scoped_asset_name(f"{prefix}{t}_table", EXP_ID) for t in used_tables]
     asset_base_name = f"{prefix}benchmark_{name}"
@@ -70,8 +75,6 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
     if engine == "postgres":
         tags["dagster/concurrency_key"] = "postgres_exclusive"
     tags["experiment_scope"] = "partitioned"
-
-    _pg_settings = pg_settings_by_partition or {}
 
     @asset(
         name=asset_scoped_name,
@@ -85,7 +88,7 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
         db = getattr(context.resources, engine)
         pk = context.partition_key
         params = SCENARIO_CONFIG.get(pk, {})
-        pg_settings = _pg_settings.get(pk, {})
+        pg_settings = PG_SETTINGS_BY_PARTITION.get(pk, {})
 
         # SQL render — params feeds template variables; pg_settings stays out of it
         render_ctx = {f"{t}_table": f"{t}_{pk}" for t in used_tables}
@@ -145,17 +148,6 @@ def get_benchmark_assets():
         path = os.path.join(target_dir, engine)
         if not os.path.exists(path): continue
 
-        # Pre-compute pg_settings for every partition once, at asset-creation time.
-        # _benchmark does a plain dict lookup — no derivation, no config logic.
-        if engine == "postgres":
-            static_pg = dict(FULL_CONFIG.get("execution", {}).get("pg_settings", {}))
-            pg_settings_by_partition = {
-                pk: {**static_pg, **{k: v for k, v in scenario.items() if k in PG_SETTING_KEYS}}
-                for pk, scenario in SCENARIO_CONFIG.items()
-            }
-        else:
-            pg_settings_by_partition = {}
-
         for f in glob.glob(os.path.join(path, "*.sql")):
             if os.path.getsize(f) == 0:
                 print(f"[WARN] Skipping empty benchmark file: {f}")
@@ -173,7 +165,7 @@ def get_benchmark_assets():
                      for c in t_def.get('columns', []):
                          col_ctx[c['name']] = c['name']
 
-            asset_wrapper = make_benchmark_asset(base, engine, tables, raw, static_meta, extra_context=col_ctx, pg_settings_by_partition=pg_settings_by_partition)
+            asset_wrapper = make_benchmark_asset(base, engine, tables, raw, static_meta, extra_context=col_ctx)
             
             try:
                 asset_obj = asset_wrapper.to_asset_def()
