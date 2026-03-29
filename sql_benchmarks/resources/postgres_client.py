@@ -5,6 +5,21 @@ import pyarrow.parquet as pq
 from sqlalchemy import create_engine, text
 from typing import Dict, Any, Optional
 
+# Module-level constant so callers can identify pg-setting dimension keys
+# without importing the class or reaching into its internals.
+PG_SETTING_KEYS = frozenset({
+    "work_mem",
+    "random_page_cost",
+    "enable_hashjoin",
+    "enable_nestloop",
+    "enable_seqscan",
+    "enable_sort",
+    "enable_mergejoin",
+    "effective_cache_size",
+    "max_parallel_workers_per_gather",
+})
+
+
 class PostgresClient:
     """
     STATEFUL CLIENT: Restored original logic using Polars + PyArrow for robust ingestion.
@@ -16,32 +31,28 @@ class PostgresClient:
 
     # Allowlist of Postgres settings the benchmark harness is permitted to set.
     # Prevents arbitrary SQL injection via pg_settings YAML keys.
-    _ALLOWED_PG_SETTINGS = frozenset({
-        "work_mem",
-        "random_page_cost",
-        "enable_hashjoin",
-        "enable_nestloop",
-        "enable_seqscan",
-        "enable_sort",
-        "enable_mergejoin",
-        "effective_cache_size",
-        "max_parallel_workers_per_gather",
-    })
+    # Also exported as a module-level constant for callers that need to
+    # identify which dimension keys are pg settings (without coupling to this class).
+    _ALLOWED_PG_SETTINGS = PG_SETTING_KEYS
 
-    def run_query(self, sql: str, scenario_params: Dict[str, Any]) -> Optional[float]:
-        pg_settings = scenario_params.get("pg_settings", {})
+    def run_query(self, sql: str, partition_key: str = None, pg_settings: Dict[str, Any] = None) -> Optional[float]:
+        """Execute a benchmark query, optionally applying Postgres session settings first.
+
+        partition_key is accepted but unused — present for interface symmetry with DuckDBClient.
+        pg_settings must only contain keys from PG_SETTING_KEYS (enforced below).
+        """
+        pg_settings = pg_settings or {}
 
         with self.engine.connect() as conn:
-            if pg_settings:
-                for key, val in pg_settings.items():
-                    if key not in self._ALLOWED_PG_SETTINGS:
-                        raise ValueError(f"pg_setting '{key}' is not in the allowlist.")
-                    # Values are safe_cast to string and quoted; key is allowlisted above.
-                    conn.execute(text(f"SET {key} = :val"), {"val": str(val)})
-            
+            for key, val in pg_settings.items():
+                if key not in PG_SETTING_KEYS:
+                    raise ValueError(f"pg_setting '{key}' is not in the allowlist.")
+                # Key is allowlisted (safe to interpolate); value is parameterized.
+                conn.execute(text(f"SET {key} = :val"), {"val": str(val)})
+
             start = time.time()
             conn.execute(text(sql))
-            conn.commit() 
+            conn.commit()
             return time.time() - start
 
     # Updated signature to accept partition_key (passed from factory), even if unused logic-wise

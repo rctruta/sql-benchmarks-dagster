@@ -9,6 +9,7 @@ from dagster import asset, AssetExecutionContext, MaterializeResult, MetadataVal
 from ..partitions import partitions_def, SCENARIO_CONFIG
 from ..constants import RESULTS_DIR
 from ..utils.common import load_context, get_tables_used_in_sql, get_target_sql_dir, infer_metadata_from_sql, get_engine_asset_prefix, get_scoped_asset_name
+from ..resources.postgres_client import PG_SETTING_KEYS
 
 CTX = load_context()
 ACTIVE_ENGINES = CTX['engines']
@@ -79,64 +80,52 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
         op_tags=tags
     )
     def _benchmark(context: AssetExecutionContext):
-        # 1. Dynamic Resource Retrieval
-
         db = getattr(context.resources, engine)
-        
         pk = context.partition_key
+        # params: pure benchmark dimensions — never mutated, never contaminated with config
         params = SCENARIO_CONFIG.get(pk, {})
 
-        # Build pg_settings: start from static execution.pg_settings, then let
-        # matrix dimensions override. Any dimension key that matches an allowed
-        # pg_setting (e.g. work_mem) is folded in so it varies per partition.
-        from ..resources.postgres_client import PostgresClient
-        pg_settings = dict(FULL_CONFIG.get("execution", {}).get("pg_settings", {}))
-        for key in list(params.keys()):
-            if key in PostgresClient._ALLOWED_PG_SETTINGS:
-                pg_settings[key] = params[key]
-        if pg_settings:
-            params = {**params, "pg_settings": pg_settings}
+        # pg_settings: execution config, separate from dimensions, only built for Postgres.
+        # Merges static execution.pg_settings from YAML with any dimension keys that are
+        # also Postgres settings (e.g. work_mem, max_parallel_workers_per_gather).
+        pg_settings = {}
+        if engine == "postgres":
+            pg_settings = dict(FULL_CONFIG.get("execution", {}).get("pg_settings", {}))
+            pg_settings.update({k: v for k, v in params.items() if k in PG_SETTING_KEYS})
 
-        # 2. SQL Render
-        # Standard Resolution: {{ table_table }} -> table_partitionlabel
+        # SQL render — params feeds template variables; pg_settings stays out of it
         render_ctx = {f"{t}_table": f"{t}_{pk}" for t in used_tables}
         render_ctx.update(params)
         sql = jinja2.Template(raw_template).render(render_ctx)
-        
-        # 3. Execution (Replicated)
+
+        # Execution (replicated)
         durations = []
         for _ in range(REPLICATION_FACTOR):
-            duration = db.run_query(sql=sql, partition_key=pk, scenario_params=params)
+            duration = db.run_query(sql=sql, partition_key=pk, pg_settings=pg_settings)
             if duration is None:
                 raise ValueError(f"Engine '{engine}' execution returned None.")
             durations.append(duration)
 
-        # 4. Write Fragment (The Isolated Call)
+        # Write fragment — params is already clean dimensions, no filtering needed
         experiment_id = EXPERIMENT_META.get("experiment_id", "unknown")
-        # pg_settings is config, not a measured dimension — exclude from fragment
-        fragment_params = {k: v for k, v in params.items() if k != "pg_settings"}
-
-        saved_path = write_benchmark_fragment(
+        write_benchmark_fragment(
             experiment_id=experiment_id,
             run_id=context.run.run_id,
             engine=engine,
             asset_name=asset_scoped_name,
             pk=pk,
             durations=durations,
-            params=fragment_params
+            params=params,
         )
 
-        # 4. Return Dagster Metadata
+        # Dagster metadata — params is clean, no filtering needed
         meta = {
             "duration": MetadataValue.float(statistics.mean(durations)),
             "sql": MetadataValue.md(f"```sql\n{sql}\n```"),
-            
-            "experiment_id": EXPERIMENT_META.get("experiment_id", "unknown"),
-            "config_engine": engine, 
-            
-            # Static & Dimension Meta
-            **{k: _smart_cast(v) for k,v in static_meta.items()},
-            **{f"dim_{k}": _smart_cast(v) for k,v in params.items() if k != "pg_settings"}
+            "experiment_id": experiment_id,
+            "config_engine": engine,
+            **{k: _smart_cast(v) for k, v in static_meta.items()},
+            **{f"dim_{k}": _smart_cast(v) for k, v in params.items()},
         }
         return MaterializeResult(metadata=meta)
 

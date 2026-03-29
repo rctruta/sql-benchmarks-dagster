@@ -52,11 +52,15 @@ class DuckDBClient:
                 [filepath],
             )
              
-    def run_query(self, 
-                  sql: str, 
-                  partition_key: str, 
-                  scenario_params: Dict[str, Any]) -> Optional[float]:
-        
+    def run_query(self,
+                  sql: str,
+                  partition_key: str,
+                  pg_settings: Dict[str, Any] = None) -> Optional[float]:
+        """Execute a benchmark query against the partition's DuckDB file.
+
+        pg_settings is accepted but intentionally ignored — DuckDB manages its
+        own memory and does not use Postgres session parameters.
+        """
         db_path = self._get_db_path(partition_key)
         
         # Enable RW for Sentinel experiments (CREATE TABLE)
