@@ -9,7 +9,6 @@ from dagster import asset, AssetExecutionContext, MaterializeResult, MetadataVal
 from ..partitions import partitions_def, SCENARIO_CONFIG
 from ..constants import RESULTS_DIR
 from ..utils.common import load_context, get_tables_used_in_sql, get_target_sql_dir, infer_metadata_from_sql, get_engine_asset_prefix, get_scoped_asset_name
-from ..resources.postgres_client import PG_SETTING_KEYS
 
 CTX = load_context()
 ACTIVE_ENGINES = CTX['engines']
@@ -18,7 +17,6 @@ EXP_ID = EXPERIMENT_META.get("experiment_id", "unknown")
 VALID_TABLES = set(CTX['tables'])
 FULL_CONFIG = CTX['full_config']
 REPLICATION_FACTOR = FULL_CONFIG.get("execution", {}).get("replication", 1)
-_STATIC_PG = dict(FULL_CONFIG.get("execution", {}).get("pg_settings", {}))
 
 def _smart_cast(val):
     if isinstance(val, (int, float, bool)): return val
@@ -84,11 +82,12 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
         db = getattr(context.resources, engine)
         pk = context.partition_key
         params = SCENARIO_CONFIG.get(pk, {})
-        pg_settings = {**_STATIC_PG, **{k: v for k, v in params.items() if k in PG_SETTING_KEYS}}
+        pg_settings = params.get("pg_settings", {})
+        dims = {k: v for k, v in params.items() if k != "pg_settings"}
 
-        # SQL render — params feeds template variables; pg_settings stays out of it
+        # SQL render — dims feeds template variables; pg_settings stays out of it
         render_ctx = {f"{t}_table": f"{t}_{pk}" for t in used_tables}
-        render_ctx.update(params)
+        render_ctx.update(dims)
         sql = jinja2.Template(raw_template).render(render_ctx)
 
         # Execution (replicated)
@@ -99,7 +98,6 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
                 raise ValueError(f"Engine '{engine}' execution returned None.")
             durations.append(duration)
 
-        # Write fragment — params is already clean dimensions, no filtering needed
         experiment_id = EXPERIMENT_META.get("experiment_id", "unknown")
         write_benchmark_fragment(
             experiment_id=experiment_id,
@@ -108,17 +106,16 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
             asset_name=asset_scoped_name,
             pk=pk,
             durations=durations,
-            params=params,
+            params=dims,
         )
 
-        # Dagster metadata — params is clean, no filtering needed
         meta = {
             "duration": MetadataValue.float(statistics.mean(durations)),
             "sql": MetadataValue.md(f"```sql\n{sql}\n```"),
             "experiment_id": experiment_id,
             "config_engine": engine,
             **{k: _smart_cast(v) for k, v in static_meta.items()},
-            **{f"dim_{k}": _smart_cast(v) for k, v in params.items()},
+            **{f"dim_{k}": _smart_cast(v) for k, v in dims.items()},
         }
         return MaterializeResult(metadata=meta)
 
