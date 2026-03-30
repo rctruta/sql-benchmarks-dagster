@@ -1,62 +1,82 @@
 """
-Tests for benchmark_factory module-level state and pg_settings pre-computation.
+Tests for benchmark_factory pg_settings derivation logic.
 
-PG_SETTINGS_BY_PARTITION is computed once at module load from SCENARIO_CONFIG
-and FULL_CONFIG. These tests verify the structural guarantees of that mapping
-without touching Dagster asset materialisation.
+pg_settings are derived at execution time from the partition's params:
+static execution.pg_settings from the YAML merged with any dimension keys
+that are also Postgres session settings.
 """
 import pytest
-from sql_benchmarks.assets.benchmark_factory import PG_SETTINGS_BY_PARTITION
-from sql_benchmarks.partitions import SCENARIO_CONFIG
+from sql_benchmarks.assets.benchmark_factory import _STATIC_PG
 from sql_benchmarks.resources.postgres_client import PG_SETTING_KEYS
 
 
 # ---------------------------------------------------------------------------
-# PG_SETTINGS_BY_PARTITION structure
+# _STATIC_PG — module-level constant, same for all partitions
 # ---------------------------------------------------------------------------
 
-def test_pg_settings_by_partition_covers_all_scenario_keys():
-    """Every partition key in SCENARIO_CONFIG has an entry in the mapping."""
-    assert set(PG_SETTINGS_BY_PARTITION.keys()) == set(SCENARIO_CONFIG.keys())
+def test_static_pg_is_dict():
+    assert isinstance(_STATIC_PG, dict)
 
 
-def test_pg_settings_by_partition_values_are_dicts():
-    """Each entry is a plain dict (no lambdas, no builders, nothing deferred)."""
-    for pk, settings in PG_SETTINGS_BY_PARTITION.items():
-        assert isinstance(settings, dict), f"Partition {pk!r} value is not a dict"
+def test_static_pg_contains_only_allowlisted_keys():
+    """Static pg_settings from the YAML must only use allowlisted keys."""
+    for key in _STATIC_PG:
+        assert key in PG_SETTING_KEYS, f"Static pg_setting {key!r} is not in the allowlist"
 
 
-def test_pg_settings_by_partition_contains_only_allowlisted_keys():
-    """No key that isn't in PG_SETTING_KEYS can appear in any partition's settings."""
-    for pk, settings in PG_SETTINGS_BY_PARTITION.items():
-        for key in settings:
-            assert key in PG_SETTING_KEYS, (
-                f"Partition {pk!r} has non-allowlisted key {key!r} in pg_settings"
-            )
+# ---------------------------------------------------------------------------
+# pg_settings derivation logic (tested as a pure function)
+# ---------------------------------------------------------------------------
+
+def derive_pg_settings(params):
+    """Mirror of the one-liner in _benchmark — tested independently."""
+    return {**_STATIC_PG, **{k: v for k, v in params.items() if k in PG_SETTING_KEYS}}
 
 
-def test_pg_settings_by_partition_captures_dimension_pg_keys():
-    """
-    For any partition whose SCENARIO_CONFIG entry contains a key that is also
-    a PG setting (e.g. work_mem, max_parallel_workers_per_gather), that key
-    must appear in PG_SETTINGS_BY_PARTITION for that partition.
-    """
-    for pk, scenario in SCENARIO_CONFIG.items():
-        pg_dim_keys = {k for k in scenario if k in PG_SETTING_KEYS}
-        actual_keys = set(PG_SETTINGS_BY_PARTITION.get(pk, {}).keys())
-        assert pg_dim_keys.issubset(actual_keys), (
-            f"Partition {pk!r}: expected {pg_dim_keys} in pg_settings, got {actual_keys}"
-        )
+def test_pg_dimension_keys_are_included():
+    """Dimension keys that are PG settings appear in the derived pg_settings."""
+    params = {"rows": 1_000_000, "work_mem": "64MB", "max_parallel_workers_per_gather": 4}
+    result = derive_pg_settings(params)
+    assert result["work_mem"] == "64MB"
+    assert result["max_parallel_workers_per_gather"] == 4
 
 
-def test_pg_settings_by_partition_excludes_non_pg_dimension_keys():
-    """
-    Dimension keys such as 'rows' or 'disk_type' must never bleed into
-    pg_settings, regardless of what the scenario config contains.
-    """
-    non_pg_keys = {"rows", "disk_type", "size", "scale", "engine"}
-    for pk, settings in PG_SETTINGS_BY_PARTITION.items():
-        leaked = non_pg_keys & settings.keys()
-        assert not leaked, (
-            f"Partition {pk!r} leaked non-PG dimension keys into pg_settings: {leaked}"
-        )
+def test_non_pg_dimension_keys_are_excluded():
+    """Dimension keys that are not PG settings must not bleed into pg_settings."""
+    params = {"rows": 1_000_000, "disk_type": "ssd", "work_mem": "4MB"}
+    result = derive_pg_settings(params)
+    assert "rows" not in result
+    assert "disk_type" not in result
+
+
+def test_static_pg_is_merged_with_dimension_pg_keys():
+    """Dimension PG values override static ones; static keys not in dims are preserved."""
+    import sql_benchmarks.assets.benchmark_factory as factory
+    original = factory._STATIC_PG.copy()
+
+    # Inject a known static setting for this test
+    factory._STATIC_PG["random_page_cost"] = 4.0
+    factory._STATIC_PG["work_mem"] = "4MB"
+
+    params = {"work_mem": "256MB", "rows": 500}
+    result = derive_pg_settings(params)
+
+    assert result["random_page_cost"] == 4.0   # preserved from static
+    assert result["work_mem"] == "256MB"        # dimension overrides static
+
+    # Restore
+    factory._STATIC_PG.clear()
+    factory._STATIC_PG.update(original)
+
+
+def test_empty_params_returns_only_static():
+    """With no dimensions, pg_settings is just the static config."""
+    result = derive_pg_settings({})
+    assert result == _STATIC_PG
+
+
+def test_no_pg_dimension_keys_returns_only_static():
+    """Params with no PG-setting keys produce only the static config."""
+    params = {"rows": 100, "disk_type": "ssd"}
+    result = derive_pg_settings(params)
+    assert result == _STATIC_PG

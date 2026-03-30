@@ -19,10 +19,6 @@ VALID_TABLES = set(CTX['tables'])
 FULL_CONFIG = CTX['full_config']
 REPLICATION_FACTOR = FULL_CONFIG.get("execution", {}).get("replication", 1)
 _STATIC_PG = dict(FULL_CONFIG.get("execution", {}).get("pg_settings", {}))
-PG_SETTINGS_BY_PARTITION = {
-    pk: {**_STATIC_PG, **{k: v for k, v in scenario.items() if k in PG_SETTING_KEYS}}
-    for pk, scenario in SCENARIO_CONFIG.items()
-}
 
 def _smart_cast(val):
     if isinstance(val, (int, float, bool)): return val
@@ -88,7 +84,7 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
         db = getattr(context.resources, engine)
         pk = context.partition_key
         params = SCENARIO_CONFIG.get(pk, {})
-        pg_settings = PG_SETTINGS_BY_PARTITION.get(pk, {})
+        pg_settings = {**_STATIC_PG, **{k: v for k, v in params.items() if k in PG_SETTING_KEYS}}
 
         # SQL render — params feeds template variables; pg_settings stays out of it
         render_ctx = {f"{t}_table": f"{t}_{pk}" for t in used_tables}
