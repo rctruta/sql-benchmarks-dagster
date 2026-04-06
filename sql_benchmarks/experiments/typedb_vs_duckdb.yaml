@@ -1,0 +1,31 @@
+meta:
+  description: "TypeDB vs DuckDB selectivity benchmark"
+
+dataset:
+  source: "sql_benchmarks.plugins.data_sources.declarative_gen"
+  tables:
+    skewed_data:
+      rows: "rows"
+      columns:
+        - name: id
+          provider: sequence
+          primary_key: true
+        - name: selectivity_code
+          provider: choice
+          options: ["sel_0_1", "sel_1", "sel_5", "sel_10", "sel_20", "filler"]
+          weights: [0.001, 0.01, 0.05, 0.10, 0.20, 0.639]
+        - name: payload
+          provider: text_concat
+          prefix: "PADDING_"
+          source: id
+
+definitions:
+  rows:
+    small: 10_000
+
+execution:
+  test_suite: "selectivity"
+  replication: 3
+  engines: ["duckdb", "typedb"]
+  matrix:
+    rows: [small]

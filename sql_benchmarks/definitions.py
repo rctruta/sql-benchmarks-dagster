@@ -21,6 +21,7 @@ semantic_gate_assets = get_semantic_gate_assets(benchmark_assets)
 from .resources.postgres import PostgresEngine
 from .resources.duckdb import DuckDBEngine
 from .resources.actian import ActianEngine
+from .resources.typedb_engine import TypeDBEngine
 from .constants import DATA_DIR
 from .jobs import benchmark_job
 # from .sensors import experiment_queue_sensor
@@ -45,12 +46,56 @@ all_assets = [
     *semantic_gate_assets
 ]
 
+typedb_address = os.getenv("TYPEDB_ADDRESS", "127.0.0.1:1729")
+
+# ---------------------------------------------------------------------------
+# Relation configs — keyed by base table name (no partition-key suffix).
+# Used by TypeDBEngine.bulk_load to dispatch to bulk_load_relation.
+# ---------------------------------------------------------------------------
+
+# Supply-chain hypergraph (3-way: supplier × buyer × product)
+SUPPLY_CHAIN_RELATION_CONFIGS = {
+    "supply_contract": {
+        "roles": {
+            "supplier_id": ["supplier", "supplier_role"],
+            "buyer_id":    ["buyer",    "buyer_role"],
+            "product_id":  ["product",  "product_role"],
+        },
+        "attributes": ["volume", "price_per_unit"],
+    }
+}
+
+# Recursive supply-graph (self-referential: company × company)
+# Both roles are played by the same entity type — TypeDB handles this natively.
+# "inference": "transitive" triggers _build_transitive_inference_schema after
+# the relation is loaded, adding a 'reachable' relation + recursive rule so that
+# q_transitive_closure.sql can query full reachability without explicit recursion.
+RECURSIVE_GRAPH_RELATION_CONFIGS = {
+    "supplies": {
+        "roles": {
+            "from_id": ["company", "seller_role"],
+            "to_id":   ["company", "buyer_role"],
+        },
+        "attributes": [],
+        "inference": "transitive",
+    }
+}
+
+# Active relation config — switch this to match the current experiment.
+# The TypeDBEngine is instantiated once at Dagster load time, so only one
+# experiment's relation config can be active per process.
+ACTIVE_RELATION_CONFIGS = RECURSIVE_GRAPH_RELATION_CONFIGS
+
 defs = Definitions(
     assets=all_assets,
     resources={
         "postgres": PostgresEngine(connection_string=postgres_url),
         "duckdb": DuckDBEngine(data_folder=os.path.join(DATA_DIR, "duckdb")),
-        "actian": ActianEngine()
+        "actian": ActianEngine(),
+        "typedb": TypeDBEngine(
+            address=typedb_address,
+            relation_configs=ACTIVE_RELATION_CONFIGS,
+        ),
     },
     jobs=[benchmark_job],
 )

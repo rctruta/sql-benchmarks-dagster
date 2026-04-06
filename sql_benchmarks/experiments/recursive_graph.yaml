@@ -1,5 +1,4 @@
 meta:
-  experiment_id: "2b3b0dea"
   description: >
     Recursive graph traversal: SQL recursive CTE vs TypeDB transitive relations.
     Schema: one 'company' entity type, one self-referential 'supplies' relation.

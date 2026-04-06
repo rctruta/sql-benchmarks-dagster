@@ -181,8 +181,13 @@ def _generate_chunk(offset, size, table_model, dataset_config, params, total_row
                 results = generator_func(size, existing_data=data, **kwargs)
             else:
                 results = generator_func(size, **kwargs)
-            
-            data[col_def.name] = results
+
+            # Multi-column providers return a dict of {col_name: array}.
+            # Expand them directly into data instead of nesting under one key.
+            if isinstance(results, dict):
+                data.update(results)
+            else:
+                data[col_def.name] = results
             
     df = pl.DataFrame(data)
 

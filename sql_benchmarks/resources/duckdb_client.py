@@ -3,10 +3,20 @@ import os
 import time
 from contextlib import contextmanager
 from typing import Dict, Any, Optional
-from ..utils.system import thrash_os_cache 
-from .base_engine import IBenchmarkEngine 
+from ..utils.system import thrash_os_cache
+from .base_engine import IBenchmarkEngine
 
 # Note: DuckDBClient does NOT inherit ConfigurableResource
+
+# ---------------------------------------------------------------------------
+# Module-level partition tracker (mirrors the TypeDBEngine pattern).
+# The first bulk_load call for a given partition deletes the existing .duckdb
+# file (clean slate).  Subsequent calls for the same partition just add tables
+# via CREATE OR REPLACE TABLE, so multi-table experiments (e.g. hypergraph
+# supply chain) work correctly.  Cleared naturally between runs because each
+# execute_run.py invocation starts a fresh Python process.
+# ---------------------------------------------------------------------------
+_INITIALIZED_PARTITIONS: set = set()
 
 class DuckDBClient: 
     """
@@ -22,19 +32,23 @@ class DuckDBClient:
     
     def bulk_load(self, filepath: str, target_table_name: str, partition_key: str) -> None:
         db_path = self._get_db_path(partition_key)
-        # Ensure fresh start to avoid locks or RO states
-        if os.path.exists(db_path):
-            try:
-                os.remove(db_path)
-            except OSError as e:
-                print(f"[WARN] Could not remove existing DB file {db_path}: {e}")
 
-        # Ensure directory exists only for write/creation operations
+        # First table for this partition: wipe any stale database file for a
+        # clean slate.  Subsequent tables are added to the same file via
+        # CREATE OR REPLACE TABLE so all tables coexist.
+        if partition_key not in _INITIALIZED_PARTITIONS:
+            if os.path.exists(db_path):
+                try:
+                    os.remove(db_path)
+                except OSError as e:
+                    print(f"[WARN] Could not remove existing DB file {db_path}: {e}")
+            _INITIALIZED_PARTITIONS.add(partition_key)
+
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         sql = f"CREATE OR REPLACE TABLE {target_table_name} AS SELECT * FROM read_parquet('{filepath}')"
-        
+
         with duckdb.connect(db_path, read_only=False) as con:
-             con.execute(sql)
+            con.execute(sql)
              
     def run_query(self, 
                   sql: str, 
