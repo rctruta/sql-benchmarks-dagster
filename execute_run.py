@@ -48,10 +48,11 @@ def run_job(partition=None, reporting=False, run_all=False, dry_run=False):
         selection = AssetSelection.all()
     else:
         selection = AssetSelection.groups(
-            "data_generation", 
-            "ingestion", 
-            "dynamic_bench_postgres", 
-            "dynamic_bench_duckdb"
+            "data_generation",
+            "ingestion",
+            "dynamic_bench_postgres",
+            "dynamic_bench_duckdb",
+            "dynamic_bench_typedb",
         )
 
     # RESOLVE SELECTION

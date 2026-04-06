@@ -54,10 +54,16 @@ def parse_fragments_to_records(experiment_id):
                 if len(parts) >= 2:
                     partition_name = parts[-1]
             
+            # DNF fragments have duration_seconds=None; preserve as None in the CSV
+            # so downstream analysis can distinguish "timed out" from "0ms".
+            raw_duration = metrics.get("duration_seconds")
+            duration_val = float(raw_duration) if raw_duration is not None else None
+
             row = {
                 "Asset": asset_name,
                 "Partition": partition_name,
-                "Duration": float(metrics.get("duration_seconds", 0.0)),
+                "Duration": duration_val,
+                "DNF": bool(metrics.get("dnf", False)),
                 "Engine": str(meta.get("engine", "Unknown")),
                 "System": str(meta.get("engine")),
                 "Rows": int(params.get("rows", 0)) if "rows" in params else 0,

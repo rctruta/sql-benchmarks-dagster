@@ -93,16 +93,54 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
         sql = jinja2.Template(raw_template).render(render_ctx)
         
         # 3. Execution (Replicated)
+        # None return means the engine signalled a non-fatal failure (e.g. TypeDB
+        # stack overflow on recursive queries).  We stop after the first None and
+        # record the run as DNF rather than crashing the entire Dagster step.
         durations = []
+        dnf = False
         for _ in range(REPLICATION_FACTOR):
             duration = db.run_query(sql=sql, partition_key=pk, scenario_params=params)
             if duration is None:
-                raise ValueError(f"Engine '{engine}' execution returned None.")
+                dnf = True
+                break
             durations.append(duration)
+
+        if dnf:
+            context.log.warning(
+                f"Engine '{engine}' returned None for partition '{pk}' — "
+                f"recording as DNF (did-not-finish). "
+                f"Likely cause: server crash / stack overflow / OOM during query evaluation."
+            )
+            # Write a sentinel fragment directly (bypass write_benchmark_fragment
+            # which requires at least one duration measurement)
+            experiment_id = EXPERIMENT_META.get("experiment_id", "unknown")
+            fragment_path = os.path.join(
+                RESULTS_DIR, experiment_id, "fragments",
+                f"{asset_scoped_name}__{pk}.json"
+            )
+            os.makedirs(os.path.dirname(fragment_path), exist_ok=True)
+            import json as _json, datetime as _dt
+            _json.dump({
+                "meta": {
+                    "timestamp": _dt.datetime.now().isoformat(),
+                    "experiment_id": experiment_id,
+                    "dagster_run_id": context.run.run_id,
+                    "engine": engine,
+                    "asset": asset_scoped_name,
+                    "partition": pk,
+                },
+                "metrics": {"duration_seconds": None, "replication_factor": 0, "dnf": True},
+                "parameters": {**params, "dnf": True},
+            }, open(fragment_path, "w"), default=str, indent=2)
+            return MaterializeResult(metadata={
+                "dnf": MetadataValue.bool(True),
+                "engine": MetadataValue.text(engine),
+                "partition": MetadataValue.text(pk),
+            })
 
         # 4. Write Fragment (The Isolated Call)
         experiment_id = EXPERIMENT_META.get("experiment_id", "unknown")
-        
+
         saved_path = write_benchmark_fragment(
             experiment_id=experiment_id,
             run_id=context.run.run_id,

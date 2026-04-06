@@ -18,7 +18,16 @@ services:
       timeout: 5s
       retries: 5
 
+  typedb:
+    image: typedb/typedb:latest
+    container_name: bench_typedb
+    ports:
+      - "1729:1729"
+    volumes:
+      - typedb_bench_data:/var/lib/typedb/data
+
 volumes:
   postgres_data:
+  typedb_bench_data:
 
 
