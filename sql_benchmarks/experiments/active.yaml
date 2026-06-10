@@ -1,48 +1,52 @@
+# =============================================================================
+# RUNTIME PLACEHOLDER — DO NOT EDIT BY HAND
+# Every ./run.sh invocation overwrites this file with the experiment being
+# executed (with its computed experiment_id injected). The committed copy is
+# the DuckDB-only quickstart so a fresh clone always has a valid loader state.
+# Old timestamps on this file are expected: it is state, not source.
+# =============================================================================
+meta:
+  description: "Quickstart — DuckDB only, no Docker required. Runs in seconds."
+
 dataset:
   source: sql_benchmarks.plugins.data_sources.declarative_gen
   tables:
     analytical_data:
-      columns:
-      - name: id
-        primary_key: true
-        provider: sequence
-      - name: region
-        options:
-        - North
-        - South
-        - East
-        - West
-        provider: choice
-      - name: category
-        options:
-        - A
-        - B
-        - C
-        provider: choice
-      - max: 500.0
-        min: 10.0
-        name: price
-        provider: random_float
-      - max: 100
-        min: 1
-        name: quantity
-        provider: random_int
-      - max: 0.3
-        min: 0.0
-        name: discount
-        provider: random_float
       rows: rows
+      columns:
+        - name: id
+          provider: sequence
+          primary_key: true
+        - name: region
+          provider: choice
+          options: ["North", "South", "East", "West"]
+        - name: category
+          provider: choice
+          options: ["A", "B", "C"]
+        - name: price
+          provider: random_float
+          min: 10.0
+          max: 500.0
+        - name: quantity
+          provider: random_int
+          min: 1
+          max: 100
+        - name: discount
+          provider: random_float
+          min: 0.0
+          max: 0.30
+
 definitions:
   rows:
-    small: 10000
     tiny: 100
+    small: 10000
+
 execution:
+  test_suite: analytical_wall
   engines:
-  - duckdb
+    - duckdb
+  replication: 1
   matrix:
     rows:
-    - 100
-  replication: 1
-  test_suite: analytical_wall
-meta:
-  description: "Quickstart \u2014 DuckDB only, no Docker required. Runs in seconds."
+      - tiny
+      - small

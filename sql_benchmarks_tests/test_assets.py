@@ -224,8 +224,12 @@ def test_benchmark_asset_integration_writes_file(loaded_benchmark_assets, tmpdir
     # We need to mock the DB run_query to return a float (duration)
     # The current mock definition in 'get_mock_resource_defs' returns a MagicMock, 
     # but we need to ensure the method 'run_query' returns a float.
-    mock_db = resource_defs["postgres"].resource_fn(None)
-    mock_db.run_query.return_value = 0.5 
+    # Mock BOTH engines: assets[0]'s engine depends on active.yaml's engine
+    # list, so assuming postgres-first couples the test to config ordering
+    # (this exact coupling hid here for months until a duckdb-only
+    # active.yaml exposed it in CI).
+    for engine_name in ("postgres", "duckdb"):
+        resource_defs[engine_name].resource_fn(None).run_query.return_value = 0.5
     
     valid_keys = partitions_def.get_partition_keys()
     pk = valid_keys[0]

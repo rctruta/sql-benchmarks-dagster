@@ -59,14 +59,28 @@ def get_fallback_config():
     }
 
 # --- GLOBAL SETUP ---
-# Runs immediately. Reads YOUR file, Shrinks it, Writes it to active.yaml
+# Runs immediately. Reads YOUR file, Shrinks it, Writes it to active.yaml.
+# The original content is preserved and restored at session end so running
+# the suite never leaves active.yaml dirty in the working tree.
 os.makedirs(EXPERIMENTS_DIR, exist_ok=True)
 active_yaml_path = os.path.join(EXPERIMENTS_DIR, "active.yaml")
+
+_original_active_yaml = None
+if os.path.exists(active_yaml_path):
+    with open(active_yaml_path, "r") as f:
+        _original_active_yaml = f.read()
 
 test_config = load_real_config_and_shrink()
 
 with open(active_yaml_path, "w") as f:
     yaml.dump(test_config, f)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Restore the pre-session active.yaml (it is runtime state, not ours to keep)."""
+    if _original_active_yaml is not None:
+        with open(active_yaml_path, "w") as f:
+            f.write(_original_active_yaml)
 
 @pytest.fixture(scope="session")
 def test_context():
