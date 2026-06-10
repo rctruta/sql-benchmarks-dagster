@@ -1,0 +1,87 @@
+meta:
+  description: >
+    Hypergraph traversal vs multi-join SQL.
+    TypeDB models the supply chain as a native n-ary relation (supplier ×
+    buyer × product = supply_contract).  DuckDB uses a standard 3-way JOIN.
+    Queries are structurally equivalent — the variable is traversal strategy,
+    not business logic.
+
+dataset:
+  source: "sql_benchmarks.plugins.data_sources.declarative_gen"
+  tables:
+    supplier:
+      rows: 100
+      columns:
+        - name: id
+          provider: sequence
+        - name: name
+          provider: text_concat
+          prefix: "Supplier_"
+          source: id
+        - name: country
+          provider: choice
+          options: ["US", "EU", "APAC", "LATAM"]
+          weights: [0.30, 0.30, 0.25, 0.15]
+
+    buyer:
+      rows: 200
+      columns:
+        - name: id
+          provider: sequence
+        - name: name
+          provider: text_concat
+          prefix: "Buyer_"
+          source: id
+        - name: region
+          provider: choice
+          options: ["US", "EU", "APAC", "LATAM"]
+          weights: [0.30, 0.30, 0.25, 0.15]
+
+    product:
+      rows: 50
+      columns:
+        - name: id
+          provider: sequence
+        - name: name
+          provider: text_concat
+          prefix: "Product_"
+          source: id
+        - name: category
+          provider: choice
+          options: ["electronics", "apparel", "food", "machinery"]
+          weights: [0.30, 0.20, 0.30, 0.20]
+
+    supply_contract:
+      rows: "contracts"
+      columns:
+        - name: id
+          provider: sequence
+        - name: supplier_id
+          provider: foreign_key
+          target_table: supplier
+        - name: buyer_id
+          provider: foreign_key
+          target_table: buyer
+        - name: product_id
+          provider: foreign_key
+          target_table: product
+        - name: volume
+          provider: random_int
+          min: 10
+          max: 10000
+        - name: price_per_unit
+          provider: random_float
+          min: 1.0
+          max: 500.0
+
+definitions:
+  contracts:
+    small: 1_000
+    medium: 10_000
+
+execution:
+  test_suite: "hypergraph"
+  replication: 3
+  engines: ["duckdb", "typedb"]
+  matrix:
+    contracts: [small, medium]

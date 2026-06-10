@@ -22,13 +22,13 @@ jobs:
     - name: Install Dependencies  
       run: |
         python -m pip install --upgrade pip
-        pip install docker plotly
-        pip install -e ".[dev]"
-        echo "=== DEBUG: INSTALLED PACKAGES ==="
-        pip list
-        echo "================================="
+        pip install -r requirements.txt
 
     - name: Run Full Test Suite
+      env:
+        # This makes 'sql_benchmarks' importable without 'pip install -e .'
+        PYTHONPATH: ${{ github.workspace }}
       run: |
-        # Run all tests in the package
-        pytest sql_benchmarks_tests -v
+        # This tells pytest to ignore the Actian test file 
+        # that requires the SSH key.
+        pytest sql_benchmarks_tests/ --ignore=sql_benchmarks_tests/test_actian_integration.py -v
