@@ -14,6 +14,31 @@ def _assert_safe_identifier(value: str, label: str) -> None:
     if not _SAFE_IDENTIFIER.match(value):
         raise ValueError(f"Unsafe {label}: '{value}'. Only word characters allowed.")
 
+
+# The 'duckdb' engine_params namespace vocabulary: session settings applied
+# via SET before the measured query. Strict allowlist — an unknown key is a
+# config error and must fail loudly, never be silently ignored.
+DUCKDB_SETTING_KEYS = frozenset({
+    "threads",
+    "memory_limit",
+})
+
+# SET cannot use parameter binding; values are interpolated as quoted
+# literals, so restrict the alphabet (covers ints and sizes like '1GB').
+_SAFE_SETTING_VALUE = re.compile(r"^[A-Za-z0-9._]+$")
+
+
+def _apply_engine_params(con, engine_params: Dict[str, Any]) -> None:
+    for key, value in (engine_params or {}).items():
+        if key not in DUCKDB_SETTING_KEYS:
+            raise ValueError(
+                f"Unknown duckdb engine_params key '{key}'. "
+                f"Allowed: {sorted(DUCKDB_SETTING_KEYS)}"
+            )
+        if not _SAFE_SETTING_VALUE.match(str(value)):
+            raise ValueError(f"Unsafe value for duckdb setting '{key}': {value!r}")
+        con.execute(f"SET {key} = '{value}'")
+
 # Note: DuckDBClient does NOT inherit ConfigurableResource
 
 # ---------------------------------------------------------------------------
@@ -74,14 +99,15 @@ class DuckDBClient:
                   engine_params: Dict[str, Any] = None) -> Optional[float]:
         """Execute a benchmark query against the partition's DuckDB file.
 
-        engine_params is the 'duckdb' namespace (e.g. memory_limit, threads).
-        Not yet applied — DuckDB currently runs with defaults. Wiring these to
-        SET statements is the entry point for memory/parallelism experiments.
+        engine_params is the 'duckdb' namespace (threads, memory_limit),
+        applied via SET before timing starts so the measurement reflects the
+        configured execution, not the configuration itself.
         """
         db_path = self._get_db_path(partition_key)
-        
+
         # Enable RW for Sentinel experiments (CREATE TABLE)
         with duckdb.connect(db_path, read_only=False) as con:
+            _apply_engine_params(con, engine_params)
             start = time.time()
             # In DuckDB, multiple statements in one string are executed if separated by semicolon
             # .sql() executes them. 
