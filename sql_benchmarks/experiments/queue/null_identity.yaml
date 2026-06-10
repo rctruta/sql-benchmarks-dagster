@@ -1,5 +1,5 @@
 meta:
-  experiment_id: "null_identity_test"
+  name: "null_identity_test"
   description: "Benchmarking 3-Valued Logic (Native) vs 2-Valued Logic (Zombie) for joins with NULLs."
 
 dataset:

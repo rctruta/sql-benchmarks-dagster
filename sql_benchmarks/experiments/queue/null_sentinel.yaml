@@ -1,5 +1,5 @@
 meta:
-  experiment_id: "null_sentinel"
+  name: "null_sentinel"
   description: "Benchmarking 3-Valued Logic (Native) vs 2-Valued Logic (Zombie) for joins with NULLs."
 
 dataset:

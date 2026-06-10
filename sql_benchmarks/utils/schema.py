@@ -87,8 +87,9 @@ class ExecutionConfig(BaseModel):
 class MetaInfo(BaseModel):
     # --- V2 MIGRATION: Replaces class Config: extra = 'allow' ---
     model_config = ConfigDict(extra='allow')
-    experiment_id: Optional[str] = None
-    description: Optional[str] = None
+    # experiment_id is computed by the system (SHA-256 hash). Never set manually.
+    name: Optional[str] = None         # Short human-readable identifier, e.g. "Sort Spill Cliff"
+    description: Optional[str] = None  # Prose description of the hypothesis being tested
 
 class ExperimentSchema(BaseModel):
     meta: Optional[Dict[str, Optional[str]]] = None

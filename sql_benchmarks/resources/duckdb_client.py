@@ -1,10 +1,18 @@
 import duckdb
 import os
+import re
 import time
 from contextlib import contextmanager
 from typing import Dict, Any, Optional
 from ..utils.system import thrash_os_cache
 from .base_engine import IBenchmarkEngine
+
+_SAFE_IDENTIFIER = re.compile(r"^\w+$")  # letters, digits, underscores only
+
+
+def _assert_safe_identifier(value: str, label: str) -> None:
+    if not _SAFE_IDENTIFIER.match(value):
+        raise ValueError(f"Unsafe {label}: '{value}'. Only word characters allowed.")
 
 # Note: DuckDBClient does NOT inherit ConfigurableResource
 
@@ -33,6 +41,13 @@ class DuckDBClient:
     def bulk_load(self, filepath: str, target_table_name: str, partition_key: str) -> None:
         db_path = self._get_db_path(partition_key)
 
+        # Validate inputs before constructing SQL.
+        # Table name: DuckDB doesn't support parameterized identifiers, so we validate
+        # with a strict allowlist regex (word chars only) before interpolation.
+        # Filepath: use read_parquet(?) parameterized binding for the value.
+        _assert_safe_identifier(target_table_name, "table name")
+        filepath = os.path.realpath(filepath)  # resolve symlinks / traversal
+
         # First table for this partition: wipe any stale database file for a
         # clean slate.  Subsequent tables are added to the same file via
         # CREATE OR REPLACE TABLE so all tables coexist.
@@ -45,16 +60,21 @@ class DuckDBClient:
             _INITIALIZED_PARTITIONS.add(partition_key)
 
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
-        sql = f"CREATE OR REPLACE TABLE {target_table_name} AS SELECT * FROM read_parquet('{filepath}')"
-
         with duckdb.connect(db_path, read_only=False) as con:
-            con.execute(sql)
+            con.execute(
+                f"CREATE OR REPLACE TABLE {target_table_name} AS SELECT * FROM read_parquet(?)",
+                [filepath],
+            )
              
-    def run_query(self, 
-                  sql: str, 
-                  partition_key: str, 
-                  scenario_params: Dict[str, Any]) -> Optional[float]:
-        
+    def run_query(self,
+                  sql: str,
+                  partition_key: str,
+                  pg_settings: Dict[str, Any] = None) -> Optional[float]:
+        """Execute a benchmark query against the partition's DuckDB file.
+
+        pg_settings is accepted but intentionally ignored — DuckDB manages its
+        own memory and does not use Postgres session parameters.
+        """
         db_path = self._get_db_path(partition_key)
         
         # Enable RW for Sentinel experiments (CREATE TABLE)

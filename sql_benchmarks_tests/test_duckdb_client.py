@@ -1,39 +1,12 @@
-# sql_benchmarks_dagster/tests/resources/test_client_duckdb.py
 import pytest
 from unittest.mock import patch, MagicMock
 import os
-import time
 from duckdb import Error
 
-# Adjust import path as necessary
 from sql_benchmarks.resources.duckdb_client import DuckDBClient
 
-# --- CONSTANTS ---
 TEST_DATA_FOLDER = "/tmp/test_duckdb_data"
-TEST_DB_PATH = os.path.join(TEST_DATA_FOLDER, "benchmark_test_part.duckdb")
 
-# --- FIXTURES ---
-
-@pytest.fixture
-def clean_data_folder():
-    """Ensures a clean folder for DuckDB file creation."""
-    if os.path.exists(TEST_DATA_FOLDER):
-        for f in os.listdir(TEST_DATA_FOLDER):
-            os.remove(os.path.join(TEST_DATA_FOLDER, f))
-    os.makedirs(TEST_DATA_FOLDER, exist_ok=True)
-    yield
-    if os.path.exists(TEST_DB_PATH):
-        os.remove(TEST_DB_PATH)
-
-@pytest.fixture
-def test_data_folder_path():
-    """Returns the global test data folder path."""
-    return TEST_DATA_FOLDER
-
-@pytest.fixture
-def mock_db_path(test_data_folder_path):
-    """Returns a specific mock database path using the folder fixture."""
-    return os.path.join(test_data_folder_path, "mock_test.duckdb")
 
 @pytest.fixture
 def mock_duckdb_connect():
@@ -41,90 +14,96 @@ def mock_duckdb_connect():
     with patch("sql_benchmarks.resources.duckdb_client.duckdb") as mock_duckdb:
         mock_conn = MagicMock()
         mock_result = MagicMock()
-        mock_result.fetchall.return_value = [] 
-        
-        context_manager_mock = mock_duckdb.connect.return_value
-        context_manager_mock.__enter__.return_value = mock_conn
-        mock_conn.execute.return_value = mock_result
-        
+        mock_result.fetchall.return_value = []
+
+        ctx = mock_duckdb.connect.return_value
+        ctx.__enter__.return_value = mock_conn
+        mock_conn.sql.return_value = mock_result
+
         yield mock_duckdb.connect
 
-# --- TESTS ---
 
-def test_duckdb_client_run_query_execution_and_timing(mock_duckdb_connect):
-    """
-    Validates that the DuckDBClient correctly calls connect/execute and measures time.
-    """
+@pytest.fixture
+def test_data_folder_path():
+    return TEST_DATA_FOLDER
+
+
+# ---------------------------------------------------------------------------
+# run_query interface
+# ---------------------------------------------------------------------------
+
+def test_run_query_executes_and_returns_duration(mock_duckdb_connect):
+    """run_query opens a connection, calls .sql().fetchall(), and returns elapsed time."""
     client = DuckDBClient(data_folder=TEST_DATA_FOLDER)
-    TEST_SQL = "SELECT 1"
-    
-    with patch('time.time', side_effect=[0, 1.5]): 
-        duration = client.run_query(
-            sql=TEST_SQL, 
-            partition_key="test_part", 
-            scenario_params={"flood_size_gb": 0}
-        )
 
-    mock_duckdb_connect.assert_called_once()
-    # Implementation now uses .sql() instead of .execute()
+    with patch("time.time", side_effect=[0.0, 1.5]):
+        duration = client.run_query(sql="SELECT 1", partition_key="test_part")
+
     mock_conn = mock_duckdb_connect.return_value.__enter__.return_value
-    mock_conn.sql.assert_called_once()
+    mock_conn.sql.assert_called_once_with("SELECT 1")
     mock_conn.sql.return_value.fetchall.assert_called_once()
-    assert duration == 1.5
+    assert duration == pytest.approx(1.5)
 
-def test_duckdb_client_execute_on_file_delegation(mock_db_path):
-    """
-    Verifies that execute_on_file correctly delegates to get_connection.
-    """
-    # Uses mock_db_path fixture defined above
-    client = DuckDBClient(data_folder=os.path.dirname(mock_db_path))
-    TEST_SQL = "CREATE TABLE T"
 
-    with patch.object(client, 'get_connection') as mock_get_connection:
-        mock_conn = MagicMock()
-        mock_get_connection.return_value.__enter__.return_value = mock_conn
-
-        client.execute_on_file(TEST_SQL, mock_db_path)
-
-        mock_get_connection.assert_called_once_with(mock_db_path)
-        # execute_on_file still uses .execute()
-        mock_conn.execute.assert_called_once_with(TEST_SQL)
-
-def test_duckdb_client_propagates_duckdb_error(mock_duckdb_connect):
-    """
-    Ensures that the client does not hide or wrap a native duckdb error.
-    """
+def test_run_query_accepts_pg_settings_and_ignores_them(mock_duckdb_connect):
+    """pg_settings is accepted for interface symmetry but has no effect on execution."""
     client = DuckDBClient(data_folder=TEST_DATA_FOLDER)
-    TEST_SQL = "SELECT * FROM non_existent_table"
-    
+    pg_settings = {"work_mem": "256MB", "max_parallel_workers_per_gather": 4}
+
+    with patch("time.time", side_effect=[0.0, 0.2]):
+        duration = client.run_query(sql="SELECT 1", partition_key="test_part", pg_settings=pg_settings)
+
+    # No extra calls — settings must not have triggered any SET commands
     mock_conn = mock_duckdb_connect.return_value.__enter__.return_value
-    # Implementation uses .sql()
-    mock_conn.sql.side_effect = Error("Database table not found.")
-    
-    with pytest.raises(Error) as excinfo:
-        client.run_query(
-            sql=TEST_SQL, 
-            partition_key="test_part", 
-            scenario_params={}
-        )
+    mock_conn.sql.assert_called_once_with("SELECT 1")
+    assert duration == pytest.approx(0.2)
 
-    assert "Database table not found." in str(excinfo.value)
-    
 
-def test_duckdb_client_path_calculation(test_data_folder_path):
-    """
-    Verifies the _get_db_path utility adheres to the partitioning contract.
-    """
+def test_run_query_propagates_duckdb_error(mock_duckdb_connect):
+    """Native duckdb errors are not swallowed or wrapped."""
+    client = DuckDBClient(data_folder=TEST_DATA_FOLDER)
+
+    mock_conn = mock_duckdb_connect.return_value.__enter__.return_value
+    mock_conn.sql.side_effect = Error("Table not found.")
+
+    with pytest.raises(Error, match="Table not found."):
+        client.run_query(sql="SELECT * FROM missing", partition_key="test_part")
+
+
+# ---------------------------------------------------------------------------
+# Path calculation
+# ---------------------------------------------------------------------------
+
+def test_get_db_path_partitioned(test_data_folder_path):
     client = DuckDBClient(data_folder=test_data_folder_path)
-    
-    expected_partitioned_path = os.path.join(test_data_folder_path, "benchmark_test_part.duckdb")
-    expected_unpartitioned_path = os.path.join(test_data_folder_path, "benchmark.duckdb")
-    
-    path_partitioned = client._get_db_path("test_part")
-    assert path_partitioned == expected_partitioned_path
-    
-    path_unpartitioned = client._get_db_path(None)
-    assert path_unpartitioned == expected_unpartitioned_path
-    
-    path_other = client._get_db_path("other_part")
-    assert path_partitioned != path_other
+    path = client._get_db_path("medium__work_mem_64MB")
+    assert path == os.path.join(test_data_folder_path, "benchmark_medium__work_mem_64MB.duckdb")
+
+
+def test_get_db_path_unpartitioned(test_data_folder_path):
+    client = DuckDBClient(data_folder=test_data_folder_path)
+    path = client._get_db_path(None)
+    assert path == os.path.join(test_data_folder_path, "benchmark.duckdb")
+
+
+def test_get_db_path_different_keys_differ(test_data_folder_path):
+    client = DuckDBClient(data_folder=test_data_folder_path)
+    assert client._get_db_path("part_a") != client._get_db_path("part_b")
+
+
+# ---------------------------------------------------------------------------
+# execute_on_file delegation
+# ---------------------------------------------------------------------------
+
+def test_execute_on_file_delegates_to_get_connection():
+    client = DuckDBClient(data_folder=TEST_DATA_FOLDER)
+    db_path = os.path.join(TEST_DATA_FOLDER, "mock.duckdb")
+
+    with patch.object(client, "get_connection") as mock_get_conn:
+        mock_conn = MagicMock()
+        mock_get_conn.return_value.__enter__.return_value = mock_conn
+
+        client.execute_on_file("CREATE TABLE t (id INT)", db_path)
+
+        mock_get_conn.assert_called_once_with(db_path)
+        mock_conn.execute.assert_called_once_with("CREATE TABLE t (id INT)")

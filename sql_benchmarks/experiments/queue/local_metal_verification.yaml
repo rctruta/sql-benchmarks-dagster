@@ -1,5 +1,5 @@
 meta:
-  experiment_id: "local_metal_verification"
+  name: "local_metal_verification"
   description: "Native Verification: DuckDB vs Postgres (Final Scoped Fix)"
 
 dataset:

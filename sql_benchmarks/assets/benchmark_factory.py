@@ -12,7 +12,7 @@ from ..utils.common import load_context, get_tables_used_in_sql, get_target_sql_
 
 CTX = load_context()
 ACTIVE_ENGINES = CTX['engines']
-EXPERIMENT_META = CTX['meta'] 
+EXPERIMENT_META = CTX['meta']
 EXP_ID = EXPERIMENT_META.get("experiment_id", "unknown")
 VALID_TABLES = set(CTX['tables'])
 FULL_CONFIG = CTX['full_config']
@@ -64,11 +64,11 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
     asset_base_name = f"{prefix}benchmark_{name}"
     asset_scoped_name = get_scoped_asset_name(asset_base_name, EXP_ID)
     tags = {}
-    
+
     # Condition: If this is Postgres, enforce the Single-Lane Limit
     if engine == "postgres":
         tags["dagster/concurrency_key"] = "postgres_exclusive"
-    tags["experiment_scope"] = "partitioned"    
+    tags["experiment_scope"] = "partitioned"
 
     @asset(
         name=asset_scoped_name,
@@ -79,19 +79,17 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
         op_tags=tags
     )
     def _benchmark(context: AssetExecutionContext):
-        # 1. Dynamic Resource Retrieval
-
         db = getattr(context.resources, engine)
-        
         pk = context.partition_key
         params = SCENARIO_CONFIG.get(pk, {})
-        
-        # 2. SQL Render
-        # Standard Resolution: {{ table_table }} -> table_partitionlabel
+        pg_settings = params.get("pg_settings", {})
+        dims = {k: v for k, v in params.items() if k != "pg_settings"}
+
+        # SQL render — dims feeds template variables; pg_settings stays out of it
         render_ctx = {f"{t}_table": f"{t}_{pk}" for t in used_tables}
-        render_ctx.update(params)
+        render_ctx.update(dims)
         sql = jinja2.Template(raw_template).render(render_ctx)
-        
+
         # 3. Execution (Replicated)
         # None return means the engine signalled a non-fatal failure (e.g. TypeDB
         # stack overflow on recursive queries).  We stop after the first None and
@@ -99,7 +97,7 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
         durations = []
         dnf = False
         for _ in range(REPLICATION_FACTOR):
-            duration = db.run_query(sql=sql, partition_key=pk, scenario_params=params)
+            duration = db.run_query(sql=sql, partition_key=pk, pg_settings=pg_settings)
             if duration is None:
                 dnf = True
                 break
@@ -141,27 +139,23 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
         # 4. Write Fragment (The Isolated Call)
         experiment_id = EXPERIMENT_META.get("experiment_id", "unknown")
 
-        saved_path = write_benchmark_fragment(
+        write_benchmark_fragment(
             experiment_id=experiment_id,
             run_id=context.run.run_id,
             engine=engine,
             asset_name=asset_scoped_name,
             pk=pk,
             durations=durations,
-            params=params
+            params=dims,
         )
 
-        # 4. Return Dagster Metadata
         meta = {
             "duration": MetadataValue.float(statistics.mean(durations)),
             "sql": MetadataValue.md(f"```sql\n{sql}\n```"),
-            
-            "experiment_id": EXPERIMENT_META.get("experiment_id", "unknown"),
-            "config_engine": engine, 
-            
-            # Static & Dimension Meta
-            **{k: _smart_cast(v) for k,v in static_meta.items()},
-            **{f"dim_{k}": _smart_cast(v) for k,v in params.items() if k != "pg_settings"}
+            "experiment_id": experiment_id,
+            "config_engine": engine,
+            **{k: _smart_cast(v) for k, v in static_meta.items()},
+            **{f"dim_{k}": _smart_cast(v) for k, v in dims.items()},
         }
         return MaterializeResult(metadata=meta)
 
@@ -186,16 +180,16 @@ def get_benchmark_assets():
     for engine in ACTIVE_ENGINES:
         path = os.path.join(target_dir, engine)
         if not os.path.exists(path): continue
-        
+
         for f in glob.glob(os.path.join(path, "*.sql")):
             if os.path.getsize(f) == 0:
                 print(f"[WARN] Skipping empty benchmark file: {f}")
                 continue
-                
+
             base = os.path.basename(f).replace(".sql", "")
             tables, raw = get_tables_used_in_sql(f, VALID_TABLES)
             static_meta = infer_metadata_from_sql(raw, dataset_cfg)
-            
+
             # Context Injection: Enable {{ column_name }} in SQL
             col_ctx = {}
             if dataset_cfg and 'tables' in dataset_cfg:
@@ -203,7 +197,7 @@ def get_benchmark_assets():
                      t_def = dataset_cfg['tables'].get(t, {})
                      for c in t_def.get('columns', []):
                          col_ctx[c['name']] = c['name']
-            
+
             asset_wrapper = make_benchmark_asset(base, engine, tables, raw, static_meta, extra_context=col_ctx)
             
             try:
