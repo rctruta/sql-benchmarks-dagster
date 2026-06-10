@@ -73,9 +73,18 @@ def generate_experiment_hash(config_dict, root_dir):
     target_sql_dir = get_target_sql_dir(config_dict)
     hash_folder(target_sql_dir, ".sql", normalizer=normalize_sql)
 
-    # 3. Hash Python Assets
-    assets_dir = os.path.join(root_dir, "sql_benchmarks", "assets")
-    hash_folder(assets_dir, ".py", normalizer=normalize_python)
+    # 3. Hash Python code that can change what a measurement means:
+    #    assets/    — orchestration logic (original boundary)
+    #    resources/ — engine facades & clients (an engine bug fix must
+    #                 change the ID; see dcbd0bcc, which kept its ID across
+    #                 a quack_client behavior change)
+    #    plugins/   — data generators (a generator change changes the data)
+    for code_dir in ("assets", "resources", "plugins"):
+        hash_folder(
+            os.path.join(root_dir, "sql_benchmarks", code_dir),
+            ".py",
+            normalizer=normalize_python,
+        )
 
     return hasher.hexdigest()[:8]
 

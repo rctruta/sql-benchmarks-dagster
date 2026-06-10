@@ -19,7 +19,7 @@ The core of the system is a **Deterministic Orchestration Harness** that guarant
 The Heart of the system is the **Experiment ID**, an 8-character hash that governs the entire lifecycle. This hash is a SHA-256 fingerprint generated from:
 *   **The Config**: Every dimension in your YAML (rows, skew, parameters).
 *   **The SQL Logic**: The actual content of the benchmarked scripts.
-*   **The Python Assets**: The orchestration logic in `sql_benchmarks/assets/`.
+*   **The Code**: All measurement-relevant Python — orchestration (`assets/`), engine clients (`resources/`), and data generators (`plugins/`).
 
 **Semantic Normalization**: The hashing engine distinguishes between a logic change and a formatting change. 
 *   **SQL**: Comments, whitespace, and case are normalized before hashing.

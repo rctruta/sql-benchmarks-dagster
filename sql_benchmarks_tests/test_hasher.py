@@ -51,3 +51,37 @@ def test_hasher_sensitivity(mock_get_sql_dir, tmp_path):
     (sql_dir / "query.sql").write_text("SELECT 2;")
     hash_3 = generate_experiment_hash(config, str(root))
     assert hash_1 != hash_3
+
+
+@patch("sql_benchmarks.utils.hasher.get_target_sql_dir")
+def test_hasher_covers_all_measurement_relevant_code(mock_get_sql_dir, tmp_path):
+    """
+    The ID must change when engine code (resources/) or data generators
+    (plugins/) change — not just assets/. Regression for the original
+    boundary, where dcbd0bcc kept its ID across a quack_client change.
+    """
+    root = tmp_path
+    sql_dir = root / "sql_benchmarks/scripts/sql/joins"
+    os.makedirs(sql_dir, exist_ok=True)
+    (sql_dir / "query.sql").write_text("SELECT 1;")
+    mock_get_sql_dir.return_value = str(sql_dir)
+
+    for code_dir in ("assets", "resources", "plugins"):
+        os.makedirs(root / f"sql_benchmarks/{code_dir}", exist_ok=True)
+        (root / f"sql_benchmarks/{code_dir}/mod.py").write_text("x = 1")
+
+    config = {"execution": {"test_suite": "joins"}}
+    baseline = generate_experiment_hash(config, str(root))
+
+    for code_dir in ("assets", "resources", "plugins"):
+        (root / f"sql_benchmarks/{code_dir}/mod.py").write_text(f"x = '{code_dir} changed'")
+        new_hash = generate_experiment_hash(config, str(root))
+        assert new_hash != baseline, f"{code_dir}/ change did not change the experiment ID"
+        baseline = new_hash
+
+    # Formatting-only change in resources/ must NOT change the ID
+    # (AST normalization applies to all hashed code dirs equally).
+    (root / "sql_benchmarks/resources/mod.py").write_text(
+        "x   =   'resources changed'   # comment\n"
+    )
+    assert generate_experiment_hash(config, str(root)) == baseline
