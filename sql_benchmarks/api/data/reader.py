@@ -64,6 +64,7 @@ class ResultReader:
                     metrics=FragmentMetrics(
                         duration_seconds=float(data.get("metrics", {}).get("duration_seconds", 0.0)),
                         replication_factor=int(data.get("metrics", {}).get("replication_factor", 1)),
+                        durations_raw=data.get("metrics", {}).get("durations_raw"),
                     ),
                     parameters=data.get("parameters", {}),
                 ))

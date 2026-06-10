@@ -48,7 +48,11 @@ def write_benchmark_fragment(experiment_id, run_id, engine, asset_name, pk, dura
         },
         "metrics": {
             "duration_seconds": statistics.mean(durations),
-            "replication_factor": REPLICATION_FACTOR  
+            # Raw per-replication measurements: the spread under identical
+            # conditions is itself evidence (thermal drift, scheduler noise,
+            # cold-cache approximation). Mean alone hides it.
+            "durations_raw": durations,
+            "replication_factor": REPLICATION_FACTOR
         },
         "parameters": params # The "Jagged" Context
     }
@@ -131,7 +135,7 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
                     "asset": asset_scoped_name,
                     "partition": pk,
                 },
-                "metrics": {"duration_seconds": None, "replication_factor": 0, "dnf": True},
+                "metrics": {"duration_seconds": None, "durations_raw": [], "replication_factor": 0, "dnf": True},
                 # dnf lives in metrics; duplicating it into parameters leaked a
                 # redundant lowercase 'dnf' column into the flattened CSV.
                 "parameters": params,

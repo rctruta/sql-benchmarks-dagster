@@ -158,3 +158,24 @@ def test_live_scenario_config_engine_params_shape():
         for ns, settings in ep.items():
             assert isinstance(settings, dict), \
                 f"Partition {pk!r}: namespace {ns!r} is not a dict"
+
+
+# ---------------------------------------------------------------------------
+# fragment contract: raw replication durations are preserved
+# ---------------------------------------------------------------------------
+
+def test_fragment_stores_raw_durations(tmp_path, monkeypatch):
+    """The fragment must keep every replication measurement, not just the mean —
+    the spread under identical cold-cache conditions is itself evidence."""
+    import json
+    from sql_benchmarks.assets import benchmark_factory as bf
+    monkeypatch.setattr(bf, "RESULTS_DIR", str(tmp_path))
+
+    path = bf.write_benchmark_fragment(
+        experiment_id="rawtest1", run_id="r1", engine="duckdb",
+        asset_name="a", pk="p1", durations=[1.0, 2.0, 3.0], params={"rows": 10},
+    )
+    with open(path) as f:
+        fragment = json.load(f)
+    assert fragment["metrics"]["durations_raw"] == [1.0, 2.0, 3.0]
+    assert fragment["metrics"]["duration_seconds"] == 2.0
