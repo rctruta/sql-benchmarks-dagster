@@ -1,10 +1,41 @@
 import os
 import mmap
+import platform
+import sys
 import psutil
 import logging
 
 # Use the dagster logger so these events show up in the UI
 logger = logging.getLogger("dagster")
+
+
+def capture_environment() -> dict:
+    """
+    Records the runtime CONDITIONS of an experiment for the result capsule.
+
+    The Experiment ID fingerprints the question (config + SQL + code); this
+    block records the lab bench it was answered on. Same ID on different
+    hardware or engine versions = same question, distinct observation.
+    """
+    import duckdb
+    import dagster
+
+    env = {
+        "python": platform.python_version(),
+        "duckdb": duckdb.__version__,
+        "dagster": dagster.__version__,
+        "os": f"{platform.system()} {platform.release()}",
+        "machine": platform.machine(),
+        "cpu_count_logical": psutil.cpu_count(logical=True),
+        "cpu_count_physical": psutil.cpu_count(logical=False),
+        "ram_total_gb": round(psutil.virtual_memory().total / (1024 ** 3), 1),
+    }
+    try:
+        import polars
+        env["polars"] = polars.__version__
+    except ImportError:
+        pass
+    return env
 
 def thrash_os_cache(override_gb=None):
     """

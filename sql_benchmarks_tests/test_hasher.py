@@ -85,3 +85,48 @@ def test_hasher_covers_all_measurement_relevant_code(mock_get_sql_dir, tmp_path)
         "x   =   'resources changed'   # comment\n"
     )
     assert generate_experiment_hash(config, str(root)) == baseline
+
+
+@patch("sql_benchmarks.utils.hasher.get_target_sql_dir")
+def test_hasher_final_boundary_root_in_api_out(mock_get_sql_dir, tmp_path):
+    """
+    The ID fingerprints the QUESTION: package-root machinery (config_loader
+    assembles engine_params) is inside the boundary; api/ only reads results
+    and stays outside; experiments/ (configs+results churn) stays outside.
+    """
+    root = tmp_path
+    sql_dir = root / "sql_benchmarks/scripts/sql/joins"
+    os.makedirs(sql_dir, exist_ok=True)
+    (sql_dir / "query.sql").write_text("SELECT 1;")
+    mock_get_sql_dir.return_value = str(sql_dir)
+
+    pkg = root / "sql_benchmarks"
+    (pkg / "config_loader.py").write_text("x = 1")
+    os.makedirs(pkg / "api", exist_ok=True)
+    (pkg / "api/app.py").write_text("a = 1")
+    os.makedirs(pkg / "experiments", exist_ok=True)
+    (pkg / "experiments/gen.py").write_text("e = 1")
+
+    config = {"execution": {"test_suite": "joins"}}
+    baseline = generate_experiment_hash(config, str(root))
+
+    # Root module change -> ID changes (this is where engine_params is assembled)
+    (pkg / "config_loader.py").write_text("x = 'changed'")
+    changed = generate_experiment_hash(config, str(root))
+    assert changed != baseline, "config_loader.py change did not change the ID"
+
+    # api/ and experiments/ changes -> ID must NOT change
+    (pkg / "api/app.py").write_text("a = 'changed'")
+    (pkg / "experiments/gen.py").write_text("e = 'changed'")
+    assert generate_experiment_hash(config, str(root)) == changed
+
+
+def test_capture_environment_records_conditions():
+    """The capsule must record the bench: versions + hardware."""
+    from sql_benchmarks.utils.system import capture_environment
+    env = capture_environment()
+    for key in ("python", "duckdb", "dagster", "os", "machine",
+                "cpu_count_logical", "ram_total_gb"):
+        assert key in env, f"environment block missing '{key}'"
+    assert env["cpu_count_logical"] >= 1
+    assert env["ram_total_gb"] > 0
