@@ -1,0 +1,101 @@
+{
+  "rows": 6001215,
+  "columns": {
+    "l_orderkey": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 1500000,
+      "dtype": "Int64"
+    },
+    "l_partkey": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 200000,
+      "dtype": "Int64"
+    },
+    "l_suppkey": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 10000,
+      "dtype": "Int64"
+    },
+    "l_linenumber": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 7,
+      "dtype": "Int64"
+    },
+    "l_quantity": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 50,
+      "dtype": "Float64"
+    },
+    "l_extendedprice": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 933900,
+      "dtype": "Float64"
+    },
+    "l_discount": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 11,
+      "dtype": "Float64"
+    },
+    "l_tax": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 9,
+      "dtype": "Float64"
+    },
+    "l_returnflag": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 3,
+      "dtype": "String"
+    },
+    "l_linestatus": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 2,
+      "dtype": "String"
+    },
+    "l_shipdate": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 2526,
+      "dtype": "Date"
+    },
+    "l_commitdate": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 2466,
+      "dtype": "Date"
+    },
+    "l_receiptdate": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 2554,
+      "dtype": "Date"
+    },
+    "l_shipinstruct": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 4,
+      "dtype": "String"
+    },
+    "l_shipmode": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 7,
+      "dtype": "String"
+    },
+    "l_comment": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 3610733,
+      "dtype": "String"
+    }
+  }
+}

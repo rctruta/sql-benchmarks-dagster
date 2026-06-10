@@ -1,0 +1,59 @@
+{
+  "rows": 1500000,
+  "columns": {
+    "o_orderkey": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 1500000,
+      "dtype": "Int64"
+    },
+    "o_custkey": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 99996,
+      "dtype": "Int64"
+    },
+    "o_orderstatus": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 3,
+      "dtype": "String"
+    },
+    "o_totalprice": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 1464556,
+      "dtype": "Float64"
+    },
+    "o_orderdate": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 2406,
+      "dtype": "Date"
+    },
+    "o_orderpriority": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 5,
+      "dtype": "String"
+    },
+    "o_clerk": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 1000,
+      "dtype": "String"
+    },
+    "o_shippriority": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 1,
+      "dtype": "Int32"
+    },
+    "o_comment": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 1387872,
+      "dtype": "String"
+    }
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "rows": 10000000,
+  "columns": {
+    "id": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 10000000,
+      "dtype": "Int64"
+    },
+    "region": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 4,
+      "dtype": "String"
+    },
+    "category": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 3,
+      "dtype": "String"
+    },
+    "price": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 10000000,
+      "dtype": "Float64"
+    },
+    "quantity": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 99,
+      "dtype": "Int64"
+    },
+    "discount": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 10000000,
+      "dtype": "Float64"
+    }
+  }
+}

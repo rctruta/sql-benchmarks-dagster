@@ -1,0 +1,7 @@
+Asset,Partition,Duration,Duration_Min,Duration_Max,DNF,Engine,System,Rows,Selectivity,scale_factor
+e_25ce1385__quack_benchmark_q3_shipping_priority,small,,,,true,quack,quack,0,0.0,0.1
+e_25ce1385__duckdb_benchmark_q3_shipping_priority,small,0.010555839538574219,0.008195161819458008,0.016264915466308594,false,duckdb,duckdb,0,0.0,0.1
+e_25ce1385__quack_pushdown_benchmark_q3_shipping_priority,small,0.018269729614257813,0.01720595359802246,0.02060699462890625,false,quack_pushdown,quack_pushdown,0,0.0,0.1
+e_25ce1385__quack_benchmark_q3_shipping_priority,medium,,,,true,quack,quack,0,0.0,1.0
+e_25ce1385__quack_pushdown_benchmark_q3_shipping_priority,medium,0.0483823299407959,0.0466151237487793,0.05404019355773926,false,quack_pushdown,quack_pushdown,0,0.0,1.0
+e_25ce1385__duckdb_benchmark_q3_shipping_priority,medium,0.028497600555419923,0.024549007415771484,0.040051937103271484,false,duckdb,duckdb,0,0.0,1.0

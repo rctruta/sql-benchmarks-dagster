@@ -1,0 +1,66 @@
+meta:
+  name: 'Quack Execution Modes: Attach vs Pushdown vs In-Process'
+  description: 'Mechanism experiment for the Quack protocol (DuckDB 1.5.3 beta). Prior
+    measurement (experiment b82b4eae) showed attach-mode protocol overhead GROWS with
+    scan size (2.7x at 100K rows, 4.9x at 1M) even though the analytical_wall result
+    set is a constant 12 rows. Hypothesis: in attach mode (ATTACH + USE) the client
+    plans the query and streams table data over HTTP; remote.query() pushdown executes
+    fully server-side, so its overhead curve should stay flat at the constant cost
+    of shipping 12 result rows. Three variants, identical data, identical SQL, identical
+    cold-cache discipline: duckdb (in-process floor), quack (attach), quack_pushdown.
+
+    '
+  experiment_id: a3fe0c5f
+dataset:
+  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  tables:
+    analytical_data:
+      rows: rows
+      columns:
+      - name: id
+        provider: sequence
+        primary_key: true
+      - name: region
+        provider: choice
+        options:
+        - North
+        - South
+        - East
+        - West
+      - name: category
+        provider: choice
+        options:
+        - A
+        - B
+        - C
+      - name: price
+        provider: random_float
+        min_value: 10.0
+        max_value: 500.0
+      - name: quantity
+        provider: random_int
+        min_value: 1
+        max_value: 100
+      - name: discount
+        provider: random_float
+        min_value: 0.0
+        max_value: 0.3
+definitions:
+  rows:
+    tiny: 1000
+    small: 100000
+    medium: 1000000
+    large: 10000000
+execution:
+  test_suite: analytical_wall
+  engines:
+  - duckdb
+  - quack
+  - quack_pushdown
+  replication: 3
+  matrix:
+    rows:
+    - tiny
+    - small
+    - medium
+    - large

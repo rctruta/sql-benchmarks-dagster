@@ -1,0 +1,17 @@
+Asset,Partition,Duration,Duration_Min,Duration_Max,DNF,Engine,System,Rows,Selectivity,duckdb.threads,rows
+e_45db01a4__duckdb_benchmark_analytical_wall,4_medium,0.014091396331787109,0.013898134231567383,0.01434016227722168,false,duckdb,duckdb,1000000,0.0,4,1000000
+e_45db01a4__duckdb_benchmark_analytical_wall,8_medium,0.012765216827392577,0.011049032211303711,0.01380300521850586,false,duckdb,duckdb,1000000,0.0,8,1000000
+e_45db01a4__quack_pushdown_benchmark_analytical_wall,1_medium,0.02483067512512207,0.02443861961364746,0.025943994522094727,false,quack_pushdown,quack_pushdown,1000000,0.0,1,1000000
+e_45db01a4__duckdb_benchmark_analytical_wall,1_medium,0.044631147384643556,0.043981075286865234,0.045130014419555664,false,duckdb,duckdb,1000000,0.0,1,1000000
+e_45db01a4__duckdb_benchmark_analytical_wall,2_medium,0.024012279510498048,0.02377915382385254,0.02431631088256836,false,duckdb,duckdb,1000000,0.0,2,1000000
+e_45db01a4__quack_pushdown_benchmark_analytical_wall,8_medium,0.024353218078613282,0.023003816604614258,0.025582075119018555,false,quack_pushdown,quack_pushdown,1000000,0.0,8,1000000
+e_45db01a4__quack_pushdown_benchmark_analytical_wall,2_medium,0.024868345260620116,0.023199081420898438,0.028255939483642578,false,quack_pushdown,quack_pushdown,1000000,0.0,2,1000000
+e_45db01a4__quack_pushdown_benchmark_analytical_wall,4_medium,0.024616765975952148,0.02372884750366211,0.025603771209716797,false,quack_pushdown,quack_pushdown,1000000,0.0,4,1000000
+e_45db01a4__quack_pushdown_benchmark_analytical_wall,8_large,0.14773640632629395,0.1447160243988037,0.15084218978881836,false,quack_pushdown,quack_pushdown,10000000,0.0,8,10000000
+e_45db01a4__quack_pushdown_benchmark_analytical_wall,1_large,0.15771007537841797,0.14617514610290527,0.18415617942810059,false,quack_pushdown,quack_pushdown,10000000,0.0,1,10000000
+e_45db01a4__duckdb_benchmark_analytical_wall,4_large,0.11830267906188965,0.11574673652648926,0.12309718132019043,false,duckdb,duckdb,10000000,0.0,4,10000000
+e_45db01a4__duckdb_benchmark_analytical_wall,8_large,0.07673435211181641,0.07478499412536621,0.0793607234954834,false,duckdb,duckdb,10000000,0.0,8,10000000
+e_45db01a4__duckdb_benchmark_analytical_wall,1_large,0.43280858993530275,0.4299149513244629,0.43441104888916016,false,duckdb,duckdb,10000000,0.0,1,10000000
+e_45db01a4__quack_pushdown_benchmark_analytical_wall,4_large,0.14767889976501464,0.14592480659484863,0.1492772102355957,false,quack_pushdown,quack_pushdown,10000000,0.0,4,10000000
+e_45db01a4__quack_pushdown_benchmark_analytical_wall,2_large,0.14866080284118652,0.1464231014251709,0.1521930694580078,false,quack_pushdown,quack_pushdown,10000000,0.0,2,10000000
+e_45db01a4__duckdb_benchmark_analytical_wall,2_large,0.21919550895690917,0.21816396713256836,0.2204580307006836,false,duckdb,duckdb,10000000,0.0,2,10000000

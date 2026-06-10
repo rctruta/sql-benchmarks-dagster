@@ -1,22 +1,52 @@
+# =============================================================================
+# RUNTIME PLACEHOLDER — DO NOT EDIT BY HAND
+# Every ./run.sh invocation overwrites this file with the experiment being
+# executed (with its computed experiment_id injected). The committed copy is
+# the DuckDB-only quickstart so a fresh clone always has a valid loader state.
+# Old timestamps on this file are expected: it is state, not source.
+# =============================================================================
+meta:
+  description: "Quickstart — DuckDB only, no Docker required. Runs in seconds."
+
 dataset:
   source: sql_benchmarks.plugins.data_sources.declarative_gen
   tables:
-    skewed_data:
+    analytical_data:
+      rows: rows
       columns:
-      - name: id
-        provider: sequence
-      rows: 100
+        - name: id
+          provider: sequence
+          primary_key: true
+        - name: region
+          provider: choice
+          options: ["North", "South", "East", "West"]
+        - name: category
+          provider: choice
+          options: ["A", "B", "C"]
+        - name: price
+          provider: random_float
+          min: 10.0
+          max: 500.0
+        - name: quantity
+          provider: random_int
+          min: 1
+          max: 100
+        - name: discount
+          provider: random_float
+          min: 0.0
+          max: 0.30
+
+definitions:
+  rows:
+    tiny: 100
+    small: 10000
+
 execution:
+  test_suite: analytical_wall
   engines:
-  - postgres
-  - duckdb
+    - duckdb
+  replication: 1
   matrix:
-    disk_type:
-    - ssd
-    - hdd
     rows:
-    - 100
-  replication: 3
-  test_suite: selectivity
-meta:
-  description: Clean architecture test
+      - tiny
+      - small
