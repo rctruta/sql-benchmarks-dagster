@@ -207,6 +207,7 @@ def get_engine_asset_prefix(engine_name: str) -> str:
 # over a client-server protocol — identical dialect, different transport.
 ENGINE_SQL_DIALECTS = {
     "quack": "duckdb",
+    "quack_pushdown": "duckdb",
 }
 
 def get_engine_sql_dialect(engine_name: str) -> str:

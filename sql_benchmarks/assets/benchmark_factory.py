@@ -66,8 +66,8 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
     tags = {}
 
     # Single-Lane Limit for engines with exclusive infrastructure:
-    # postgres restarts a shared Docker container; quack binds a fixed port.
-    if engine in ("postgres", "quack"):
+    # postgres restarts a shared Docker container; quack variants bind fixed ports.
+    if engine in ("postgres", "quack", "quack_pushdown"):
         tags["dagster/concurrency_key"] = f"{engine}_exclusive"
     tags["experiment_scope"] = "partitioned"
 

@@ -21,10 +21,14 @@ class QuackEngine(ConfigurableResource):
     data_folder: str
     port: int = 9494
     token: str = "sb-local-quack-token"
+    # attach mode (False): client-side planning via USE remote.
+    # pushdown (True): SQL text shipped via remote.query() — server-side execution.
+    pushdown: bool = False
     model_config = ConfigDict(extra='forbid')
 
     def _get_client(self) -> QuackClient:
-        return QuackClient(data_folder=self.data_folder, port=self.port, token=self.token)
+        return QuackClient(data_folder=self.data_folder, port=self.port,
+                           token=self.token, pushdown=self.pushdown)
 
     # --- IBenchmarkEngine Implementation (Delegation) ---
 
