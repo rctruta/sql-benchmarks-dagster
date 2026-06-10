@@ -1,0 +1,53 @@
+{
+  "rows": 15000,
+  "columns": {
+    "c_custkey": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 15000,
+      "dtype": "Int64"
+    },
+    "c_name": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 15000,
+      "dtype": "String"
+    },
+    "c_address": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 15000,
+      "dtype": "String"
+    },
+    "c_nationkey": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 25,
+      "dtype": "Int32"
+    },
+    "c_phone": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 15000,
+      "dtype": "String"
+    },
+    "c_acctbal": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 14887,
+      "dtype": "Float64"
+    },
+    "c_mktsegment": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 5,
+      "dtype": "String"
+    },
+    "c_comment": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 14988,
+      "dtype": "String"
+    }
+  }
+}

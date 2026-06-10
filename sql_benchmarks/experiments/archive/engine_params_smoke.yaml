@@ -1,0 +1,55 @@
+meta:
+  name: engine_params smoke
+  description: Verifies namespaced engine_params flow end-to-end (DuckDB only).
+  experiment_id: aeb14dba
+dataset:
+  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  tables:
+    analytical_data:
+      rows: rows
+      columns:
+      - name: id
+        provider: sequence
+        primary_key: true
+      - name: region
+        provider: choice
+        options:
+        - North
+        - South
+        - East
+        - West
+      - name: category
+        provider: choice
+        options:
+        - A
+        - B
+        - C
+      - name: price
+        provider: random_float
+        min: 10.0
+        max: 500.0
+      - name: quantity
+        provider: random_int
+        min: 1
+        max: 100
+      - name: discount
+        provider: random_float
+        min: 0.0
+        max: 0.3
+definitions:
+  rows:
+    tiny: 1000
+execution:
+  test_suite: analytical_wall
+  engines:
+  - duckdb
+  replication: 1
+  engine_params:
+    duckdb:
+      memory_limit: 1GB
+  matrix:
+    rows:
+    - tiny
+    duckdb.threads:
+    - 2
+    - 4
