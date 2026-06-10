@@ -117,3 +117,31 @@ def test_parse_fragments_multi_partition_flow(mock_results_dir):
     
     assert records[1]["Partition"] == "part_b"
     assert records[1]["null_prob"] == 0.5
+
+
+def test_parse_fragments_exposes_replication_spread(mock_results_dir):
+    """Raw per-replication durations surface as Duration_Min/Duration_Max."""
+    target_id = "spread01"
+    create_fragment(mock_results_dir, target_id, "asset__p1.json", {
+        "meta": {"experiment_id": target_id, "engine": "duckdb"},
+        "metrics": {"duration_seconds": 2.0, "durations_raw": [1.0, 2.0, 3.0],
+                    "replication_factor": 3},
+        "parameters": {"rows": 100},
+    })
+    (record,) = parse_fragments_to_records(target_id)
+    assert record["Duration"] == 2.0
+    assert record["Duration_Min"] == 1.0
+    assert record["Duration_Max"] == 3.0
+
+
+def test_parse_fragments_backcompat_without_raw_durations(mock_results_dir):
+    """Fragments written before raw capture fall back to mean for min/max."""
+    target_id = "legacy01"
+    create_fragment(mock_results_dir, target_id, "asset__p1.json", {
+        "meta": {"experiment_id": target_id, "engine": "duckdb"},
+        "metrics": {"duration_seconds": 1.5},
+        "parameters": {},
+    })
+    (record,) = parse_fragments_to_records(target_id)
+    assert record["Duration_Min"] == 1.5
+    assert record["Duration_Max"] == 1.5

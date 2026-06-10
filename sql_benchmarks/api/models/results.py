@@ -14,6 +14,9 @@ class FragmentMeta(BaseModel):
 class FragmentMetrics(BaseModel):
     duration_seconds: float
     replication_factor: int
+    # Raw per-replication measurements; None for fragments written before
+    # raw capture (or DNF sentinels, which carry an empty list).
+    durations_raw: Optional[List[float]] = None
 
 
 class Fragment(BaseModel):

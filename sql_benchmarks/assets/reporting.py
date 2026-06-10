@@ -59,10 +59,17 @@ def parse_fragments_to_records(experiment_id):
             raw_duration = metrics.get("duration_seconds")
             duration_val = float(raw_duration) if raw_duration is not None else None
 
+            # Per-replication spread (older fragments lack durations_raw)
+            raw_list = metrics.get("durations_raw") or []
+            duration_min = min(raw_list) if raw_list else duration_val
+            duration_max = max(raw_list) if raw_list else duration_val
+
             row = {
                 "Asset": asset_name,
                 "Partition": partition_name,
                 "Duration": duration_val,
+                "Duration_Min": duration_min,
+                "Duration_Max": duration_max,
                 "DNF": bool(metrics.get("dnf", False)),
                 "Engine": str(meta.get("engine", "Unknown")),
                 "System": str(meta.get("engine")),
@@ -159,7 +166,7 @@ def performance_dashboard(context: AssetExecutionContext):
     figures_html = []
     
     # Identify Matrix Parameters (Columns that are not "System", "Asset", "Duration", "Engine", "Partition")
-    excluded_cols = {"Asset", "Partition", "Duration", "Engine", "System"}
+    excluded_cols = {"Asset", "Partition", "Duration", "Duration_Min", "Duration_Max", "Engine", "System"}
     matrix_params = [c for c in pldf.columns if c not in excluded_cols and pd.api.types.is_numeric_dtype(pldf[c])]
     
     context.log.info(f"Matrix Params Detected: {matrix_params}")
