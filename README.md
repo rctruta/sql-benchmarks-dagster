@@ -43,7 +43,7 @@ Benchmarks are defined as N-dimensional matrices in YAML. The platform expands t
 
 ### Prerequisites
 *   **Docker & Docker Compose**: For containerized engine management.
-*   **Python 3.10+**: Core platform runtime.
+*   **Python 3.11+**: Core platform runtime.
 *   **Dagster**: Orchestration and state management.
 
 ### Installation & Setup
