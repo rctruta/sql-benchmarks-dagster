@@ -23,6 +23,7 @@ ENGINE_CLASSES = [
     ("sql_benchmarks.resources.duckdb", "DuckDBEngine"),
     ("sql_benchmarks.resources.postgres", "PostgresEngine"),
     ("sql_benchmarks.resources.typedb_engine", "TypeDBEngine"),
+    ("sql_benchmarks.resources.quack", "QuackEngine"),
 ]
 
 # Keyword arguments used by sql_benchmarks/assets/benchmark_factory.py

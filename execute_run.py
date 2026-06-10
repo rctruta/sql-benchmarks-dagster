@@ -3,7 +3,7 @@ import sys
 import argparse
 from dagster import AssetSelection
 from sql_benchmarks.definitions import defs, all_assets
-from sql_benchmarks.utils.common import load_context
+from sql_benchmarks.utils.common import load_context, get_engine_benchmark_group
 
 def run_job(partition=None, reporting=False, run_all=False, dry_run=False):
     """
@@ -47,12 +47,15 @@ def run_job(partition=None, reporting=False, run_all=False, dry_run=False):
     elif run_all:
         selection = AssetSelection.all()
     else:
+        # Benchmark groups are derived from the active experiment's engines —
+        # a hardcoded list here silently drops any engine it doesn't mention
+        # (this is exactly how quack and actian benchmarks once vanished
+        # from runs while ingestion still executed).
+        active_engines = (load_context() or {}).get('engines', [])
         selection = AssetSelection.groups(
             "data_generation",
             "ingestion",
-            "dynamic_bench_postgres",
-            "dynamic_bench_duckdb",
-            "dynamic_bench_typedb",
+            *[get_engine_benchmark_group(e) for e in active_engines],
         )
 
     # RESOLVE SELECTION

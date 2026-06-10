@@ -22,6 +22,7 @@ from .resources.postgres import PostgresEngine
 from .resources.duckdb import DuckDBEngine
 from .resources.actian import ActianEngine
 from .resources.typedb_engine import TypeDBEngine
+from .resources.quack import QuackEngine
 from .constants import DATA_DIR
 from .jobs import benchmark_job
 # from .sensors import experiment_queue_sensor
@@ -91,6 +92,11 @@ defs = Definitions(
     resources={
         "postgres": PostgresEngine(connection_string=postgres_url),
         "duckdb": DuckDBEngine(data_folder=os.path.join(DATA_DIR, "duckdb")),
+        "quack": QuackEngine(
+            data_folder=os.path.join(DATA_DIR, "quack"),
+            port=int(os.getenv("SB_QUACK_PORT", "9494")),
+            token=os.getenv("SB_QUACK_TOKEN", "sb-local-quack-token"),
+        ),
         "actian": ActianEngine(),
         "typedb": TypeDBEngine(
             address=typedb_address,
