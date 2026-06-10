@@ -1,71 +1,160 @@
 """
-Tests for pg_settings preparation in config_loader and consumption in benchmark_factory.
-
-pg_settings are built once in config_loader._compile_scenario_config and stored
-as a nested key in SCENARIO_CONFIG. benchmark_factory reads them out directly —
-no derivation at execution time.
+Tests for namespaced engine_params: assembled once in
+config_loader._compile_scenario_config, stored under the 'engine_params' key
+of each partition's params, and sliced per engine by benchmark_factory
+(each engine receives ONLY its own namespace).
 """
+import os
+import textwrap
+
 import pytest
+from sql_benchmarks.config_loader import ConfigLoader
 from sql_benchmarks.partitions import SCENARIO_CONFIG
-from sql_benchmarks.resources.postgres_client import PG_SETTING_KEYS
+
+
+def make_loader(tmp_path, yaml_body: str) -> ConfigLoader:
+    path = os.path.join(str(tmp_path), "exp.yaml")
+    with open(path, "w") as f:
+        f.write(textwrap.dedent(yaml_body))
+    return ConfigLoader(config_path=path)
+
+
+BASE_CONFIG = """
+    meta:
+      name: engine_params_test
+
+    definitions:
+      rows:
+        tiny: 1000
+        small: 100000
+
+    execution:
+      test_suite: sort_spill
+      engines: [postgres, duckdb]
+      engine_params:
+        postgres:
+          random_page_cost: 1.1
+        duckdb:
+          memory_limit: 1GB
+      matrix:
+        rows: [tiny, small]
+        postgres.work_mem: [4MB, 1GB]
+"""
 
 
 # ---------------------------------------------------------------------------
-# config_loader: pg_settings prepared at load time
+# config_loader: namespace assembly
 # ---------------------------------------------------------------------------
 
-def test_scenario_config_pg_settings_values_are_dicts():
-    """Every pg_settings entry in SCENARIO_CONFIG is a plain dict."""
-    for pk, params in SCENARIO_CONFIG.items():
-        if "pg_settings" in params:
-            assert isinstance(params["pg_settings"], dict), \
-                f"Partition {pk!r}: pg_settings is not a dict"
+def test_namespaced_dimension_lands_in_engine_namespace(tmp_path):
+    loader = make_loader(tmp_path, BASE_CONFIG)
+    for pk, params in loader.scenario_config.items():
+        ep = params["engine_params"]
+        assert ep["postgres"]["work_mem"] in ("4MB", "1GB"), \
+            f"Partition {pk!r}: namespaced dim missing from postgres namespace"
 
 
-def test_scenario_config_pg_settings_contains_only_allowlisted_keys():
-    """No key outside PG_SETTING_KEYS can appear in any partition's pg_settings."""
-    for pk, params in SCENARIO_CONFIG.items():
-        for key in params.get("pg_settings", {}):
-            assert key in PG_SETTING_KEYS, \
-                f"Partition {pk!r}: non-allowlisted key {key!r} in pg_settings"
+def test_static_block_merges_with_varied_dimensions(tmp_path):
+    loader = make_loader(tmp_path, BASE_CONFIG)
+    for pk, params in loader.scenario_config.items():
+        ep = params["engine_params"]
+        # static value present alongside the varied one
+        assert ep["postgres"]["random_page_cost"] == 1.1
+        assert ep["duckdb"] == {"memory_limit": "1GB"}
 
 
-def test_scenario_config_pg_dimension_keys_appear_in_pg_settings():
-    """
-    If a partition's dimensions include a PG setting key (e.g. work_mem),
-    that key must appear in the nested pg_settings dict.
-    """
-    for pk, params in SCENARIO_CONFIG.items():
-        pg_dim_keys = {k for k in params if k in PG_SETTING_KEYS}
-        if pg_dim_keys:
-            assert "pg_settings" in params, \
-                f"Partition {pk!r} has PG dimension keys {pg_dim_keys} but no pg_settings entry"
-            for key in pg_dim_keys:
-                assert key in params["pg_settings"], \
-                    f"Partition {pk!r}: dimension key {key!r} missing from pg_settings"
+def test_matrix_dimension_overrides_static_block(tmp_path):
+    loader = make_loader(tmp_path, """
+        meta: {name: override_test}
+        execution:
+          engines: [postgres]
+          engine_params:
+            postgres: {work_mem: 16MB}
+          matrix:
+            rows: [100]
+            postgres.work_mem: [4MB]
+    """)
+    (params,) = loader.scenario_config.values()
+    assert params["engine_params"]["postgres"]["work_mem"] == "4MB"
 
 
-def test_scenario_config_non_pg_dimension_keys_not_in_pg_settings():
-    """Dimension keys like 'rows' must not appear in pg_settings."""
-    non_pg_keys = {"rows", "disk_type", "size", "scale"}
-    for pk, params in SCENARIO_CONFIG.items():
-        leaked = non_pg_keys & set(params.get("pg_settings", {}).keys())
-        assert not leaked, \
-            f"Partition {pk!r}: non-PG keys {leaked} leaked into pg_settings"
+def test_partitions_do_not_share_namespace_dicts(tmp_path):
+    """Mutating one partition's engine_params must not affect another's."""
+    loader = make_loader(tmp_path, BASE_CONFIG)
+    partitions = list(loader.scenario_config.values())
+    partitions[0]["engine_params"]["postgres"]["poisoned"] = True
+    assert "poisoned" not in partitions[1]["engine_params"]["postgres"]
+
+
+def test_plain_dimensions_do_not_leak_into_engine_params(tmp_path):
+    loader = make_loader(tmp_path, BASE_CONFIG)
+    for params in loader.scenario_config.values():
+        for ns, settings in params["engine_params"].items():
+            assert "rows" not in settings, f"'rows' leaked into namespace {ns!r}"
+
+
+def test_no_engine_params_key_when_none_defined(tmp_path):
+    loader = make_loader(tmp_path, """
+        meta: {name: plain_test}
+        execution:
+          engines: [duckdb]
+          matrix:
+            rows: [100]
+    """)
+    (params,) = loader.scenario_config.values()
+    assert "engine_params" not in params
+
+
+def test_unknown_namespace_is_carried_not_dropped(tmp_path):
+    """Future engines (e.g. quack) are first-class: the loader is namespace-agnostic."""
+    loader = make_loader(tmp_path, """
+        meta: {name: quack_test}
+        execution:
+          engines: [duckdb]
+          engine_params:
+            quack: {server_threads: 8}
+          matrix:
+            rows: [100]
+    """)
+    (params,) = loader.scenario_config.values()
+    assert params["engine_params"]["quack"] == {"server_threads": 8}
 
 
 # ---------------------------------------------------------------------------
-# benchmark_factory: plain lookup, no derivation
+# factory slice: each engine sees only its own namespace
 # ---------------------------------------------------------------------------
 
-def test_benchmark_factory_reads_pg_settings_from_params():
-    """
-    _benchmark reads pg_settings via params.get('pg_settings', {}).
-    Verify the key is present and consistent for partitions that have PG dimensions.
-    """
+def test_factory_slice_isolates_namespaces(tmp_path):
+    """Replicates the exact lookup benchmark_factory performs per engine."""
+    loader = make_loader(tmp_path, BASE_CONFIG)
+    for params in loader.scenario_config.values():
+        pg_slice = params.get("engine_params", {}).get("postgres", {})
+        duck_slice = params.get("engine_params", {}).get("duckdb", {})
+        assert "memory_limit" not in pg_slice
+        assert "work_mem" not in duck_slice
+        # engines not in the config get an empty dict, never an error
+        assert params.get("engine_params", {}).get("quack", {}) == {}
+
+
+def test_dims_exclude_engine_params_but_keep_dotted_keys(tmp_path):
+    """Replicates the factory's dims split: traceability keys stay, nest goes."""
+    loader = make_loader(tmp_path, BASE_CONFIG)
+    for params in loader.scenario_config.values():
+        dims = {k: v for k, v in params.items() if k != "engine_params"}
+        assert "engine_params" not in dims
+        assert "postgres.work_mem" in dims  # dotted dim remains for fragments/CSV
+        assert "rows" in dims
+
+
+# ---------------------------------------------------------------------------
+# live SCENARIO_CONFIG sanity (whatever active.yaml currently is)
+# ---------------------------------------------------------------------------
+
+def test_live_scenario_config_engine_params_shape():
+    """If active.yaml defines engine_params, it must be Dict[str, Dict]."""
     for pk, params in SCENARIO_CONFIG.items():
-        pg_settings = params.get("pg_settings", {})
-        # All keys must be allowlisted
-        for key in pg_settings:
-            assert key in PG_SETTING_KEYS, \
-                f"Partition {pk!r}: pg_settings key {key!r} not in allowlist"
+        ep = params.get("engine_params", {})
+        assert isinstance(ep, dict)
+        for ns, settings in ep.items():
+            assert isinstance(settings, dict), \
+                f"Partition {pk!r}: namespace {ns!r} is not a dict"

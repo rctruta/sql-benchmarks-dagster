@@ -50,14 +50,14 @@ def test_duckdb_engine_delegates_run_query(mock_duckdb_connect):
         engine = DuckDBEngine(data_folder=TEST_CONN)
         
         # Define parameters to check if they were passed correctly
-        test_params = {"flood_size_gb": 4}
+        test_settings = {"memory_limit": "1GB"}
         TEST_SQL = "SELECT count(*)"
 
         # 3. Execution
         result = engine.run_query(
-            sql=TEST_SQL, 
-            partition_key="large_ssd", 
-            scenario_params=test_params
+            sql=TEST_SQL,
+            partition_key="large_ssd",
+            engine_params=test_settings
         )
         
         # 4. Assertions
@@ -69,7 +69,7 @@ def test_duckdb_engine_delegates_run_query(mock_duckdb_connect):
         mock_instance.run_query.assert_called_once_with(
             sql=TEST_SQL,
             partition_key="large_ssd",
-            scenario_params=test_params
+            engine_params=test_settings
         )
         
         # Assert the result came from the Client

@@ -71,10 +71,10 @@ def test_postgres_engine_delegates_run_query(mock_thrash):
                 mock_client.run_query.return_value = 1.23
                 
                 sql = "SELECT 1"
-                params = {"pg_settings": {"work_mem": "4MB"}}
-                
+                settings = {"work_mem": "4MB"}
+
                 # ACT
-                result = engine.run_query(sql=sql, partition_key="p1", scenario_params=params)
+                result = engine.run_query(sql=sql, partition_key="p1", engine_params=settings)
                 
                 # ASSERT 1: Pre-execution cleanup happened
                 mock_thrash.assert_called_once()
@@ -85,7 +85,7 @@ def test_postgres_engine_delegates_run_query(mock_thrash):
                 MockClientClass.assert_called_once_with(TEST_CONN)
                 
                 # ASSERT 3: The engine delegated the call
-                mock_client.run_query.assert_called_once_with(sql=sql, scenario_params=params)
+                mock_client.run_query.assert_called_once_with(sql=sql, pg_settings=settings)
                 
                 # ASSERT 4: Result passed through
                 assert result == 1.23

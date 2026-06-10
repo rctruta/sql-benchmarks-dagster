@@ -69,7 +69,7 @@ execution:
       - small
       - medium
       - large
-    work_mem:
+    postgres.work_mem:
       - 4MB
       - 64MB
       - 256MB

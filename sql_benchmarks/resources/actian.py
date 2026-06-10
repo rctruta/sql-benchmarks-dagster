@@ -169,11 +169,15 @@ class ActianEngine(ConfigurableResource):
         self._wait_for_ready()
         print("[Actian] Service restarted, cache cleared")
 
-    def run_query(self, sql: str, partition_key: str, scenario_params: Dict[str, Any]) -> Optional[float]:
-        """Execute a benchmark query with cold cache."""
-        self.clear_cache(scenario_params.get("actian_settings"))
+    def run_query(self, sql: str, partition_key: str, engine_params: Dict[str, Any] = None) -> Optional[float]:
+        """Execute a benchmark query with cold cache.
+
+        engine_params is the 'actian' namespace — accepted but not yet applied
+        (Vector session tuning is a future capability).
+        """
+        self.clear_cache()
         client = self._get_client()
-        return client.run_query(sql, scenario_params)
+        return client.run_query(sql, {})
 
     def bulk_load(self, filepath: str, table_name: str, partition_key: str) -> None:
         """

@@ -82,10 +82,13 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
         db = getattr(context.resources, engine)
         pk = context.partition_key
         params = SCENARIO_CONFIG.get(pk, {})
-        pg_settings = params.get("pg_settings", {})
-        dims = {k: v for k, v in params.items() if k != "pg_settings"}
+        # Each engine receives ONLY its own namespace of engine_params
+        # (assembled by config_loader from execution.engine_params + namespaced
+        # matrix dimensions like 'postgres.work_mem').
+        engine_params = params.get("engine_params", {}).get(engine, {})
+        dims = {k: v for k, v in params.items() if k != "engine_params"}
 
-        # SQL render — dims feeds template variables; pg_settings stays out of it
+        # SQL render — dims feeds template variables; engine_params stays out of it
         render_ctx = {f"{t}_table": f"{t}_{pk}" for t in used_tables}
         render_ctx.update(dims)
         sql = jinja2.Template(raw_template).render(render_ctx)
@@ -97,7 +100,7 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
         durations = []
         dnf = False
         for _ in range(REPLICATION_FACTOR):
-            duration = db.run_query(sql=sql, partition_key=pk, pg_settings=pg_settings)
+            duration = db.run_query(sql=sql, partition_key=pk, engine_params=engine_params)
             if duration is None:
                 dnf = True
                 break

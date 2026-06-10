@@ -45,13 +45,13 @@ def test_run_query_executes_and_returns_duration(mock_duckdb_connect):
     assert duration == pytest.approx(1.5)
 
 
-def test_run_query_accepts_pg_settings_and_ignores_them(mock_duckdb_connect):
-    """pg_settings is accepted for interface symmetry but has no effect on execution."""
+def test_run_query_accepts_engine_params_and_ignores_them(mock_duckdb_connect):
+    """engine_params is accepted for interface symmetry but has no effect on execution."""
     client = DuckDBClient(data_folder=TEST_DATA_FOLDER)
-    pg_settings = {"work_mem": "256MB", "max_parallel_workers_per_gather": 4}
+    engine_params = {"work_mem": "256MB", "max_parallel_workers_per_gather": 4}
 
     with patch("time.time", side_effect=[0.0, 0.2]):
-        duration = client.run_query(sql="SELECT 1", partition_key="test_part", pg_settings=pg_settings)
+        duration = client.run_query(sql="SELECT 1", partition_key="test_part", engine_params=engine_params)
 
     # No extra calls — settings must not have triggered any SET commands
     mock_conn = mock_duckdb_connect.return_value.__enter__.return_value
