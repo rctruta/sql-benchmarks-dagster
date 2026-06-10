@@ -145,10 +145,13 @@ class ExperimentCoordinator:
             return False
 
         # 1. Capture Metadata (in scratchpad first)
+        from .utils.system import capture_environment
         metadata = {
             "experiment_id": self.exp_id,
             "timestamp": time.time(),
-            "config_id": f"config_{self.exp_id}"
+            "config_id": f"config_{self.exp_id}",
+            # Conditions, not identity: the bench this question was answered on
+            "environment": capture_environment(),
         }
         with open(os.path.join(scratch_exp_folder, f"metadata_{self.exp_id}.json"), "w") as f:
             json.dump(metadata, f, indent=4)

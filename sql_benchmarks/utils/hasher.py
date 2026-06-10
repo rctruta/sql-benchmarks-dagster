@@ -52,39 +52,42 @@ def generate_experiment_hash(config_dict, root_dir):
     config_str = json.dumps(clean_config, sort_keys=True)
     hasher.update(config_str.encode('utf-8'))
 
-    def hash_folder(folder_path, extension, normalizer=None):
+    def hash_folder(folder_path, extension, normalizer=None, exclude_dirs=()):
         if not os.path.exists(folder_path): return
 
         for root, dirs, files in os.walk(folder_path):
+            dirs[:] = sorted(d for d in dirs if d not in exclude_dirs)
             for file in sorted(files):
                 if file.endswith(extension):
                     rel_path = os.path.relpath(os.path.join(root, file), root_dir)
                     hasher.update(rel_path.encode('utf-8'))
-                    
+
                     with open(os.path.join(root, file), 'r', encoding='utf-8') as f:
                         content = f.read()
-                        
+
                     if normalizer:
                         content = normalizer(content)
-                    
+
                     hasher.update(content.encode('utf-8'))
 
     # 2. Hash SQL Files
     target_sql_dir = get_target_sql_dir(config_dict)
     hash_folder(target_sql_dir, ".sql", normalizer=normalize_sql)
 
-    # 3. Hash Python code that can change what a measurement means:
-    #    assets/    — orchestration logic (original boundary)
-    #    resources/ — engine facades & clients (an engine bug fix must
-    #                 change the ID; see dcbd0bcc, which kept its ID across
-    #                 a quack_client behavior change)
-    #    plugins/   — data generators (a generator change changes the data)
-    for code_dir in ("assets", "resources", "plugins"):
-        hash_folder(
-            os.path.join(root_dir, "sql_benchmarks", code_dir),
-            ".py",
-            normalizer=normalize_python,
-        )
+    # 3. Hash ALL Python that can change what a measurement means: the whole
+    #    package — orchestration (assets/), engines (resources/), data
+    #    generators (plugins/), and the root/utils machinery (config_loader
+    #    assembles engine_params; system.py owns the cold-cache primitive).
+    #    Excluded: api/ only READS results — it cannot affect a measurement —
+    #    and experiments/ holds configs/results, which are hashed separately.
+    #    The ID fingerprints the QUESTION; runtime conditions (engine
+    #    versions, hardware) are recorded in the capsule metadata instead.
+    hash_folder(
+        os.path.join(root_dir, "sql_benchmarks"),
+        ".py",
+        normalizer=normalize_python,
+        exclude_dirs=("api", "experiments", "__pycache__"),
+    )
 
     return hasher.hexdigest()[:8]
 
