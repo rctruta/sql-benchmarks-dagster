@@ -1,0 +1,63 @@
+meta:
+  name: "Quack vs Postgres: Client-Server Head-to-Head"
+  description: >
+    The apples-to-apples question the execution-modes experiment (capsule
+    3e2fe152) deliberately avoided: if you want CLIENT-SERVER analytics,
+    is DuckDB-over-Quack (beta, pushdown mode) already competitive with
+    the incumbent client-server database? Three engines, identical data
+    and SQL (analytical_wall), stock defaults, cold cache per query:
+    duckdb in-process (reference floor), quack_pushdown (DuckDB
+    client-server), postgres (the incumbent).
+    Caveat for cross-engine fairness, disclosed up front: on macOS,
+    Postgres runs inside Docker's VM and pays filesystem-virtualization
+    tax that the native engines do not. Treat Postgres numbers here as
+    macOS-Docker numbers; a Linux run is the clean comparison.
+
+dataset:
+  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  tables:
+    analytical_data:
+      rows: rows
+      columns:
+        - name: id
+          provider: sequence
+          primary_key: true
+        - name: region
+          provider: choice
+          options: ["North", "South", "East", "West"]
+        - name: category
+          provider: choice
+          options: ["A", "B", "C"]
+        - name: price
+          provider: random_float
+          min_value: 10.0
+          max_value: 500.0
+        - name: quantity
+          provider: random_int
+          min_value: 1
+          max_value: 100
+        - name: discount
+          provider: random_float
+          min_value: 0.0
+          max_value: 0.30
+
+definitions:
+  rows:
+    tiny:   1_000
+    small:  100_000
+    medium: 1_000_000
+    large:  10_000_000
+
+execution:
+  test_suite: analytical_wall
+  engines:
+    - duckdb
+    - quack_pushdown
+    - postgres
+  replication: 5
+  matrix:
+    rows:
+      - tiny
+      - small
+      - medium
+      - large
