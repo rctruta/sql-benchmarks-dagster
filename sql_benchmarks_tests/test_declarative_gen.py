@@ -170,3 +170,47 @@ def test_declarative_gen_variable_null_prob(temp_output):
     null_count = df["col_a"].null_count()
     # 40-60 range for 100 rows is valid
     assert 40 <= null_count <= 60
+
+
+def _seed_config(seed=None):
+    config = {
+        "tables": {
+            "seed_table": {
+                "rows": 50,
+                "columns": [
+                    {"name": "id", "provider": "sequence"},
+                    {"name": "price", "provider": "random_float", "min_value": 0.0, "max_value": 100.0},
+                ]
+            }
+        }
+    }
+    if seed is not None:
+        config["seed"] = seed
+    return config
+
+
+def test_same_seed_generates_identical_data(temp_output, tmp_path):
+    """dataset.seed makes generation reproducible: same seed, same bytes of data."""
+    out_a = str(tmp_path / "a.parquet")
+    out_b = str(tmp_path / "b.parquet")
+    declarative_gen.generate({}, {}, "seed_table", out_a, _seed_config(seed=7))
+    declarative_gen.generate({}, {}, "seed_table", out_b, _seed_config(seed=7))
+    assert pl.read_parquet(out_a).equals(pl.read_parquet(out_b))
+
+
+def test_different_seed_generates_different_data(temp_output, tmp_path):
+    out_a = str(tmp_path / "a.parquet")
+    out_b = str(tmp_path / "b.parquet")
+    declarative_gen.generate({}, {}, "seed_table", out_a, _seed_config(seed=7))
+    declarative_gen.generate({}, {}, "seed_table", out_b, _seed_config(seed=8))
+    assert not pl.read_parquet(out_a)["price"].equals(pl.read_parquet(out_b)["price"])
+
+
+def test_default_seed_preserves_historical_data(temp_output, tmp_path):
+    """Omitting dataset.seed must behave exactly like the historical
+    hardcoded 42 — existing experiment IDs keep their data."""
+    out_default = str(tmp_path / "default.parquet")
+    out_42 = str(tmp_path / "explicit42.parquet")
+    declarative_gen.generate({}, {}, "seed_table", out_default, _seed_config())
+    declarative_gen.generate({}, {}, "seed_table", out_42, _seed_config(seed=42))
+    assert pl.read_parquet(out_default).equals(pl.read_parquet(out_42))
