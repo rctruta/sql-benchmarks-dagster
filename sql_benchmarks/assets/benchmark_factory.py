@@ -132,7 +132,9 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
                     "partition": pk,
                 },
                 "metrics": {"duration_seconds": None, "replication_factor": 0, "dnf": True},
-                "parameters": {**params, "dnf": True},
+                # dnf lives in metrics; duplicating it into parameters leaked a
+                # redundant lowercase 'dnf' column into the flattened CSV.
+                "parameters": params,
             }, open(fragment_path, "w"), default=str, indent=2)
             return MaterializeResult(metadata={
                 "dnf": MetadataValue.bool(True),
