@@ -22,6 +22,7 @@ ENGINE_STYLE = {
     "duckdb":         ("DuckDB in-process", "#2f6f4f", "o"),
     "quack":          ("Quack attach (ATTACH + USE)", "#b3402a", "s"),
     "quack_pushdown": ("Quack pushdown (remote.query)", "#3b6ea5", "^"),
+    "postgres":       ("PostgreSQL (Docker)", "#7a5ea8", "D"),
 }
 
 
