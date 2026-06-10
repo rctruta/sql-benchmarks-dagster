@@ -28,18 +28,18 @@ class DuckDBEngine(ConfigurableResource):
         client.bulk_load(filepath, table_name, partition_key)
 
              
-    def run_query(self, 
-                  sql: str, 
-                  partition_key: str, 
-                  scenario_params: Dict[str, Any]) -> Optional[float]:
+    def run_query(self,
+                  sql: str,
+                  partition_key: str,
+                  pg_settings: Dict[str, Any] = None) -> Optional[float]:
         """Delegates the core benchmarking query execution to the client."""
         self.clear_cache()
-    
+
         client = self._get_client()
         # Delegate the call using the exact method signature
-        return client.run_query(sql=sql, 
-                                partition_key=partition_key, 
-                                scenario_params=scenario_params
+        return client.run_query(sql=sql,
+                                partition_key=partition_key,
+                                pg_settings=pg_settings
                                 )
 
     # --- Utility Methods ---

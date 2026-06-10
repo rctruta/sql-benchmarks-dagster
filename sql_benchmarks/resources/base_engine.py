@@ -24,20 +24,22 @@ class IBenchmarkEngine(Protocol):
         pass   
      
     @abstractmethod
-    def run_query(self, 
-                  sql: str, 
+    def run_query(self,
+                  sql: str,
                   partition_key: str,
-                  scenario_params: Dict[str, Any]) -> Optional[float]:
+                  pg_settings: Dict[str, Any] = None) -> Optional[float]:
         """
         Executes the query for benchmarking and forces result collection.
-        
+
         Args:
             sql (str): The SQL or Cypher query to run.
             partition_key (str): The unique key for the scenario/database instance.
-            scenario_params (Dict): Full configuration matrix payload for this partition. 
-                                    Engine-specific settings (e.g., 'pg_settings', 'flood_size_gb') 
-                                    MUST be extracted and handled internally by the engine.
-                                    
+            pg_settings (Dict): Engine session settings prepared by config_loader
+                                (currently Postgres session parameters). Engines
+                                that do not use them MUST still accept the kwarg
+                                and ignore it — the benchmark factory passes it
+                                to every engine.
+
         Returns:
             Optional[float]: The execution duration in seconds, if measured internally.
         """
