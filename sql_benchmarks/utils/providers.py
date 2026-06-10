@@ -108,6 +108,70 @@ def generate_foreign_key(rows: int, table_name: str, **kwargs):
     else: # uniform
         return np.random.randint(mn, mx, size=rows)
 
+def generate_zipf_edges(rows: int, **kwargs):
+    """
+    Generate a directed edge list for a Zipf-distributed supply graph.
+
+    Each row represents one directed supply edge: (from_id, to_id).
+    The number of *outgoing* edges per node follows a power-law / Zipf
+    distribution controlled by the ``zipf_a`` parameter:
+
+      - zipf_a=2.0  → moderate skew  (a few large hubs, long tail of leaves)
+      - zipf_a=1.5  → heavy skew     (very dominant hubs)
+      - zipf_a=3.0  → mild skew      (more uniform, closer to random graph)
+
+    Self-loops are excluded.  The resulting edge list is what gets loaded as
+    the ``supplies`` relation in TypeDB and as the ``supplies`` table in DuckDB.
+
+    Columns produced: ``from_id`` (integer), ``to_id`` (integer).
+
+    Note: ``rows`` here is the *total number of edges*, not nodes.  The number
+    of nodes is controlled by the ``n_nodes`` kwarg (default 500).
+    """
+    n_nodes  = int(kwargs.get("n_nodes",  500))
+    zipf_a   = float(kwargs.get("zipf_a", 2.0))
+    seed     = kwargs.get("seed", 42)
+    rng      = np.random.default_rng(seed)
+
+    # --- 1. Assign each node an out-degree drawn from Zipf ---
+    # numpy's Zipf returns values >= 1.  Cap at n_nodes-1 so a single node
+    # can't supply more companies than exist.
+    raw_degrees = rng.zipf(zipf_a, size=n_nodes)
+    out_degrees = np.minimum(raw_degrees, n_nodes - 1).astype(int)
+
+    # --- 2. Build edge list ---
+    # For each source node, sample ``out_degree`` distinct target nodes
+    # (excluding itself).  Collect until we have exactly ``rows`` edges,
+    # cycling through nodes if needed.
+    from_ids = []
+    to_ids   = []
+    node_ids = np.arange(1, n_nodes + 1)
+
+    for src_idx, deg in enumerate(out_degrees):
+        if len(from_ids) >= rows:
+            break
+        src_id   = src_idx + 1  # 1-indexed
+        targets  = node_ids[node_ids != src_id]
+        chosen   = rng.choice(targets, size=min(deg, len(targets)), replace=False)
+        remaining = rows - len(from_ids)
+        chosen = chosen[:remaining]
+        from_ids.extend([src_id] * len(chosen))
+        to_ids.extend(chosen.tolist())
+
+    # Pad to exact row count if the degree distribution ran out early
+    while len(from_ids) < rows:
+        src = rng.integers(1, n_nodes + 1)
+        tgt = rng.integers(1, n_nodes + 1)
+        if src != tgt:
+            from_ids.append(int(src))
+            to_ids.append(int(tgt))
+
+    return {
+        "from_id": np.array(from_ids[:rows], dtype=np.int64),
+        "to_id":   np.array(to_ids[:rows],   dtype=np.int64),
+    }
+
+
 PROVIDER_REGISTRY = {
     "sequence": generate_sequence,
     "random_int": generate_random_int,
@@ -115,5 +179,6 @@ PROVIDER_REGISTRY = {
     "choice": generate_choice,
     "text_concat": generate_text_concat,
     "foreign_key": generate_foreign_key,
-    "foreign key": generate_foreign_key # Alias
+    "foreign key": generate_foreign_key,  # Alias
+    "zipf_edges": generate_zipf_edges,
 }

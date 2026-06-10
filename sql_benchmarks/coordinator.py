@@ -53,15 +53,23 @@ class ExperimentCoordinator:
             return False
 
         # Phase 2: PREPARE EXECUTION (Isolated)
+        #
+        # Write the canonical active.yaml FIRST (with experiment_id injected).
+        # This is the single source of truth: every component that reads
+        # active.yaml will see the same config, and the file can be traced back
+        # to the exact experiment being run.
+        with open(ACTIVE_CONFIG_PATH, 'w') as f:
+            yaml.dump(self.config, f, sort_keys=False)
+        print(f"[INFO] active.yaml updated → experiment_id: {self.exp_id}")
+
         harness = IsolationHarness(self.exp_id)
         redirects = harness.provision()
         os.environ.update(redirects)
-        
-        # Manually redirect active.yaml to the scratchpad within Phase 2
+
+        # Point the scratchpad's active.yaml at the same config so that
+        # subprocesses running inside the scratchpad read the correct experiment.
         active_path = os.path.join(redirects["SCRATCHPAD_ROOT"], "active.yaml")
         os.environ["ACTIVE_CONFIG_PATH"] = active_path
-        
-        # Write ACTIVE config to the redirected scratchpad location
         os.makedirs(os.path.dirname(active_path), exist_ok=True)
         with open(active_path, 'w') as f:
             yaml.dump(self.config, f, sort_keys=False)
@@ -113,50 +121,50 @@ class ExperimentCoordinator:
         return overall_success and p_report.returncode == 0
 
     def _finalize_results(self) -> bool:
-        """Verifies results in the scratchpad and copies them to the permanent RESULTS_DIR."""
+        """
+        Verifies results in the scratchpad, then commits them to the canonical
+        results directory.
 
-        # Results were written to the scratchpad (SB_RESULTS_DIR), not the constant RESULTS_DIR,
-        # because constants.py evaluates os.getenv() at import time before the harness sets the env var.
+        The scratchpad env var (SB_RESULTS_DIR) is set by the harness AFTER
+        coordinator constants are imported, so the module-level RESULTS_DIR
+        still points to the real experiments/results/ dir.  We therefore look
+        for results in the scratchpad first, then copy them to the canonical dir.
+        """
+        # The subprocess wrote results here (env-redirected scratchpad)
         scratchpad_results = os.environ.get("SB_RESULTS_DIR", RESULTS_DIR)
         scratch_exp_folder = os.path.join(scratchpad_results, self.exp_id)
-        permanent_exp_folder = os.path.join(RESULTS_DIR, self.exp_id)
 
-        # Copy from scratchpad to permanent location before cleanup runs
-        if os.path.isdir(scratch_exp_folder) and scratch_exp_folder != permanent_exp_folder:
-            os.makedirs(permanent_exp_folder, exist_ok=True)
-            shutil.copytree(scratch_exp_folder, permanent_exp_folder, dirs_exist_ok=True)
+        # Canonical destination (the real experiments/results/ dir)
+        canonical_exp_folder = os.path.join(RESULTS_DIR, self.exp_id)
 
-        exp_folder = permanent_exp_folder
-        csv_target = os.path.join(exp_folder, f"{self.exp_id}.csv")
-        dashboard_target = os.path.join(exp_folder, f"{self.exp_id}.html")
-        
+        csv_target = os.path.join(scratch_exp_folder, f"{self.exp_id}.csv")
+        dashboard_target = os.path.join(scratch_exp_folder, f"{self.exp_id}.html")
+
         if not os.path.exists(csv_target) and not os.path.exists(dashboard_target):
             print(f"[ERROR] Run finished but no results found (Checked {csv_target} and {dashboard_target})")
             return False
 
-        # 1. Capture Metadata (Isolated)
+        # 1. Capture Metadata (in scratchpad first)
         metadata = {
             "experiment_id": self.exp_id,
             "timestamp": time.time(),
             "config_id": f"config_{self.exp_id}"
         }
-        with open(os.path.join(exp_folder, f"metadata_{self.exp_id}.json"), "w") as f:
+        with open(os.path.join(scratch_exp_folder, f"metadata_{self.exp_id}.json"), "w") as f:
             json.dump(metadata, f, indent=4)
 
         # 1.5 Semantic Audit
         auditor = SemanticAuditor()
         violations = []
-        # Audit isolated fragment directory
-        fragments_dir = os.path.join(exp_folder, "fragments")
-        
+        fragments_dir = os.path.join(scratch_exp_folder, "fragments")
+
         if os.path.exists(fragments_dir):
-             for filename in os.listdir(fragments_dir):
+            for filename in os.listdir(fragments_dir):
                 file_path = os.path.join(fragments_dir, filename)
                 if filename.endswith(".json"):
                     with open(file_path, 'r') as f:
                         try:
                             data = json.load(f)
-                            # Audit fragments in this isolated folder
                             audit_res = auditor.audit_fragment(data)
                             if not audit_res["success"]:
                                 violations.append(f"JSON {filename} failed audit: {audit_res['violations']}")
@@ -166,19 +174,33 @@ class ExperimentCoordinator:
         is_semantically_valid = len(violations) == 0
         if not is_semantically_valid:
             print(f"[WARNING] Semantic Violation Detected in {self.exp_id}: {violations}")
-            # Move semantic violations to VIOLATIONS_DIR/exp_id
             violation_dest = os.path.join(VIOLATIONS_DIR, self.exp_id)
             os.makedirs(violation_dest, exist_ok=True)
-            # We copy the failing fragments/results for inspection
             shutil.copy(csv_target, os.path.join(violation_dest, "results.csv"))
             return False
 
-        # 2. Archive Config
+        # 2. Commit scratchpad → canonical results dir
+        if scratch_exp_folder != canonical_exp_folder:
+            if os.path.exists(canonical_exp_folder):
+                shutil.rmtree(canonical_exp_folder)
+            shutil.copytree(scratch_exp_folder, canonical_exp_folder)
+            print(f"[INFO] Results committed: {scratch_exp_folder} → {canonical_exp_folder}")
+
+        # Update csv_target to canonical location for final log message
+        csv_target = os.path.join(canonical_exp_folder, f"{self.exp_id}.csv")
+
+        # 3. Copy experiment config into results folder for traceability.
+        # ACTIVE_CONFIG_PATH (the module-level constant) still points to the
+        # real active.yaml — it was written before the scratchpad redirect.
+        experiment_config_dest = os.path.join(canonical_exp_folder, "experiment_config.yaml")
+        shutil.copy(ACTIVE_CONFIG_PATH, experiment_config_dest)
+
+        # 4. Archive Config registry
         registry_path = os.path.join(CONFIG_ARCHIVE_DIR, f"config_{self.exp_id}.yaml")
         os.makedirs(os.path.dirname(registry_path), exist_ok=True)
-        shutil.copy(os.environ["ACTIVE_CONFIG_PATH"], registry_path)
-        
-        # 3. Archive copy in experiments/archive
+        shutil.copy(ACTIVE_CONFIG_PATH, registry_path)
+
+        # 5. Archive copy in experiments/archive
         filename = os.path.basename(self.target_yaml)
         clean_name = filename if not filename.endswith(PROCESSED_SUFFIX) else filename[:-len(PROCESSED_SUFFIX)]
         archive_dest = os.path.join(EXPERIMENTS_DIR, "archive", clean_name)

@@ -1,0 +1,50 @@
+meta:
+  description: >
+    Recursive graph traversal: SQL recursive CTE vs TypeDB transitive relations.
+    Schema: one 'company' entity type, one self-referential 'supplies' relation.
+    Graph topology: Zipf-distributed out-degree (scale-free / hub-and-spoke).
+    Three query depths — fixed 2-hop, bounded up-to-3, full transitive closure
+    from a high-degree hub — designed to stress recursive SQL materialisation.
+
+dataset:
+  source: "sql_benchmarks.plugins.data_sources.declarative_gen"
+  tables:
+    company:
+      rows: "nodes"
+      columns:
+        - name: id
+          provider: sequence
+        - name: name
+          provider: text_concat
+          prefix: "Company_"
+          source: id
+        - name: industry
+          provider: choice
+          options: ["manufacturing", "distribution", "retail", "logistics", "finance"]
+          weights: [0.25, 0.30, 0.20, 0.15, 0.10]
+
+    supplies:
+      rows: "edges"
+      columns:
+        - name: edge_id
+          provider: sequence
+        - name: from_id
+          provider: zipf_edges
+          n_nodes: "nodes"
+          zipf_a: 2.0
+
+definitions:
+  nodes:
+    small:  500
+    medium: 2000
+  edges:
+    small:  2000
+    medium: 10000
+
+execution:
+  test_suite: "recursive_graph"
+  replication: 3
+  engines: ["duckdb", "typedb"]
+  matrix:
+    nodes: [small, medium]
+    edges: [small, medium]
