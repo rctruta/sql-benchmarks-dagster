@@ -95,7 +95,8 @@ def generate(context, params, table_name, target_path, dataset_config):
             current_size = min(DEFAULT_CHUNK_SIZE, row_count - offset)
             
             chunk_path = f"{target_path}.part_{i}"
-            _generate_chunk(offset, current_size, table_model, dataset_config, params, row_count, chunk_path)
+            _generate_chunk(offset, current_size, table_model, dataset_config, params, row_count, chunk_path,
+                            base_seed=dataset_config.get("seed", 42))
             temp_files.append(chunk_path)
             print(f"[Gen] Batch {i+1} done.")
             
@@ -121,11 +122,15 @@ def generate(context, params, table_name, target_path, dataset_config):
         }
     )
 
-def _generate_chunk(offset, size, table_model, dataset_config, params, total_rows, output_path):
-    # Enable reproducible generation
-    # Use offset to ensure different chunks get different random sequences, 
-    # but same chunk always gets same sequence.
-    np.random.seed(42 + offset) 
+def _generate_chunk(offset, size, table_model, dataset_config, params, total_rows, output_path,
+                    base_seed=42):
+    # Enable reproducible generation. The base seed comes from dataset.seed
+    # in the YAML (default 42, preserving all pre-seed-param experiment IDs'
+    # data). Because the config is hashed, a different seed automatically
+    # yields a different Experiment ID — seed changes are never silent.
+    # Offset ensures different chunks get different sequences, but the same
+    # chunk always gets the same sequence.
+    np.random.seed(base_seed + offset)
 
     data = {}
     if not table_model.columns:

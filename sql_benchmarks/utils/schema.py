@@ -57,6 +57,10 @@ class DatasetConfig(BaseModel):
     source: Optional[str] = None
     tables: Optional[Dict[str, Any]] = None
     paths: Optional[Dict[str, str]] = None
+    # Base seed for synthetic data generation (declarative_gen). Default 42.
+    # The config is hashed, so changing the seed changes the Experiment ID —
+    # two experiments with different data can never share an identity.
+    seed: Optional[int] = None
 
 # ==========================================
 # 3. EXECUTION CONFIGURATION (The Matrix)
