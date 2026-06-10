@@ -45,18 +45,26 @@ def test_run_query_executes_and_returns_duration(mock_duckdb_connect):
     assert duration == pytest.approx(1.5)
 
 
-def test_run_query_accepts_engine_params_and_ignores_them(mock_duckdb_connect):
-    """engine_params is accepted for interface symmetry but has no effect on execution."""
+def test_run_query_applies_allowlisted_engine_params(mock_duckdb_connect):
+    """Allowlisted duckdb settings are applied via SET before the timed query."""
     client = DuckDBClient(data_folder=TEST_DATA_FOLDER)
-    engine_params = {"work_mem": "256MB", "max_parallel_workers_per_gather": 4}
 
     with patch("time.time", side_effect=[0.0, 0.2]):
-        duration = client.run_query(sql="SELECT 1", partition_key="test_part", engine_params=engine_params)
+        duration = client.run_query(sql="SELECT 1", partition_key="test_part",
+                                    engine_params={"threads": 2})
 
-    # No extra calls — settings must not have triggered any SET commands
     mock_conn = mock_duckdb_connect.return_value.__enter__.return_value
+    mock_conn.execute.assert_any_call("SET threads = '2'")
     mock_conn.sql.assert_called_once_with("SELECT 1")
     assert duration == pytest.approx(0.2)
+
+
+def test_run_query_rejects_foreign_namespace_keys(mock_duckdb_connect):
+    """Postgres vocabulary in the duckdb namespace is a config error — fail loudly."""
+    client = DuckDBClient(data_folder=TEST_DATA_FOLDER)
+    with pytest.raises(ValueError, match="Unknown duckdb engine_params key 'work_mem'"):
+        client.run_query(sql="SELECT 1", partition_key="test_part",
+                         engine_params={"work_mem": "256MB"})
 
 
 def test_run_query_propagates_duckdb_error(mock_duckdb_connect):
