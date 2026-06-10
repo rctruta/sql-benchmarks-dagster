@@ -3,6 +3,13 @@ set -e
 
 echo "--- SQL Benchmarking Laboratory: Environment Setup ---"
 
+# 0. Require Python 3.11+ (fail fast — matches pyproject.toml requires-python)
+if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)'; then
+    echo "ERROR: Python 3.11+ required (found: $(python3 --version 2>&1))."
+    echo "Tip: with uv installed, 'uv venv venv --python 3.11' downloads one automatically."
+    exit 1
+fi
+
 # 1. Create Virtual Environment
 if [ ! -d "venv" ]; then
     echo "[1/4] Creating virtual environment..."

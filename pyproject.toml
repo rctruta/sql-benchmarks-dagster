@@ -3,12 +3,13 @@ name = "sql_benchmarks"
 version = "0.1.0"
 description = "SQL Benchmarks V7 Platform"
 readme = "README.md"
-requires-python = ">=3.9,<3.14"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "dagster",
     "dagster-cloud",
     "dagster-postgres",
     "dagster-duckdb",
+    "docker",
     "pandas",
     "plotly",
     "polars",
@@ -22,7 +23,10 @@ dependencies = [
     "sshtunnel>=0.4.0",
     "scp>=0.14.0",
     "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.29.0",
+    "fastmcp>=0.1.0",
     "httpx>=0.27.0",
+    "typedb-driver",
 ]
 
 [project.optional-dependencies]
