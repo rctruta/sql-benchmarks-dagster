@@ -97,6 +97,14 @@ defs = Definitions(
             port=int(os.getenv("SB_QUACK_PORT", "9494")),
             token=os.getenv("SB_QUACK_TOKEN", "sb-local-quack-token"),
         ),
+        # Same protocol, server-side execution via remote.query() — own data
+        # folder and port so it never contends with the attach-mode engine.
+        "quack_pushdown": QuackEngine(
+            data_folder=os.path.join(DATA_DIR, "quack_pushdown"),
+            port=int(os.getenv("SB_QUACK_PUSHDOWN_PORT", "9495")),
+            token=os.getenv("SB_QUACK_TOKEN", "sb-local-quack-token"),
+            pushdown=True,
+        ),
         "actian": ActianEngine(),
         "typedb": TypeDBEngine(
             address=typedb_address,

@@ -67,7 +67,8 @@ def test_engine_delegates_run_query():
 
         mock_thrash.assert_called_once()
         MockClient.assert_called_once_with(
-            data_folder="/tmp/q", port=9494, token="sb-local-quack-token"
+            data_folder="/tmp/q", port=9494, token="sb-local-quack-token",
+            pushdown=False,
         )
         mock_instance.run_query.assert_called_once_with(
             sql="SELECT 1", partition_key="tiny",
@@ -121,6 +122,52 @@ def test_run_query_cold_starts_and_always_stops_server():
     assert duration is not None and duration >= 0
     fake_con.execute.assert_any_call("USE remote")
     fake_con.close.assert_called_once()
+
+
+def test_pushdown_wraps_sql_in_remote_query_and_escapes_quotes():
+    """Pushdown mode ships SQL text server-side; single quotes are doubled."""
+    client = QuackClient(data_folder="/tmp/q", token="sb-local-quack-token",
+                         pushdown=True)
+    fake_con = MagicMock()
+    fake_con.sql.return_value.fetchall.return_value = [(1,)]
+
+    with patch.object(client, "stop_server"), \
+         patch.object(client, "_start_server", return_value=MagicMock()), \
+         patch.object(client, "_attach_with_retry"), \
+         patch("sql_benchmarks.resources.quack_client.duckdb.connect", return_value=fake_con):
+        client.run_query(sql="SELECT * FROM t WHERE region = 'North'", partition_key="tiny")
+
+    (wrapped,), _ = fake_con.sql.call_args
+    assert wrapped == "FROM remote.query('SELECT * FROM t WHERE region = ''North''')"
+    # attach-mode catalog switch must NOT happen in pushdown mode
+    assert not any(c.args == ("USE remote",) for c in fake_con.execute.call_args_list)
+
+
+def test_attach_mode_uses_remote_catalog_not_remote_query():
+    client = QuackClient(data_folder="/tmp/q", token="sb-local-quack-token")
+    fake_con = MagicMock()
+    fake_con.sql.return_value.fetchall.return_value = [(1,)]
+
+    with patch.object(client, "stop_server"), \
+         patch.object(client, "_start_server", return_value=MagicMock()), \
+         patch.object(client, "_attach_with_retry"), \
+         patch("sql_benchmarks.resources.quack_client.duckdb.connect", return_value=fake_con):
+        client.run_query(sql="SELECT 1", partition_key="tiny")
+
+    fake_con.execute.assert_any_call("USE remote")
+    (passed,), _ = fake_con.sql.call_args
+    assert passed == "SELECT 1"
+
+
+def test_engine_passes_pushdown_flag_to_client():
+    with patch("sql_benchmarks.resources.quack.QuackClient") as MockClient, \
+         patch("sql_benchmarks.resources.quack.thrash_os_cache"):
+        engine = QuackEngine(data_folder="/tmp/q", port=9495, pushdown=True)
+        engine.run_query(sql="SELECT 1", partition_key="tiny")
+        MockClient.assert_called_once_with(
+            data_folder="/tmp/q", port=9495, token="sb-local-quack-token",
+            pushdown=True,
+        )
 
 
 def test_run_query_stops_server_even_on_failure():

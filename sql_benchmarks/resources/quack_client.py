@@ -53,7 +53,8 @@ while True:
 class QuackClient:
     """STATEFUL CLIENT: owns server lifecycle + measurement I/O for Quack."""
 
-    def __init__(self, data_folder: str, port: int = 9494, token: str = ""):
+    def __init__(self, data_folder: str, port: int = 9494, token: str = "",
+                 pushdown: bool = False):
         if not _SAFE_TOKEN.match(token):
             raise ValueError(
                 "Quack token must be >=8 chars of [A-Za-z0-9_-] "
@@ -62,6 +63,12 @@ class QuackClient:
         self.data_folder = data_folder
         self.port = port
         self.token = token
+        # Execution mode. attach (default): the CLIENT plans the query against
+        # the remote catalog (USE remote) — table data may stream over HTTP.
+        # pushdown: the SQL text is shipped via remote.query('...') and
+        # executes fully SERVER-side; only the result set crosses the wire.
+        # Comparing the two isolates where Quack spends its time.
+        self.pushdown = pushdown
         # File-level operations (db path layout, parquet bulk load) are
         # identical to the in-process duckdb engine — compose, don't copy.
         self._duck = DuckDBClient(data_folder=data_folder)
@@ -89,11 +96,19 @@ class QuackClient:
         try:
             con.execute("LOAD quack;")
             self._attach_with_retry(con, proc)
-            con.execute("USE remote")
 
-            start = time.time()
-            con.sql(sql).fetchall()
-            end = time.time()
+            if self.pushdown:
+                # Ship the SQL text; execution happens entirely server-side.
+                # Single-quote doubling is the only escaping SQL strings need.
+                wrapped = "FROM remote.query('{}')".format(sql.replace("'", "''"))
+                start = time.time()
+                con.sql(wrapped).fetchall()
+                end = time.time()
+            else:
+                con.execute("USE remote")
+                start = time.time()
+                con.sql(sql).fetchall()
+                end = time.time()
             return end - start
         finally:
             con.close()
