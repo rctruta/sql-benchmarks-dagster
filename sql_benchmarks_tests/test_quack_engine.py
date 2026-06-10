@@ -9,6 +9,7 @@ token validation. Real protocol behavior is verified by the e2e experiment
 import os
 from unittest.mock import MagicMock, patch
 
+import duckdb
 import pytest
 
 from sql_benchmarks.resources.quack import QuackEngine
@@ -168,6 +169,26 @@ def test_engine_passes_pushdown_flag_to_client():
             data_folder="/tmp/q", port=9495, token="sb-local-quack-token",
             pushdown=True,
         )
+
+
+def test_not_implemented_exception_records_dnf_not_crash():
+    """Quack beta capability gaps (e.g. multi-scan joins in attach mode)
+    return None so the factory records a DNF fragment — same contract as
+    the TypeDB stack-overflow precedent. Other errors must still raise."""
+    client = QuackClient(data_folder="/tmp/q", token="sb-local-quack-token")
+    fake_con = MagicMock()
+    fake_con.sql.side_effect = duckdb.NotImplementedException(
+        "Multiple streaming scans ... not currently supported"
+    )
+
+    with patch.object(client, "stop_server") as mock_stop, \
+         patch.object(client, "_start_server", return_value=MagicMock()), \
+         patch.object(client, "_attach_with_retry"), \
+         patch("sql_benchmarks.resources.quack_client.duckdb.connect", return_value=fake_con):
+        result = client.run_query(sql="SELECT ... 3-way join ...", partition_key="small")
+
+    assert result is None
+    assert mock_stop.call_count >= 2  # pre-start stop + finally cleanup
 
 
 def test_run_query_stops_server_even_on_failure():

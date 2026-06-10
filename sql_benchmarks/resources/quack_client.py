@@ -110,6 +110,13 @@ class QuackClient:
                 con.sql(sql).fetchall()
                 end = time.time()
             return end - start
+        except duckdb.NotImplementedException as e:
+            # A protocol capability gap, not a config error: e.g. attach mode
+            # cannot run multi-table joins in the Quack beta ("Multiple
+            # streaming scans ... not currently supported"). Record as DNF —
+            # the limitation IS the measurement. Anything else still raises.
+            print(f"[Quack] DNF — protocol limitation: {e}")
+            return None
         finally:
             con.close()
             self.stop_server()
