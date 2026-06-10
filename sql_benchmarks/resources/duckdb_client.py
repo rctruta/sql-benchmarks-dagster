@@ -69,11 +69,12 @@ class DuckDBClient:
     def run_query(self,
                   sql: str,
                   partition_key: str,
-                  pg_settings: Dict[str, Any] = None) -> Optional[float]:
+                  engine_params: Dict[str, Any] = None) -> Optional[float]:
         """Execute a benchmark query against the partition's DuckDB file.
 
-        pg_settings is accepted but intentionally ignored — DuckDB manages its
-        own memory and does not use Postgres session parameters.
+        engine_params is the 'duckdb' namespace (e.g. memory_limit, threads).
+        Not yet applied — DuckDB currently runs with defaults. Wiring these to
+        SET statements is the entry point for memory/parallelism experiments.
         """
         db_path = self._get_db_path(partition_key)
         

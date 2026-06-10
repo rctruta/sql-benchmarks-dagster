@@ -31,7 +31,7 @@ class DuckDBEngine(ConfigurableResource):
     def run_query(self,
                   sql: str,
                   partition_key: str,
-                  pg_settings: Dict[str, Any] = None) -> Optional[float]:
+                  engine_params: Dict[str, Any] = None) -> Optional[float]:
         """Delegates the core benchmarking query execution to the client."""
         self.clear_cache()
 
@@ -39,7 +39,7 @@ class DuckDBEngine(ConfigurableResource):
         # Delegate the call using the exact method signature
         return client.run_query(sql=sql,
                                 partition_key=partition_key,
-                                pg_settings=pg_settings
+                                engine_params=engine_params
                                 )
 
     # --- Utility Methods ---

@@ -4,7 +4,7 @@ Engine contract tests.
 The benchmark factory calls every engine resource with the exact keyword
 arguments below.  Unit tests mock the engines, so a facade whose signature
 drifts from the contract passes the suite but explodes on a real run
-(e.g. "run_query() got an unexpected keyword argument 'pg_settings'").
+(e.g. "run_query() got an unexpected keyword argument 'engine_params'").
 These tests pin the signatures themselves.
 
 NOTE: engines are imported lazily inside the tests, not at module level.
@@ -26,7 +26,7 @@ ENGINE_CLASSES = [
 ]
 
 # Keyword arguments used by sql_benchmarks/assets/benchmark_factory.py
-RUN_QUERY_KWARGS = {"sql", "partition_key", "pg_settings"}
+RUN_QUERY_KWARGS = {"sql", "partition_key", "engine_params"}
 # Positional parameters used by the ingestion factory
 BULK_LOAD_PARAMS = ["filepath", "table_name", "partition_key"]
 
@@ -47,12 +47,12 @@ def test_run_query_accepts_factory_kwargs(module_path, class_name):
 
 
 @pytest.mark.parametrize("module_path,class_name", ENGINE_CLASSES, ids=lambda v: v.split(".")[-1])
-def test_run_query_pg_settings_is_optional(module_path, class_name):
-    """Engines that ignore pg_settings must still default it, not require it."""
+def test_run_query_engine_params_is_optional(module_path, class_name):
+    """Engines without tunables must still default the kwarg, not require it."""
     engine_cls = _load(module_path, class_name)
-    param = inspect.signature(engine_cls.run_query).parameters["pg_settings"]
+    param = inspect.signature(engine_cls.run_query).parameters["engine_params"]
     assert param.default is None, (
-        f"{class_name}.run_query: pg_settings must default to None"
+        f"{class_name}.run_query: engine_params must default to None"
     )
 
 

@@ -43,10 +43,11 @@ class PostgresEngine(ConfigurableResource):
         self.setup_docker(settings)
         self._wait_for_ready()
 
-    def run_query(self, sql: str, partition_key: str, pg_settings: Dict[str, Any] = None) -> Optional[float]:
-        self.clear_cache(pg_settings)
+    def run_query(self, sql: str, partition_key: str, engine_params: Dict[str, Any] = None) -> Optional[float]:
+        # engine_params is the 'postgres' namespace: session settings (work_mem, ...)
+        self.clear_cache(engine_params)
         client = self._get_client()
-        return client.run_query(sql=sql, pg_settings=pg_settings)
+        return client.run_query(sql=sql, pg_settings=engine_params)
 
     def bulk_load(self, filepath: str, table_name: str, partition_key: str) -> None:
         self.setup_docker()      

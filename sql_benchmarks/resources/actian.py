@@ -169,8 +169,12 @@ class ActianEngine(ConfigurableResource):
         self._wait_for_ready()
         print("[Actian] Service restarted, cache cleared")
 
-    def run_query(self, sql: str, partition_key: str, pg_settings: Dict[str, Any] = None) -> Optional[float]:
-        """Execute a benchmark query with cold cache. pg_settings is ignored (Postgres-only)."""
+    def run_query(self, sql: str, partition_key: str, engine_params: Dict[str, Any] = None) -> Optional[float]:
+        """Execute a benchmark query with cold cache.
+
+        engine_params is the 'actian' namespace — accepted but not yet applied
+        (Vector session tuning is a future capability).
+        """
         self.clear_cache()
         client = self._get_client()
         return client.run_query(sql, {})

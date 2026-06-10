@@ -74,7 +74,7 @@ def test_postgres_engine_delegates_run_query(mock_thrash):
                 settings = {"work_mem": "4MB"}
 
                 # ACT
-                result = engine.run_query(sql=sql, partition_key="p1", pg_settings=settings)
+                result = engine.run_query(sql=sql, partition_key="p1", engine_params=settings)
                 
                 # ASSERT 1: Pre-execution cleanup happened
                 mock_thrash.assert_called_once()

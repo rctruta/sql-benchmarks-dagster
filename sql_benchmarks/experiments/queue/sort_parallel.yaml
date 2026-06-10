@@ -72,12 +72,12 @@ execution:
   matrix:
     rows:
       - medium
-    work_mem:
+    postgres.work_mem:
       - 4MB
       - 64MB
       - 256MB
       - 1GB
-    max_parallel_workers_per_gather:
+    postgres.max_parallel_workers_per_gather:
       - 0                # forced serial (baseline)
       - 1
       - 2

@@ -3,7 +3,6 @@ import yaml
 import itertools
 from typing import Dict, Any, Tuple, List
 from .constants import ACTIVE_CONFIG_PATH
-from .resources.postgres_client import PG_SETTING_KEYS
 
 class ConfigLoader:
     def __init__(self, config_path: str = ACTIVE_CONFIG_PATH):
@@ -80,13 +79,22 @@ class ConfigLoader:
                 
                 numeric_params[dim_name] = numeric_value
 
-            # C. Pre-extract pg_settings: merge static execution.pg_settings with
-            # any dimension keys that are also Postgres session settings.
-            # Stored as a nested key so consumers never have to derive it themselves.
-            static_pg = dict(self.execution.get("pg_settings", {}))
-            pg_settings = {**static_pg, **{k: v for k, v in numeric_params.items() if k in PG_SETTING_KEYS}}
-            if pg_settings:
-                numeric_params["pg_settings"] = pg_settings
+            # C. Assemble namespaced engine params: the static execution.engine_params
+            # block merged with namespaced matrix dimensions ('postgres.work_mem'
+            # -> engine_params['postgres']['work_mem']). Varied dimensions override
+            # static values. Stored as a nested key so consumers never have to
+            # derive it themselves; the factory hands each engine ONLY its own
+            # namespace at run time.
+            engine_params = {
+                ns: dict(settings)
+                for ns, settings in (self.execution.get("engine_params") or {}).items()
+            }
+            for dim_name, value in numeric_params.items():
+                if "." in dim_name:
+                    ns, param = dim_name.split(".", 1)
+                    engine_params.setdefault(ns, {})[param] = value
+            if engine_params:
+                numeric_params["engine_params"] = engine_params
 
             # D. Store the Numeric/Literal parameters under the Symbolic Key
             self.scenario_config[key_str] = numeric_params

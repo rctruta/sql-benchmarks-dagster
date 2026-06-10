@@ -81,8 +81,8 @@ class TypeDBEngine(ConfigurableResource):
         self._restart_container()
         self._wait_for_ready()
 
-    def run_query(self, sql: str, partition_key: str, pg_settings: Dict[str, Any] = None) -> Optional[float]:
-        """pg_settings is ignored (Postgres-only session parameters)."""
+    def run_query(self, sql: str, partition_key: str, engine_params: Dict[str, Any] = None) -> Optional[float]:
+        """engine_params is the 'typedb' namespace — accepted but not yet applied."""
         self.clear_cache()
         client = self._get_client(partition_key)
         return client.run_query(sql, {})

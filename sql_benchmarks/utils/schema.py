@@ -61,22 +61,25 @@ class DatasetConfig(BaseModel):
 # ==========================================
 # 3. EXECUTION CONFIGURATION (The Matrix)
 # ==========================================
-class PostgresSettings(BaseModel):
-    # --- V2 MIGRATION: Replaces class Config: extra = 'allow' ---
-    model_config = ConfigDict(extra='allow')
-    work_mem: Optional[str] = None
-    random_page_cost: Optional[float] = None
-
 class ExecutionConfig(BaseModel):
     model_config = ConfigDict(extra='allow')
-    
-    engines: List[str] 
-    
+
+    engines: List[str]
+
     # Optional
     test_suite: Optional[str] = None
     replication: int = 1
-    pg_settings: Optional[PostgresSettings] = None
-    
+
+    # Per-engine tuning, namespaced by engine name. Each engine receives ONLY
+    # its own namespace at run time and owns the vocabulary inside it.
+    # Reserved namespaces: postgres, duckdb, actian, typedb, quack.
+    #   engine_params:
+    #     postgres: {work_mem: "64MB", random_page_cost: 1.1}
+    #     duckdb:   {memory_limit: "1GB", threads: 4}
+    # To VARY an engine param across partitions, declare it as a namespaced
+    # matrix dimension instead:  matrix: {postgres.work_mem: [4MB, 1GB]}
+    engine_params: Optional[Dict[str, Dict[str, Any]]] = None
+
     # The Matrix (can be named matrix or dimensions)
     matrix: Optional[Dict[str, List[Any]]] = None
     dimensions: Optional[Dict[str, List[Any]]] = None

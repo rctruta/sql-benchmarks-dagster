@@ -212,7 +212,7 @@ def test_run_query_delegates_to_client(engine):
         mock_client.run_query.return_value = 2.5
         mock_get_client.return_value = mock_client
 
-        result = engine.run_query("match $x isa t; select $x;", "small", {"k": "v"})  # third arg = pg_settings (ignored)
+        result = engine.run_query("match $x isa t; select $x;", "small", {"k": "v"})  # third arg = engine_params (ignored)
 
     mock_client.run_query.assert_called_once_with("match $x isa t; select $x;", {})
     assert result == 2.5
