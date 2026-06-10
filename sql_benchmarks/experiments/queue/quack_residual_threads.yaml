@@ -50,7 +50,7 @@ execution:
   engines:
     - duckdb
     - quack_pushdown
-  replication: 3
+  replication: 5
   matrix:
     rows:
       - medium

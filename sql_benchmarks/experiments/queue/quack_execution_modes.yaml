@@ -53,7 +53,7 @@ execution:
     - duckdb
     - quack
     - quack_pushdown
-  replication: 3
+  replication: 5
   matrix:
     rows:
       - tiny

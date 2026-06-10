@@ -59,7 +59,7 @@ execution:
     - duckdb
     - quack
     - quack_pushdown
-  replication: 3
+  replication: 5
   matrix:
     scale_factor:
       - small
