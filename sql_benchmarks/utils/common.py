@@ -193,7 +193,7 @@ def generate_partition_keys(matrix_config):
 
 def get_engine_asset_prefix(engine_name: str) -> str:
     """
-    Resolves the engine resource key ('postgres', 'duckdb') 
+    Resolves the engine resource key ('postgres', 'duckdb')
     to the canonical asset prefix ('pg_', 'duckdb_').
     This is the single source of truth for asset naming conventions across all factories.
     """
@@ -201,6 +201,28 @@ def get_engine_asset_prefix(engine_name: str) -> str:
         return 'pg_'
     # Default: Use the engine name itself followed by an underscore
     return f'{engine_name}_'
+
+# Engines whose SQL dialect is another engine's: they reuse that engine's
+# scenario directory instead of duplicating SQL files. Quack is DuckDB served
+# over a client-server protocol — identical dialect, different transport.
+ENGINE_SQL_DIALECTS = {
+    "quack": "duckdb",
+}
+
+def get_engine_sql_dialect(engine_name: str) -> str:
+    """
+    Resolves an engine resource key to the SQL scenario directory it executes
+    (sql/<suite>/<dialect>/). The single source of truth for dialect reuse.
+    """
+    return ENGINE_SQL_DIALECTS.get(engine_name, engine_name)
+
+def get_engine_benchmark_group(engine_name: str) -> str:
+    """
+    Dagster group name for an engine's benchmark assets. Shared by the
+    benchmark factory (asset creation) and execute_run (asset selection) so
+    the two can never drift apart.
+    """
+    return f"dynamic_bench_{engine_name}"
 
 def get_scoped_asset_name(base_name: str, exp_id: str) -> str:
     """

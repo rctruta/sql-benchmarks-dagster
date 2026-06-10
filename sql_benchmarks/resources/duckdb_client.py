@@ -17,14 +17,16 @@ def _assert_safe_identifier(value: str, label: str) -> None:
 # Note: DuckDBClient does NOT inherit ConfigurableResource
 
 # ---------------------------------------------------------------------------
-# Module-level partition tracker (mirrors the TypeDBEngine pattern).
-# The first bulk_load call for a given partition deletes the existing .duckdb
-# file (clean slate).  Subsequent calls for the same partition just add tables
-# via CREATE OR REPLACE TABLE, so multi-table experiments (e.g. hypergraph
-# supply chain) work correctly.  Cleared naturally between runs because each
+# Module-level db-file tracker (mirrors the TypeDBEngine pattern).
+# The first bulk_load call for a given db file deletes any stale copy
+# (clean slate).  Subsequent tables are added to the same file via
+# CREATE OR REPLACE TABLE, so multi-table experiments (e.g. hypergraph
+# supply chain) work correctly.  Keyed by db_path — not partition_key —
+# because multiple engines (duckdb, quack) load the same partitions into
+# different data folders.  Cleared naturally between runs because each
 # execute_run.py invocation starts a fresh Python process.
 # ---------------------------------------------------------------------------
-_INITIALIZED_PARTITIONS: set = set()
+_INITIALIZED_DB_FILES: set = set()
 
 class DuckDBClient: 
     """
@@ -48,16 +50,16 @@ class DuckDBClient:
         _assert_safe_identifier(target_table_name, "table name")
         filepath = os.path.realpath(filepath)  # resolve symlinks / traversal
 
-        # First table for this partition: wipe any stale database file for a
-        # clean slate.  Subsequent tables are added to the same file via
+        # First table for this db file: wipe any stale copy for a clean
+        # slate.  Subsequent tables are added to the same file via
         # CREATE OR REPLACE TABLE so all tables coexist.
-        if partition_key not in _INITIALIZED_PARTITIONS:
+        if db_path not in _INITIALIZED_DB_FILES:
             if os.path.exists(db_path):
                 try:
                     os.remove(db_path)
                 except OSError as e:
                     print(f"[WARN] Could not remove existing DB file {db_path}: {e}")
-            _INITIALIZED_PARTITIONS.add(partition_key)
+            _INITIALIZED_DB_FILES.add(db_path)
 
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         with duckdb.connect(db_path, read_only=False) as con:

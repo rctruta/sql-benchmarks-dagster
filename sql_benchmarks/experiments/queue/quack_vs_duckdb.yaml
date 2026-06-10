@@ -1,0 +1,56 @@
+meta:
+  name: "Quack vs In-Process DuckDB"
+  description: >
+    Measures the cost of DuckDB's Quack client-server protocol (beta, v1.5.3)
+    against the same engine running in-process. Identical storage files,
+    identical SQL (the quack engine reuses the duckdb scenario directory),
+    identical cold-cache methodology — the only variable is the transport:
+    in-process function calls vs HTTP with DuckDB's native serialization.
+    Hypothesis: protocol overhead dominates at small result sets and
+    amortizes as scan volume grows.
+
+dataset:
+  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  tables:
+    analytical_data:
+      rows: rows
+      columns:
+        - name: id
+          provider: sequence
+          primary_key: true
+        - name: region
+          provider: choice
+          options: ["North", "South", "East", "West"]
+        - name: category
+          provider: choice
+          options: ["A", "B", "C"]
+        - name: price
+          provider: random_float
+          min_value: 10.0
+          max_value: 500.0
+        - name: quantity
+          provider: random_int
+          min_value: 1
+          max_value: 100
+        - name: discount
+          provider: random_float
+          min_value: 0.0
+          max_value: 0.30
+
+definitions:
+  rows:
+    tiny:   1_000
+    small:  100_000
+    medium: 1_000_000
+
+execution:
+  test_suite: analytical_wall
+  engines:
+    - duckdb
+    - quack
+  replication: 3
+  matrix:
+    rows:
+      - tiny
+      - small
+      - medium

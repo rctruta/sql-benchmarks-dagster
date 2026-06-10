@@ -8,7 +8,7 @@ import statistics
 from dagster import asset, AssetExecutionContext, MaterializeResult, MetadataValue
 from ..partitions import partitions_def, SCENARIO_CONFIG
 from ..constants import RESULTS_DIR
-from ..utils.common import load_context, get_tables_used_in_sql, get_target_sql_dir, infer_metadata_from_sql, get_engine_asset_prefix, get_scoped_asset_name
+from ..utils.common import load_context, get_tables_used_in_sql, get_target_sql_dir, infer_metadata_from_sql, get_engine_asset_prefix, get_engine_sql_dialect, get_engine_benchmark_group, get_scoped_asset_name
 
 CTX = load_context()
 ACTIVE_ENGINES = CTX['engines']
@@ -65,16 +65,17 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
     asset_scoped_name = get_scoped_asset_name(asset_base_name, EXP_ID)
     tags = {}
 
-    # Condition: If this is Postgres, enforce the Single-Lane Limit
-    if engine == "postgres":
-        tags["dagster/concurrency_key"] = "postgres_exclusive"
+    # Single-Lane Limit for engines with exclusive infrastructure:
+    # postgres restarts a shared Docker container; quack binds a fixed port.
+    if engine in ("postgres", "quack"):
+        tags["dagster/concurrency_key"] = f"{engine}_exclusive"
     tags["experiment_scope"] = "partitioned"
 
     @asset(
         name=asset_scoped_name,
         partitions_def=partitions_def,
         deps=deps,
-        group_name=f"dynamic_bench_{engine}",
+        group_name=get_engine_benchmark_group(engine),
         required_resource_keys={engine},
         op_tags=tags
     )
@@ -181,7 +182,7 @@ def get_benchmark_assets():
     target_dir = get_target_sql_dir(FULL_CONFIG)
 
     for engine in ACTIVE_ENGINES:
-        path = os.path.join(target_dir, engine)
+        path = os.path.join(target_dir, get_engine_sql_dialect(engine))
         if not os.path.exists(path): continue
 
         for f in glob.glob(os.path.join(path, "*.sql")):
