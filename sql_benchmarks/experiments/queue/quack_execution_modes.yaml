@@ -2,7 +2,7 @@ meta:
   name: "Quack Execution Modes: Attach vs Pushdown vs In-Process"
   description: >
     Mechanism experiment for the Quack protocol (DuckDB 1.5.3 beta).
-    Prior measurement (experiment b82b4eae) showed attach-mode protocol
+    Prior measurement (superseded by published capsule 3e2fe152) showed attach-mode protocol
     overhead GROWS with scan size (2.7x at 100K rows, 4.9x at 1M) even
     though the analytical_wall result set is a constant 12 rows.
     Hypothesis: in attach mode (ATTACH + USE) the client plans the query
