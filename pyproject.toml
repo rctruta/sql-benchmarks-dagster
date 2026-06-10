@@ -45,3 +45,11 @@ code_location_name = "sql_benchmarks"
 
 [tool.setuptools.packages.find]
 exclude = ["sql_benchmarks_tests"]
+
+[tool.pytest.ini_options]
+# Migrated from pytest.ini. Filters target deprecation warnings raised by
+# external dependencies (Dagster's Pydantic V1 usage; plotly's np.bool8).
+filterwarnings = [
+    "ignore:Support for class-based `config` is deprecated:DeprecationWarning:pydantic",
+    "ignore:`np.bool8` is a deprecated alias:DeprecationWarning:plotly",
+]
