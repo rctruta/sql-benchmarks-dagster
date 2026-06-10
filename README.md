@@ -104,5 +104,8 @@ Managed with a strict separation between Harness and Scenario:
 
 ---
 
-© 2025 Ramona C. Truta. All Rights Reserved.  
+## License
+
+Copyright 2025-2026 Ramona C. Truta. Licensed under the [Apache License 2.0](LICENSE).
+
 Built with **Dagster**, **Polars**, **Docker**, **DuckDB**, and **Postgres**.

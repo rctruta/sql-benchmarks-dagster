@@ -1,7 +1,7 @@
-# Security Analysis: The "Blueberry Muffin" Vulnerability
+# Security Analysis: Result Integrity & Semantic Injection
 
 ## 🕵️‍♂️ The Threat: Semantic Injection
-The user has identified a critical flaw in agentic AI architecture: **The Collapsed Planes Problem**. 
+There is a critical flaw in agentic AI architecture: **The Collapsed Planes Problem**. 
 Agents often treat probabilistic "Memory" files (Markdown, results logs) as a deterministic **Control Plane**. If an attacker poisons these files (e.g., via a supply chain attack that appends to a log), an agent will ingest the malicious "context" and enter an infinite loop or execute dangerous commands based on a hallucinated reality.
 
 ---
