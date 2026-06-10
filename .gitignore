@@ -25,7 +25,9 @@ build/
 dist/
 
 # --- Heavy Data (The Blockers) ---
-data/
+# Root data dir only — an unanchored 'data/' would also ignore source
+# packages like sql_benchmarks/api/data/
+/data/
 *.duckdb
 *.parquet
 *.wal
@@ -59,4 +61,5 @@ dagster_home/
 *.md
 !README.md
 !AGENTS.md
+!docs/*.md
 audit.lock
