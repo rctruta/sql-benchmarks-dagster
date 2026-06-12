@@ -86,6 +86,17 @@ class ExperimentCoordinator:
                 print(f"[FAILURE] Technical execution failed.")
                 return False
 
+            # Phase 4: CODE-DRIFT GATE
+            # The Experiment ID was computed from the code at submission; if
+            # the package changed during execution, the ID no longer names
+            # what actually ran. Refuse to finalize — loudly.
+            drift = harness.check_integrity()
+            if drift:
+                print(f"[CRITICAL] Code drift detected during execution — results NOT committed:")
+                for d in drift:
+                    print(f"           {d}")
+                return False
+
             # Phase 5: FINAL VERIFICATION & REGISTRY
             return self._finalize_results()
             
