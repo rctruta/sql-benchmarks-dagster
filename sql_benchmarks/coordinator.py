@@ -152,6 +152,10 @@ class ExperimentCoordinator:
             "config_id": f"config_{self.exp_id}",
             # Conditions, not identity: the bench this question was answered on
             "environment": capture_environment(),
+            # Effective data seed (declarative_gen): explicit even when the
+            # YAML omits it — a capsule must state the seed its data came
+            # from, never leave it implied by a code default.
+            "dataset_seed": (self.config.get("dataset") or {}).get("seed", 42),
         }
         with open(os.path.join(scratch_exp_folder, f"metadata_{self.exp_id}.json"), "w") as f:
             json.dump(metadata, f, indent=4)
