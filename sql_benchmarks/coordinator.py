@@ -198,8 +198,22 @@ class ExperimentCoordinator:
             return False
 
         # 2. Commit scratchpad → canonical results dir
+        # Guard: source and destination must be disjoint trees. A destination
+        # nested inside its source turns copytree into infinite recursive
+        # nesting (historical incident: 5K+ file explosion -> OOM).
+        src_real = os.path.realpath(scratch_exp_folder)
+        dst_real = os.path.realpath(canonical_exp_folder)
+        if src_real.startswith(dst_real + os.sep) or dst_real.startswith(src_real + os.sep):
+            raise RuntimeError(
+                f"REFUSED: nested copy {src_real} <-> {dst_real} would recurse infinitely."
+            )
         if scratch_exp_folder != canonical_exp_folder:
             if os.path.exists(canonical_exp_folder):
+                # Only ever delete a folder named exactly for this experiment
+                if os.path.basename(dst_real) != self.exp_id:
+                    raise RuntimeError(
+                        f"REFUSED: rmtree target '{dst_real}' is not this experiment's capsule."
+                    )
                 shutil.rmtree(canonical_exp_folder)
             shutil.copytree(scratch_exp_folder, canonical_exp_folder)
             print(f"[INFO] Results committed: {scratch_exp_folder} → {canonical_exp_folder}")

@@ -61,8 +61,24 @@ class IsolationHarness:
         return self._monitor.check_drift()
 
     def cleanup(self):
-        """Removes the scratchpad."""
-        if self.scratchpad_root and os.path.exists(self.scratchpad_root):
-             # Wait a beat for any lagging file handles
+        """Removes the scratchpad — and ONLY a scratchpad.
+
+        Guarded after a historical incident: a miscomputed path turned a
+        cleanup into a recursive deletion of real work ("brilliant
+        amnesia"). rmtree here refuses any path that is not a genuine
+        sb_-prefixed directory under the system temp dir. Refusal is loud;
+        a leaked scratchpad is recoverable, a deleted repo is not.
+        """
+        if not self.scratchpad_root:
+            return
+        real = os.path.realpath(self.scratchpad_root)
+        tmp_root = os.path.realpath(tempfile.gettempdir())
+        if not (real.startswith(tmp_root + os.sep)
+                and os.path.basename(real).startswith("sb_")):
+            print(f"[CRITICAL] cleanup() refused: '{real}' is not a temp scratchpad. "
+                  f"Leaving it untouched.")
+            return
+        if os.path.exists(real):
+            # Wait a beat for any lagging file handles
             time.sleep(0.1)
-            shutil.rmtree(self.scratchpad_root)
+            shutil.rmtree(real)
