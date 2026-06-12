@@ -3,7 +3,7 @@ import yaml
 import jinja2
 import jinja2.meta
 import numpy as np
-from ..constants import ACTIVE_CONFIG_PATH, SQL_DIR
+from ..constants import ACTIVE_CONFIG_PATH, ENGINE_SQL_DIALECTS, SQL_DIR
 from ..config_loader import ConfigLoader
 from typing import Dict, Any
 
@@ -201,14 +201,6 @@ def get_engine_asset_prefix(engine_name: str) -> str:
         return 'pg_'
     # Default: Use the engine name itself followed by an underscore
     return f'{engine_name}_'
-
-# Engines whose SQL dialect is another engine's: they reuse that engine's
-# scenario directory instead of duplicating SQL files. Quack is DuckDB served
-# over a client-server protocol — identical dialect, different transport.
-ENGINE_SQL_DIALECTS = {
-    "quack": "duckdb",
-    "quack_pushdown": "duckdb",
-}
 
 def get_engine_sql_dialect(engine_name: str) -> str:
     """
