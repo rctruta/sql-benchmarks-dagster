@@ -1,6 +1,6 @@
 meta:
   description: "Quickstart \u2014 DuckDB only, no Docker required. Runs in seconds."
-  experiment_id: 16c174fe
+  experiment_id: e9cf1076
 dataset:
   source: sql_benchmarks.plugins.data_sources.declarative_gen
   tables:

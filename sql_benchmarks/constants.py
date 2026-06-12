@@ -39,6 +39,11 @@ ENGINE_SQL_DIALECTS = {
     "quack_pushdown": "duckdb",
 }
 
+# Every engine the harness can run. A drift test asserts this matches the
+# resources actually registered in definitions.py — add an engine there
+# without updating this list and CI fails loudly.
+KNOWN_ENGINES = ["actian", "duckdb", "postgres", "quack", "quack_pushdown", "typedb"]
+
 # 6. DAGSTER CONFIG
 _package_name = os.path.basename(PACKAGE_DIR) 
 DAGSTER_MODULE_TARGET = f"{_package_name}.definitions"

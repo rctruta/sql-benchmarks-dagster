@@ -80,3 +80,6 @@ audit.lock
 !sql_benchmarks/experiments/results/0ee24e68/
 !sql_benchmarks/experiments/results/0ee24e68/**
 !sql_benchmarks/experiments/configs/config_0ee24e68.yaml
+
+# Work-in-progress experiment configs (unpublished research — local only)
+sql_benchmarks/experiments/wip/

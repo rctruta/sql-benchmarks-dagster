@@ -72,3 +72,17 @@ def test_interface_matches_factory_contract():
     from sql_benchmarks.resources.base_engine import IBenchmarkEngine
     params = inspect.signature(IBenchmarkEngine.run_query).parameters
     assert RUN_QUERY_KWARGS <= set(params)
+
+
+def test_known_engines_matches_registered_resources():
+    """KNOWN_ENGINES (constants.py) must equal the engine resources actually
+    registered in definitions.py — the 'tool that updates the list' is this
+    test refusing to pass until you do."""
+    from sql_benchmarks.constants import KNOWN_ENGINES
+    from sql_benchmarks.definitions import defs
+
+    registered = set(defs.resources.keys()) - {"io_manager"}
+    assert set(KNOWN_ENGINES) == registered, (
+        f"KNOWN_ENGINES drifted from definitions.py resources: "
+        f"missing={registered - set(KNOWN_ENGINES)}, stale={set(KNOWN_ENGINES) - registered}"
+    )

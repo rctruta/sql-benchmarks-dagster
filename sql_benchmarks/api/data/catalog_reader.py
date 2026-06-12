@@ -1,10 +1,8 @@
 import os
 from typing import Dict, List
 
-from ...constants import SQL_DIR
+from ...constants import KNOWN_ENGINES, SQL_DIR
 from ..models.catalog import CatalogEnginesResponse, CatalogSuitesResponse, EngineInfo, SuiteDetail
-
-KNOWN_ENGINES = ["postgres", "duckdb", "actian"]
 
 
 class CatalogReader:
