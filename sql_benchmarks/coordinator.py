@@ -198,6 +198,14 @@ class ExperimentCoordinator:
         experiment_config_dest = os.path.join(canonical_exp_folder, "experiment_config.yaml")
         shutil.copy(ACTIVE_CONFIG_PATH, experiment_config_dest)
 
+        # 3.5 Seal the capsule: aggregate hash over every file in the final
+        # canonical folder (the seal itself excluded). verify_capsule.py
+        # recomputes and compares — tamper evidence for published results.
+        # (Designed in docs/integrity_sealing.md; wiring completed here.)
+        seal = generate_integrity_seal(canonical_exp_folder)
+        with open(os.path.join(canonical_exp_folder, "integrity.seal"), "w") as f:
+            f.write(seal)
+
         # 4. Archive Config registry
         registry_path = os.path.join(CONFIG_ARCHIVE_DIR, f"config_{self.exp_id}.yaml")
         os.makedirs(os.path.dirname(registry_path), exist_ok=True)

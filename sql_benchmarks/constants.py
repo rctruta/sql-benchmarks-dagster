@@ -25,7 +25,21 @@ CONFIG_ARCHIVE_DIR = os.path.join(EXPERIMENTS_DIR, "configs")
 PROCESSED_SUFFIX = ".processed"
 EXPERIMENT_EXTENSIONS = (".yaml", ".yml")
 
-# 5. DAGSTER CONFIG
+# 5. ENGINE REGISTRIES
+# Convention: cross-engine registries live HERE; engine-specific vocabulary
+# allowlists (PG_SETTING_KEYS, DUCKDB_SETTING_KEYS) stay colocated with their
+# engine clients in resources/.
+#
+# Engines whose SQL dialect is another engine's: they reuse that engine's
+# scenario directory (sql/<suite>/<dialect>/) instead of duplicating SQL.
+# Quack is DuckDB served over a client-server protocol — identical dialect,
+# different transport.
+ENGINE_SQL_DIALECTS = {
+    "quack": "duckdb",
+    "quack_pushdown": "duckdb",
+}
+
+# 6. DAGSTER CONFIG
 _package_name = os.path.basename(PACKAGE_DIR) 
 DAGSTER_MODULE_TARGET = f"{_package_name}.definitions"
 

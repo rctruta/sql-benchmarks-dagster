@@ -24,8 +24,18 @@ results/<ID>/
 ├── fragments/*.json         # atomic measurements incl. durations_raw (every replication)
 ├── metadata_<ID>.json       # conditions: engine/Python versions, OS, machine, cores, RAM
 ├── experiment_config.yaml   # the exact config that ran
+├── integrity.seal           # SHA-256 over every capsule file — tamper evidence
 └── data_stats/              # generated-data statistics
 ```
+
+## How to verify a capsule hasn't been tampered with
+
+```
+python scripts/dev/verify_capsule.py <ID>
+```
+
+recomputes the aggregate hash over the capsule's files and compares it to
+the stored `integrity.seal`.
 
 ## How to reproduce
 
