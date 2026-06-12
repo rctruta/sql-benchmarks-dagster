@@ -145,3 +145,33 @@ def test_parse_fragments_backcompat_without_raw_durations(mock_results_dir):
     (record,) = parse_fragments_to_records(target_id)
     assert record["Duration_Min"] == 1.5
     assert record["Duration_Max"] == 1.5
+
+
+def test_rows_param_does_not_duplicate_Rows_column(mock_results_dir):
+    """'rows' (param) must not appear beside 'Rows' (curated) in records."""
+    target_id = "dupins01"
+    fragment = {
+        "meta": {"experiment_id": target_id, "engine": "duckdb", "asset": "a"},
+        "metrics": {"duration_seconds": 1.0},
+        "parameters": {"rows": 5000, "skew": 0.4},
+    }
+    create_fragment(mock_results_dir, target_id, "a__p1.json", fragment)
+    (record,) = parse_fragments_to_records(target_id)
+    assert record["Rows"] == 5000
+    assert "rows" not in record          # the duplicate column relic
+    assert record["skew"] == 0.4         # other params still merge
+
+
+def test_rows_is_none_not_zero_when_dimension_absent(mock_results_dir):
+    """Experiments without a 'rows' dimension (e.g. TPC-H via scale_factor)
+    must report Rows as blank — 0 must never disguise 'absent'."""
+    target_id = "tpchabs1"
+    fragment = {
+        "meta": {"experiment_id": target_id, "engine": "duckdb", "asset": "a"},
+        "metrics": {"duration_seconds": 2.0},
+        "parameters": {"scale_factor": 0.1},
+    }
+    create_fragment(mock_results_dir, target_id, "a__small.json", fragment)
+    (record,) = parse_fragments_to_records(target_id)
+    assert record["Rows"] is None
+    assert record["scale_factor"] == 0.1

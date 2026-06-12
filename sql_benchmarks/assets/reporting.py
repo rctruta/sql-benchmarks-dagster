@@ -73,7 +73,10 @@ def parse_fragments_to_records(experiment_id):
                 "DNF": bool(metrics.get("dnf", False)),
                 "Engine": str(meta.get("engine", "Unknown")),
                 "System": str(meta.get("engine")),
-                "Rows": int(params.get("rows", 0)) if "rows" in params else 0,
+                # None (blank in CSV) when the experiment has no 'rows'
+                # dimension (e.g. TPC-H uses scale_factor) — 0 must never
+                # be the disguise for "absent".
+                "Rows": int(params["rows"]) if "rows" in params else None,
                 "Selectivity": float(params.get("derived_selectivity", 0.0) or 0.0)
             }
 
@@ -81,9 +84,11 @@ def parse_fragments_to_records(experiment_id):
                  row["System"] += f" ({params['disk_type']})"
 
             # Merge ALL parameters into the row (Dynamic Columns)
-            # This ensures 'null_probability' etc appear in CSV
+            # This ensures 'null_probability' etc appear in CSV.
+            # Case-insensitive guard: 'rows' must not duplicate 'Rows'.
+            existing = {c.lower() for c in row}
             for k, v in params.items():
-                if k not in row:
+                if k.lower() not in existing:
                     row[k] = v
 
             records.append(row)
