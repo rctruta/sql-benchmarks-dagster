@@ -79,3 +79,18 @@ def test_validator_broken_integrity():
         ExperimentValidator.validate(bad_fk_config)
     
     assert "Broken FK in 'orders.cust_id'. Target table 'customers' not defined" in str(excinfo.value)
+
+
+def test_cleanup_refuses_non_scratchpad_paths(tmp_path):
+    """Guard regression for the 'brilliant amnesia' incident: cleanup must
+    refuse to rmtree anything that is not an sb_* dir under the temp root."""
+    victim = tmp_path / "precious_work"
+    victim.mkdir()
+    (victim / "results.txt").write_text("irreplaceable")
+
+    harness = IsolationHarness("guard_test")
+    harness.scratchpad_root = str(victim)  # simulate the miscomputed path
+    harness.cleanup()
+
+    assert victim.exists(), "cleanup deleted a non-scratchpad path!"
+    assert (victim / "results.txt").read_text() == "irreplaceable"
