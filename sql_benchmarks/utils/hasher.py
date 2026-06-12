@@ -93,13 +93,15 @@ def generate_experiment_hash(config_dict, root_dir):
 
 def generate_integrity_seal(results_dir):
     """
-    Generates a SHA-256 seal for the entire results capsule.
-    Hashes the src snapshot + the results CSV/fragments.
+    Generates a SHA-256 seal for the entire results capsule: every file in
+    the capsule folder (CSV, fragments, metadata, config, dashboard), the
+    seal file itself excluded. Detects silent modification of published
+    results; it is a checksum, not a signature — code provenance is the
+    Experiment ID's job, not this seal's.
     """
     hasher = hashlib.sha256()
     
-    # 1. Walk results_dir and hash all files
-    # This includes the 'src' snapshot and the generated CSV/JSON
+    # Walk results_dir and hash all files deterministically
     for root, dirs, files in os.walk(results_dir):
         # Sort files to ensure deterministic hashing
         for file in sorted(files):

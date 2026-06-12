@@ -3,6 +3,7 @@ import shutil
 import tempfile
 import time
 from .constants import ROOT_DIR, DATA_DIR, RESULTS_DIR, VIOLATIONS_DIR, REPORTS_DIR
+from .utils.integrity_monitor import IntegrityMonitor
 
 class IsolationHarness:
     """
@@ -13,6 +14,7 @@ class IsolationHarness:
     def __init__(self, experiment_id: str):
         self.experiment_id = experiment_id
         self.scratchpad_root = None
+        self._monitor = None
         
     def provision(self) -> dict:
         """Creates the scratchpad and returns the redirection environment."""
@@ -34,27 +36,29 @@ class IsolationHarness:
         os.makedirs(os.path.join(paths["SB_DATA_DIR"], "staging"), exist_ok=True)
         os.makedirs(os.path.join(paths["SB_DATA_DIR"], "duckdb"), exist_ok=True)
         os.makedirs(os.path.join(paths["SB_RESULTS_DIR"], "fragments"), exist_ok=True)
-            
+
+        # Snapshot the package source NOW: if any code changes while the
+        # experiment runs, the Experiment ID no longer describes what ran.
+        from .constants import PACKAGE_DIR
+        self._monitor = IntegrityMonitor(PACKAGE_DIR)
+
         return paths
 
     def check_integrity(self) -> list:
         """
-        [RESTORED] Performs a shallow check for code tampering in the package root.
-        This matches the 'Unique Hasher' requirement by ensuring the trust anchor remains stable.
+        Compares the package source against the snapshot taken at provision().
+        Returns drift entries (MODIFIED/ADDED/DELETED) — any code change during
+        an experiment invalidates the run, because the Experiment ID was
+        computed from the code as it stood at submission.
+
+        History note: a previous implementation here only inspected a
+        sentinel file named secure_pill.txt (planted by its own test) and
+        could never detect real tampering. Replaced with the IntegrityMonitor
+        snapshot mechanism this docstring's promises always implied.
         """
-        from .constants import PACKAGE_DIR
-        drift = []
-        
-        # Simplified drift check: check for recent modifications in the package dir
-        now = time.time()
-        for root, _, files in os.walk(PACKAGE_DIR):
-            for f in files:
-                fpath = os.path.join(root, f)
-                if os.path.basename(fpath) == "secure_pill.txt":
-                    with open(fpath, "r") as check_f:
-                        if check_f.read().strip() != "Original":
-                            drift.append(f"MODIFIED: {os.path.relpath(fpath, PACKAGE_DIR)}")
-        return drift
+        if self._monitor is None:
+            return []
+        return self._monitor.check_drift()
 
     def cleanup(self):
         """Removes the scratchpad."""

@@ -18,7 +18,7 @@ class IntegrityMonitor:
                 rel_path = os.path.relpath(path, self.target_dir)
                 
                 # Ignore runtime artifacts, transient directories, and experiment outputs
-                if any(x in rel_path for x in ["__pycache__", ".pyc", "experiments/results", "experiments/violations"]):
+                if any(x in rel_path for x in ["__pycache__", ".pyc", "experiments/", ".DS_Store"]):
                     continue
                     
                 try:
