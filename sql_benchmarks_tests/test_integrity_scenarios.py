@@ -79,3 +79,22 @@ def test_zero_copy_integrity_logic():
         # Verify both are detected
         assert any("ADDED: unauthorized.txt" in d for d in drift)
         assert any("MODIFIED: sql_benchmarks/assets.py" in d for d in drift)
+
+
+def test_seal_excludes_its_own_sidecars(tmp_path):
+    """integrity.seal.ots (timestamp) and .sig (signature) are computed FROM
+    the seal, so they must never feed back into it — otherwise adding a
+    timestamp would break the integrity check it exists to support."""
+    from sql_benchmarks.utils.hasher import generate_integrity_seal
+    cap = tmp_path / "cap"
+    cap.mkdir()
+    (cap / "result.csv").write_text("a,b\n1,2\n")
+
+    seal_before = generate_integrity_seal(str(cap))
+    # Simulate the publication sidecars landing in the capsule
+    (cap / "integrity.seal").write_text(seal_before)
+    (cap / "integrity.seal.ots").write_bytes(b"\x00fake-timestamp-proof")
+    (cap / "integrity.seal.sig").write_text("fake-signature")
+    seal_after = generate_integrity_seal(str(cap))
+
+    assert seal_after == seal_before, "sidecars leaked into the seal computation"

@@ -11,5 +11,6 @@ Auxiliary tooling — nothing here is required by the harness itself.
 - `demo_breach_detection.py` — demonstrates the semantic-audit breach detection
 
 ## dev/ — verification helpers
-- `verify_capsule.py` — integrity-check a results capsule (see `docs/integrity_sealing.md`)
+- `verify_capsule.py` — verify a capsule's integrity (seal) AND timestamp (.ots) — see `docs/published_capsules.md`
+- `timestamp_capsule.py` — OpenTimestamp a published capsule's seal (publication-time; needs `opentimestamps-client`)
 - `verify_portability.py`, `verify_fix_locally.sh` — local verification utilities

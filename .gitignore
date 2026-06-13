@@ -92,3 +92,9 @@ sql_benchmarks/experiments/wip/
 
 # Stray/abandoned virtualenvs from migrations (venv/ already covered above)
 venv.old*
+
+# OpenTimestamps proofs for published capsule seals
+!sql_benchmarks/experiments/results/3e2fe152/integrity.seal.ots
+!sql_benchmarks/experiments/results/45db01a4/integrity.seal.ots
+!sql_benchmarks/experiments/results/25ce1385/integrity.seal.ots
+!sql_benchmarks/experiments/results/0ee24e68/integrity.seal.ots
