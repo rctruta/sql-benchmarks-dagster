@@ -83,3 +83,12 @@ audit.lock
 
 # Work-in-progress experiment configs (unpublished research — local only)
 sql_benchmarks/experiments/wip/
+
+# Claude Code worktrees & local session state — full checkouts that live
+# under .claude/ and otherwise show as thousands of untracked files in the
+# primary checkout. (Nothing here belongs in the repo.)
+.claude/worktrees/
+.claude/settings.local.json
+
+# Stray/abandoned virtualenvs from migrations (venv/ already covered above)
+venv.old*
