@@ -28,14 +28,30 @@ results/<ID>/
 └── data_stats/              # generated-data statistics
 ```
 
-## How to verify a capsule hasn't been tampered with
+## The trust chain — verify without trusting me
+
+A benchmark you have to take on faith isn't evidence. Each published capsule
+carries four independent guarantees, and you can check every one yourself:
+
+| Guarantee | Answers | Mechanism | How you check it |
+|---|---|---|---|
+| **Reproducibility** | Did this question produce this result? | content-addressed Experiment ID | re-run the config → same ID |
+| **Integrity** | Have the bytes changed since publication? | `integrity.seal` (SHA-256 over the capsule) | `verify_capsule.py <ID>` |
+| **Timestamp** | Did this exist when claimed — not backdated? | `integrity.seal.ots` (OpenTimestamps → Bitcoin) | `ots verify .../integrity.seal.ots` |
+| **Authorship** | Who produced it? | signed git tag | `git verify-tag <tag>` |
+
+Together: **a result you can trust without trusting the person who ran it.**
 
 ```
-python scripts/dev/verify_capsule.py <ID>
+python scripts/dev/verify_capsule.py <ID>     # checks integrity + timestamp
 ```
 
-recomputes the aggregate hash over the capsule's files and compares it to
-the stored `integrity.seal`.
+The timestamp proof is trustless — it anchors the seal's hash to the Bitcoin
+blockchain, so neither I, nor GitHub, nor anyone can backdate or silently
+edit a published result without the proof failing. New capsules are stamped
+at publication with `scripts/dev/timestamp_capsule.py` (requires
+`opentimestamps-client`); proofs start "pending" and finalize after the next
+Bitcoin block via `ots upgrade`.
 
 ## How to reproduce
 

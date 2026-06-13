@@ -105,7 +105,10 @@ def generate_integrity_seal(results_dir):
     for root, dirs, files in os.walk(results_dir):
         # Sort files to ensure deterministic hashing
         for file in sorted(files):
-            if file == "integrity.seal": continue # Don't hash the seal itself
+            # Skip the seal and its sidecars (timestamp proof, signature):
+            # they are computed FROM the seal, so they must not feed back into it.
+            if file == "integrity.seal" or file.startswith("integrity.seal."):
+                continue
             
             file_path = os.path.join(root, file)
             rel_path = os.path.relpath(file_path, results_dir)
