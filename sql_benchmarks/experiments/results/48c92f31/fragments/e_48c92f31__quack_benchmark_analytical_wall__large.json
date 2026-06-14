@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "timestamp": "2026-06-14T14:03:31.715009",
+    "experiment_id": "48c92f31",
+    "dagster_run_id": "aef16179-9ae7-4040-925f-e40c9eadd6b8",
+    "engine": "quack",
+    "asset": "e_48c92f31__quack_benchmark_analytical_wall",
+    "partition": "large"
+  },
+  "metrics": {
+    "duration_seconds": 0.7652960777282715,
+    "durations_raw": [
+      0.8480241298675537,
+      0.782088041305542,
+      0.7612199783325195,
+      0.696026086807251,
+      0.7391221523284912
+    ],
+    "replication_factor": 5
+  },
+  "parameters": {
+    "rows": 10000000
+  }
+}

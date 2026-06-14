@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "timestamp": "2026-06-14T14:05:42.590398",
+    "experiment_id": "86aececc",
+    "dagster_run_id": "92c3b075-f0fe-4a11-970b-e88aa80f7791",
+    "engine": "postgres",
+    "asset": "e_86aececc__pg_benchmark_analytical_wall",
+    "partition": "medium"
+  },
+  "metrics": {
+    "duration_seconds": 0.1610663890838623,
+    "durations_raw": [
+      0.17697620391845703,
+      0.1628718376159668,
+      0.14933371543884277,
+      0.1649460792541504,
+      0.15120410919189453
+    ],
+    "replication_factor": 5
+  },
+  "parameters": {
+    "rows": 1000000
+  }
+}
