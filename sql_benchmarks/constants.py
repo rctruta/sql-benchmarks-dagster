@@ -44,6 +44,11 @@ ENGINE_SQL_DIALECTS = {
 # without updating this list and CI fails loudly.
 KNOWN_ENGINES = ["actian", "duckdb", "postgres", "quack", "quack_pushdown", "typedb"]
 
+# The lab's maker's mark — carried in every capsule's `generator` field and on
+# every release tag (sqlbenchdag-<topic>-v<N>-<YYYYMMDD>). sql + bench + dag
+# (Dagster). Verified unique on GitHub/PyPI; chosen once, do not change.
+LAB_SLUG = "sqlbenchdag"
+
 # 6. DAGSTER CONFIG
 _package_name = os.path.basename(PACKAGE_DIR) 
 DAGSTER_MODULE_TARGET = f"{_package_name}.definitions"
