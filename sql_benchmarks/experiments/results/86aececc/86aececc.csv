@@ -1,0 +1,13 @@
+Asset,Partition,Duration,Duration_Min,Duration_Max,DNF,Engine,Rows,Selectivity
+e_86aececc__duckdb_benchmark_analytical_wall,tiny,0.002562427520751953,0.00228118896484375,0.0033528804779052734,false,duckdb,1000,0.0
+e_86aececc__quack_pushdown_benchmark_analytical_wall,tiny,0.006304597854614258,0.005764007568359375,0.007430076599121094,false,quack_pushdown,1000,0.0
+e_86aececc__pg_benchmark_analytical_wall,tiny,0.007021856307983398,0.004873991012573242,0.01099085807800293,false,postgres,1000,0.0
+e_86aececc__duckdb_benchmark_analytical_wall,small,0.0071452617645263675,0.0065958499908447266,0.008393287658691406,false,duckdb,100000,0.0
+e_86aececc__pg_benchmark_analytical_wall,small,0.06688075065612793,0.05794572830200195,0.09734296798706055,false,postgres,100000,0.0
+e_86aececc__quack_pushdown_benchmark_analytical_wall,small,0.015042448043823242,0.014497995376586914,0.016067028045654297,false,quack_pushdown,100000,0.0
+e_86aececc__duckdb_benchmark_analytical_wall,medium,0.012285423278808594,0.011033058166503906,0.014486074447631836,false,duckdb,1000000,0.0
+e_86aececc__quack_pushdown_benchmark_analytical_wall,medium,0.02535557746887207,0.023907899856567383,0.027448177337646484,false,quack_pushdown,1000000,0.0
+e_86aececc__pg_benchmark_analytical_wall,medium,0.1610663890838623,0.14933371543884277,0.17697620391845703,false,postgres,1000000,0.0
+e_86aececc__pg_benchmark_analytical_wall,large,1.9708186626434325,1.9148519039154053,2.1032261848449707,false,postgres,10000000,0.0
+e_86aececc__duckdb_benchmark_analytical_wall,large,0.08660202026367188,0.0759580135345459,0.10413503646850586,false,duckdb,10000000,0.0
+e_86aececc__quack_pushdown_benchmark_analytical_wall,large,0.15267338752746581,0.14467501640319824,0.17556214332580566,false,quack_pushdown,10000000,0.0

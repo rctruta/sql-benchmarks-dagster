@@ -1,7 +1,7 @@
 meta:
   name: "Quack Pushdown Residual: Thread-Scaling Probe"
   description: >
-    The execution-modes experiment (published capsule 3e2fe152) left an open question: pushdown-mode Quack runs the
+    The execution-modes experiment left an open question: pushdown-mode Quack runs the
     identical query on the identical file ~1.9x slower than in-process
     DuckDB, and the residual scales with execution work — so it is neither
     round-trip cost nor result serialization (12-row result set).
