@@ -1,5 +1,9 @@
 # Published Capsules
 
+*Independent measurements of DuckDB's **Quack** client-server protocol (beta,
+v1.5.3), produced by the **sqlbenchdag** lab. Every number here is a committed,
+verifiable capsule — re-runnable, integrity-sealed, timestamped, and signed.*
+
 Every published claim cites an 8-character **Experiment ID** — a SHA-256
 fingerprint of the experiment's config, SQL, and all measurement-relevant
 code. The capsules below are committed in full (`sql_benchmarks/experiments/results/<ID>/`)
@@ -14,7 +18,18 @@ so any cited number can be inspected down to its raw replication measurements.
 
 All four: DuckDB 1.5.3 (Quack beta), replication 5, cold cache per query,
 idle bench. Full conditions in each capsule's `metadata_<ID>.json`. These four
-are the verified set, covered by the signed `capsules-v1` tag.
+are the verified set, covered by the signed `sqlbenchdag-quack-v1-20260614` tag.
+
+## Figures
+
+**Protocol cost by execution mode** (capsule `b8e2bfaf`) — attach-mode overhead
+climbs with scan size; pushdown tracks in-process DuckDB at a flat ~2×:
+
+![Quack execution modes: attach vs pushdown vs in-process](figures/execution_modes_b8e2bfaf.png)
+
+**Client-server head-to-head** (capsule `902d1277`) — DuckDB-over-Quack vs PostgreSQL:
+
+![Quack pushdown vs PostgreSQL](figures/head_to_head_902d1277.png)
 
 ## Act 0 — the exploratory origin (historical, *not* in the verified set)
 
@@ -30,7 +45,7 @@ treat it accordingly:
 - produced under the **pre-migration hashing**, so re-running its config today
   yields a *different* ID — it is re-runnable, not re-derivable to this ID;
 - its metadata predates the environment/seed capture, and it is **excluded from
-  the signed `capsules-v1` tag**.
+  the signed `sqlbenchdag-quack-v1-20260614` tag**.
 
 It is the lab-notebook entry that came first. The rigorous, verified successor is
 `b8e2bfaf`.
@@ -78,11 +93,11 @@ To verify authorship after cloning (one-time setup, then `git verify-tag`):
 
 ```
 git config gpg.ssh.allowedSignersFile .github/allowed_signers
-git verify-tag capsules-v1     # → Good "git" signature for ramona.truta@gmail.com
+git verify-tag sqlbenchdag-quack-v1-20260614     # → Good "git" signature for ramona.truta@gmail.com
 ```
 
 The repo ships `.github/allowed_signers` mapping the author's identity to the
-public signing key, so the signed `capsules-v1` tag is verifiable by anyone
+public signing key, so the signed `sqlbenchdag-quack-v1-20260614` tag is verifiable by anyone
 offline — no GitHub account or trust in GitHub required.
 
 The timestamp proof is trustless — it anchors the seal's hash to the Bitcoin
