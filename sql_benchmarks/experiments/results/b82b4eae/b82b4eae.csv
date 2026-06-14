@@ -1,0 +1,7 @@
+Asset,Partition,Duration,DNF,Engine,System,Rows,Selectivity,rows
+e_b82b4eae__quack_benchmark_analytical_wall,tiny,0.0039107004801432295,false,quack,quack,1000,0.0,1000
+e_b82b4eae__duckdb_benchmark_analytical_wall,tiny,0.005521297454833984,false,duckdb,duckdb,1000,0.0,1000
+e_b82b4eae__duckdb_benchmark_analytical_wall,small,0.007045666376749675,false,duckdb,duckdb,100000,0.0,100000
+e_b82b4eae__quack_benchmark_analytical_wall,small,0.019194523493448894,false,quack,quack,100000,0.0,100000
+e_b82b4eae__duckdb_benchmark_analytical_wall,medium,0.013680696487426758,false,duckdb,duckdb,1000000,0.0,1000000
+e_b82b4eae__quack_benchmark_analytical_wall,medium,0.06707620620727539,false,quack,quack,1000000,0.0,1000000
