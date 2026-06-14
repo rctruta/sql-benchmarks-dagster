@@ -7,10 +7,10 @@ so any cited number can be inspected down to its raw replication measurements.
 
 | ID | Experiment | Config | Finding |
 |---|---|---|---|
-| `48c92f31` | Quack execution modes | [quack_execution_modes.yaml](../sql_benchmarks/experiments/queue/quack_execution_modes.yaml) | Attach-mode overhead grows with scan size (2.7× @100K → 9.4× @10M rows); pushdown stays flat at ~2×. Mechanism: attach mode streams table data client-side; pushdown ships only results. [Figure](figures/execution_modes_48c92f31.png) |
-| `2d0105fe` | Pushdown residual: thread probe | [quack_residual_threads.yaml](../sql_benchmarks/experiments/queue/quack_residual_threads.yaml) | Pushdown's flat ~2× residual matches in-process DuckDB at 2–4 effective threads (of 8) — consistent with reduced parallelism in the server's execution context, not protocol transport. |
-| `86aececc` | Quack vs Postgres head-to-head | [quack_vs_postgres.yaml](../sql_benchmarks/experiments/queue/quack_vs_postgres.yaml) | Client-server vs client-server: DuckDB-over-Quack (pushdown, beta) beats Postgres at every scale beyond the noise floor — 4.4× @100K, 6.4× @1M, 12.9× @10M rows. Caveat disclosed in the config: Postgres pays macOS Docker-VM tax on this bench. |
-| `40f422d5` | TPC-H Q3 validation | [tpch_quack_validation.yaml](../sql_benchmarks/experiments/queue/tpch_quack_validation.yaml) | On canonical dbgen data, pushdown holds ~1.7× on a 3-way join; attach mode cannot execute multi-table joins at all (DNF, "multiple streaming scans not supported" — see duckdb-quack [#150](https://github.com/duckdb/duckdb-quack/issues/150)/[#154](https://github.com/duckdb/duckdb-quack/issues/154)). |
+| `b8e2bfaf` | Quack execution modes | [quack_execution_modes.yaml](../sql_benchmarks/experiments/queue/quack_execution_modes.yaml) | Attach-mode overhead grows with scan size (2.6× @100K → 9.5× @10M rows); pushdown stays flat at ~2×. Mechanism: attach mode streams table data client-side; pushdown ships only results. [Figure](figures/execution_modes_b8e2bfaf.png) |
+| `25b0e134` | Pushdown residual: thread probe | [quack_residual_threads.yaml](../sql_benchmarks/experiments/queue/quack_residual_threads.yaml) | Pushdown's flat ~2× residual matches in-process DuckDB at 2–4 effective threads (of 8) — consistent with reduced parallelism in the server's execution context, not protocol transport. |
+| `902d1277` | Quack vs Postgres head-to-head | [quack_vs_postgres.yaml](../sql_benchmarks/experiments/queue/quack_vs_postgres.yaml) | Client-server vs client-server: DuckDB-over-Quack (pushdown, beta) beats Postgres at every scale beyond the noise floor — 4.4× @100K, 6.1× @1M, 13.2× @10M rows. Caveat disclosed in the config: Postgres pays macOS Docker-VM tax on this bench. |
+| `b198363e` | TPC-H Q3 validation | [tpch_quack_validation.yaml](../sql_benchmarks/experiments/queue/tpch_quack_validation.yaml) | On canonical dbgen data, pushdown holds ~1.7× on a 3-way join; attach mode cannot execute multi-table joins at all (DNF, "multiple streaming scans not supported" — see duckdb-quack [#150](https://github.com/duckdb/duckdb-quack/issues/150)/[#154](https://github.com/duckdb/duckdb-quack/issues/154)). |
 
 All four: DuckDB 1.5.3 (Quack beta), replication 5, cold cache per query,
 idle bench. Full conditions in each capsule's `metadata_<ID>.json`. These four
@@ -20,7 +20,7 @@ are the verified set, covered by the signed `capsules-v1` tag.
 
 | ID | Experiment | Finding |
 |---|---|---|
-| `b82b4eae` | Quack vs in-process DuckDB (first scout) | Single-replication, two-engine probe that first surfaced the trend: attach-mode overhead *growing* with scan size (2.7× @100K, 4.9× @1M). It motivated the designed experiment `48c92f31`, whose config header still cites it. |
+| `b82b4eae` | Quack vs in-process DuckDB (first scout) | Single-replication, two-engine probe that first surfaced the trend: attach-mode overhead *growing* with scan size (2.7× @100K, 4.9× @1M). It motivated the designed experiment `b8e2bfaf`, whose config header still cites it. |
 
 `b82b4eae` is committed so that reference resolves and the scout is inspectable —
 but it is deliberately held to a lower bar than the verified set, and you should
@@ -33,7 +33,7 @@ treat it accordingly:
   the signed `capsules-v1` tag**.
 
 It is the lab-notebook entry that came first. The rigorous, verified successor is
-`48c92f31`.
+`b8e2bfaf`.
 
 ## What's in a capsule
 
@@ -105,14 +105,14 @@ python scripts/tools/analyze_scaling.py <ID>
 
 | Capsule | duckdb (in-process) | quack attach | quack pushdown | postgres |
 |---|---|---|---|---|
-| `48c92f31` | α=0.35 | α=0.55 (~√N) | α=0.32 | — |
-| `86aececc` | α=0.36 | — | α=0.32 | α=0.61 |
+| `b8e2bfaf` | α=0.35 | α=0.55 (~√N) | α=0.32 | — |
+| `902d1277` | α=0.36 | — | α=0.33 | α=0.60 |
 
 The reading: **pushdown shares DuckDB's exponent (~0.32–0.36) — same complexity class,
 separated only by a constant (the thread tax); attach mode is a worse class
-(√N); and Postgres is worse still (0.61), which is why the head-to-head gap
+(√N); and Postgres is worse still (0.60), which is why the head-to-head gap
 *widens* with scale.** DuckDB reads ~0.35 in both capsules — an independent
-consistency check. (`2d0105fe` is a thread sweep and `40f422d5` uses
+consistency check. (`25b0e134` is a thread sweep and `b198363e` uses
 scale_factor, not a row axis, so neither yields a meaningful scaling fit.)
 
 α≈0 is flat, 0.5 is O(√N), 1 is linear. Engines sharing an α but offset by a

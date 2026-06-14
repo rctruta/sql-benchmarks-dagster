@@ -1,0 +1,19 @@
+{
+  "meta": {
+    "timestamp": "2026-06-14T17:45:19.307675",
+    "experiment_id": "b198363e",
+    "dagster_run_id": "515c6326-52a4-42ec-b3de-49764f9a7fcd",
+    "engine": "quack",
+    "asset": "e_b198363e__quack_benchmark_q3_shipping_priority",
+    "partition": "medium"
+  },
+  "metrics": {
+    "duration_seconds": null,
+    "durations_raw": [],
+    "replication_factor": 0,
+    "dnf": true
+  },
+  "parameters": {
+    "scale_factor": 1.0
+  }
+}
