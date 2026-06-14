@@ -44,10 +44,17 @@ results/<ID>/
 ├── fragments/*.json         # atomic measurements incl. durations_raw (every replication)
 ├── metadata_<ID>.json       # conditions: engine/Python versions, OS, machine, cores, RAM
 ├── experiment_config.yaml   # the exact config that ran
-├── scaling.json            # per-engine power-law exponent (auto, when row-scaled)
 ├── integrity.seal           # SHA-256 over every capsule file — tamper evidence
+├── scaling.json             # per-engine power-law exponent — see note below
 └── data_stats/              # generated-data statistics
 ```
+
+`scaling.json` is a *derived* artifact: it is auto-written into capsules produced
+after the feature landed, but for any capsule — including the four published
+here, which predate it — the exponents are regenerated on demand from the sealed
+raw fragments with `analyze_scaling.py`. The integrity guarantee lives on the
+fragments; scaling is reproducible from them, so its presence as a file is a
+convenience, not the source of truth.
 
 ## The trust chain — verify without trusting me
 
@@ -67,6 +74,17 @@ Together: **a result you can trust without trusting the person who ran it.**
 python scripts/dev/verify_capsule.py <ID>     # checks integrity + timestamp
 ```
 
+To verify authorship after cloning (one-time setup, then `git verify-tag`):
+
+```
+git config gpg.ssh.allowedSignersFile .github/allowed_signers
+git verify-tag capsules-v1     # → Good "git" signature for ramona.truta@gmail.com
+```
+
+The repo ships `.github/allowed_signers` mapping the author's identity to the
+public signing key, so the signed `capsules-v1` tag is verifiable by anyone
+offline — no GitHub account or trust in GitHub required.
+
 The timestamp proof is trustless — it anchors the seal's hash to the Bitcoin
 blockchain, so neither I, nor GitHub, nor anyone can backdate or silently
 edit a published result without the proof failing. New capsules are stamped
@@ -74,15 +92,28 @@ at publication with `scripts/dev/timestamp_capsule.py` (requires
 `opentimestamps-client`); proofs start "pending" and finalize after the next
 Bitcoin block via `ots upgrade`.
 
-## Scaling law (auto-generated)
+## Scaling law
 
-Every row-scaled capsule carries `scaling.json`: each engine's power-law
-exponent α (complexity class) fit from the raw fragments, sealed with the
-rest of the capsule. Regenerate or inspect any capsule's exponents with:
+Each engine's power-law exponent α (complexity class), fit from a capsule's raw
+fragments. Regenerate any of these from the sealed data with:
 
 ```
 python scripts/tools/analyze_scaling.py <ID>
 ```
+
+**Published capsules with a row-scaled matrix:**
+
+| Capsule | duckdb (in-process) | quack attach | quack pushdown | postgres |
+|---|---|---|---|---|
+| `3e2fe152` | α=0.34 | α=0.51 (~√N) | α=0.31 | — |
+| `0ee24e68` | α=0.34 | — | α=0.34 | α=0.62 |
+
+The reading: **pushdown shares DuckDB's exponent (~0.34) — same complexity class,
+separated only by a constant (the thread tax); attach mode is a worse class
+(√N); and Postgres is worse still (0.62), which is why the head-to-head gap
+*widens* with scale.** DuckDB reads 0.34 in both capsules — an independent
+consistency check. (`45db01a4` is a thread sweep and `25ce1385` uses
+scale_factor, not a row axis, so neither yields a meaningful scaling fit.)
 
 α≈0 is flat, 0.5 is O(√N), 1 is linear. Engines sharing an α but offset by a
 constant factor are the same algorithm at different fixed cost; a larger α is a
