@@ -104,6 +104,45 @@ Managed with a strict separation between Harness and Scenario:
 
 ---
 
+## Naming & Provenance
+
+The lab works at two layers, named two different ways. Keeping them distinct is
+the difference between a number you can trace and a number you have to trust.
+
+| Layer | What it is | Named by | Example |
+| :--- | :--- | :--- | :--- |
+| **Capsule** | one experiment's complete results | its **Experiment ID** — an 8-char SHA-256 of the *question* (config + SQL + measurement code), assigned by the machine | `48c92f31` |
+| **Release** | a signed set of capsules backing a publication | a human name: **`sqlbenchdag-<topic>-v<N>-<YYYYMMDD>`** | `sqlbenchdag-quack-v1-20260614` |
+
+A release *contains* capsules; a capsule is one experiment. The machine names
+capsules (hashes you can't forge); the author names releases (words that mean
+something). `sqlbenchdag` is the lab's maker's mark — `sql` + `bench` +
+`dag` (Dagster, the orchestration that distinguishes this lab from a bare query
+timer). It is carried on every release this lab produces.
+
+**Two hashes, two jobs** (a capsule contains both — they are not the same thing):
+- the **Experiment ID** (8 chars) is an *address* — it *names* the capsule, and
+  the same question always produces the same address;
+- the **integrity seal** (64 chars, in `integrity.seal`) is a *checksum* — it
+  *verifies* the capsule's contents are untouched. You file by the address; the
+  seal is the tamper-evident lid.
+
+**Reproducibility is pinned to the release.** Because the Experiment ID hashes
+the measurement code, it is stable only at a fixed code revision — which is
+exactly what the signed release tag freezes. To reproduce a published capsule,
+check out its release tag and re-run its config; the same question yields the
+same ID, or the comparison is refused by construction.
+
+> Provenance roadmap: a per-capsule `generator` stamp (`sqlbenchdag@<commit>`)
+> will record the exact build that produced each capsule. It writes through the
+> finalization code, which lives inside the Experiment-ID hash, so it ships with
+> a future release rather than re-numbering capsules already published.
+
+See [docs/published_capsules.md](docs/published_capsules.md) for the full trust
+chain (reproducibility, integrity, timestamp, authorship) and how to verify each.
+
+---
+
 ## License
 
 Copyright 2025-2026 Ramona C. Truta. Licensed under the [Apache License 2.0](LICENSE).
