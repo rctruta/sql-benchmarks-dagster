@@ -72,16 +72,15 @@ def parse_fragments_to_records(experiment_id):
                 "Duration_Max": duration_max,
                 "DNF": bool(metrics.get("dnf", False)),
                 "Engine": str(meta.get("engine", "Unknown")),
-                "System": str(meta.get("engine")),
                 # None (blank in CSV) when the experiment has no 'rows'
                 # dimension (e.g. TPC-H uses scale_factor) — 0 must never
                 # be the disguise for "absent".
                 "Rows": int(params["rows"]) if "rows" in params else None,
                 "Selectivity": float(params.get("derived_selectivity", 0.0) or 0.0)
             }
-
-            if "disk_type" in params:
-                 row["System"] += f" ({params['disk_type']})"
+            # Note: the old 'System' column (engine + disk_type label) was
+            # removed as a duplicate of 'Engine'; disk_type survives as its
+            # own column via the parameter merge below.
 
             # Merge ALL parameters into the row (Dynamic Columns)
             # This ensures 'null_probability' etc appear in CSV.
@@ -128,7 +127,7 @@ def performance_dashboard(context: AssetExecutionContext):
     
     # Deduplicate: Keep last run for same (Asset, Partition, Engine)
     # Rows might technically differ but Partition should cover it.
-    unique_keys = ["Asset", "Partition", "System", "Rows"]
+    unique_keys = ["Asset", "Partition", "Engine", "Rows"]
     # Filter keys that actually exist (to be safe if Partition is missing in legacy)
     unique_keys = [k for k in unique_keys if k in df.columns]
     
@@ -142,7 +141,7 @@ def performance_dashboard(context: AssetExecutionContext):
     
     cols_to_drop = []
     for col in pldf.columns:
-        if col in ["Asset", "System", "Engine", "Partition", "Duration"]:
+        if col in ["Asset", "Engine", "Partition", "Duration"]:
             continue
             
         # Check if column is all null or all default (0.0 for float, 0 for int)
@@ -170,8 +169,8 @@ def performance_dashboard(context: AssetExecutionContext):
     # 4. RENDER (Visualization - Matrix Explorer)
     figures_html = []
     
-    # Identify Matrix Parameters (Columns that are not "System", "Asset", "Duration", "Engine", "Partition")
-    excluded_cols = {"Asset", "Partition", "Duration", "Duration_Min", "Duration_Max", "Engine", "System"}
+    # Identify Matrix Parameters (numeric columns that aren't fixed labels)
+    excluded_cols = {"Asset", "Partition", "Duration", "Duration_Min", "Duration_Max", "Engine"}
     matrix_params = [c for c in pldf.columns if c not in excluded_cols and pd.api.types.is_numeric_dtype(pldf[c])]
     
     context.log.info(f"Matrix Params Detected: {matrix_params}")
@@ -179,23 +178,23 @@ def performance_dashboard(context: AssetExecutionContext):
          context.log.info(f"Unique Null Probs: {pldf['null_probability'].unique().tolist()}")
 
     # -------------------------------------------------------------------------
-    # 1. Comparison by System (The Basics)
+    # 1. Comparison by Engine (The Basics)
     # -------------------------------------------------------------------------
     try:
-        # Side-by-Side System Comparison (Fixed Rows Scaling)
+        # Side-by-Side Engine Comparison (Fixed Rows Scaling)
         # Check if "Rows" is a parameter, as it's the standard X-axis
         if "Rows" in matrix_params:
              fig_compare = px.line(
                 pldf, 
                 x="Rows", 
                 y="Duration", 
-                color="System", 
+                color="Engine", 
                 line_dash="Asset", 
-                symbol="System",
+                symbol="Engine",
                 log_x=True,
                 log_y=True,
                 markers=True,
-                title="<b>Global Comparison</b>: System Scaling (Rows vs Duration)"
+                title="<b>Global Comparison</b>: Engine Scaling (Rows vs Duration)"
             )
              figures_html.append(fig_compare.to_html(full_html=False, include_plotlyjs='cdn'))
     except Exception as e:
@@ -204,10 +203,10 @@ def performance_dashboard(context: AssetExecutionContext):
     # -------------------------------------------------------------------------
     # 2. DYNAMIC DISCOVERY ENGINE (The "Smart Logic")
     # -------------------------------------------------------------------------
-    unique_systems = sorted(pldf["System"].unique())
+    unique_systems = sorted(pldf["Engine"].unique())
     
     for system in unique_systems:
-        system_df = pldf[pldf["System"] == system].copy()
+        system_df = pldf[pldf["Engine"] == system].copy()
         
         # A. Discover Roles
         # -----------------
@@ -333,7 +332,7 @@ def performance_dashboard(context: AssetExecutionContext):
                  x="Rows", 
                  y="null_probability", 
                  z="Duration", 
-                 color="System",
+                 color="Engine",
                  symbol="Asset",
                  log_x=True,
                  log_z=True,
@@ -362,10 +361,25 @@ def performance_dashboard(context: AssetExecutionContext):
     # 5. WRITE CSV
     # -------------------------------------------------------------------------
     df.write_csv(csv_path)
-    
+
+    # -------------------------------------------------------------------------
+    # 6. SCALING LAW (auto-analysis, sealed with the capsule)
+    # Fit each engine's power-law exponent from the raw fragments. Written
+    # before the coordinator seals the capsule, so the exponents are
+    # tamper-protected alongside the timings. Absent for experiments without
+    # a row-scaled matrix (e.g. TPC-H scale_factor) — that's expected.
+    # -------------------------------------------------------------------------
+    from ..utils.scaling import analyze_capsule
+    scaling = analyze_capsule(RESULTS_DIR, EXP_ID)
+    if scaling:
+        with open(os.path.join(exp_dir, "scaling.json"), "w") as f:
+            json.dump(scaling, f, indent=2)
+        alphas = {e: r["alpha"] for e, r in scaling.items()}
+        context.log.info(f"Scaling law (alpha per engine): {alphas}")
+
     return MaterializeResult(
         metadata={
             "dashboard_path": MetadataValue.path(html_path),
             "results_csv_path": MetadataValue.path(csv_path),
-            "experiment_id": EXP_ID 
+            "experiment_id": EXP_ID
         })

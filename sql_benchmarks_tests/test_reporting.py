@@ -68,7 +68,11 @@ def test_parse_fragments_extracts_dimensions(mock_results_dir):
     assert row["Rows"] == 1000000
     assert row["Selectivity"] == 0.05
     assert row["Duration"] == 120.5
-    assert row["System"] == "postgres (ssd)" # Dynamic Construction
+    # 'System' (engine + disk_type label) was removed as a duplicate of
+    # 'Engine'; engine and disk_type are now separate first-class columns.
+    assert row["Engine"] == "postgres"
+    assert row["disk_type"] == "ssd"
+    assert "System" not in row
 
 def test_parse_fragments_handles_corruption(mock_results_dir):
     """Corrupted JSON files should be skipped, not crash the pipeline."""
