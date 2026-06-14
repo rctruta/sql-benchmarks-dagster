@@ -24,6 +24,7 @@ results/<ID>/
 ├── fragments/*.json         # atomic measurements incl. durations_raw (every replication)
 ├── metadata_<ID>.json       # conditions: engine/Python versions, OS, machine, cores, RAM
 ├── experiment_config.yaml   # the exact config that ran
+├── scaling.json            # per-engine power-law exponent (auto, when row-scaled)
 ├── integrity.seal           # SHA-256 over every capsule file — tamper evidence
 └── data_stats/              # generated-data statistics
 ```
@@ -52,6 +53,21 @@ edit a published result without the proof failing. New capsules are stamped
 at publication with `scripts/dev/timestamp_capsule.py` (requires
 `opentimestamps-client`); proofs start "pending" and finalize after the next
 Bitcoin block via `ots upgrade`.
+
+## Scaling law (auto-generated)
+
+Every row-scaled capsule carries `scaling.json`: each engine's power-law
+exponent α (complexity class) fit from the raw fragments, sealed with the
+rest of the capsule. Regenerate or inspect any capsule's exponents with:
+
+```
+python scripts/tools/analyze_scaling.py <ID>
+```
+
+α≈0 is flat, 0.5 is O(√N), 1 is linear. Engines sharing an α but offset by a
+constant factor are the same algorithm at different fixed cost; a larger α is a
+worse scaling class. (A meaningful fit needs ≥3 scale points — `n_points` is
+recorded so two-point fits, which always show R²=1.0, are obvious.)
 
 ## How to reproduce
 
