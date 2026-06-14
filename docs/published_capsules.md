@@ -13,7 +13,27 @@ so any cited number can be inspected down to its raw replication measurements.
 | `25ce1385` | TPC-H Q3 validation | [tpch_quack_validation.yaml](../sql_benchmarks/experiments/queue/tpch_quack_validation.yaml) | On canonical dbgen data, pushdown holds ~1.7× on a 3-way join; attach mode cannot execute multi-table joins at all (DNF, "multiple streaming scans not supported" — see duckdb-quack [#150](https://github.com/duckdb/duckdb-quack/issues/150)/[#154](https://github.com/duckdb/duckdb-quack/issues/154)). |
 
 All four: DuckDB 1.5.3 (Quack beta), replication 5, cold cache per query,
-idle bench. Full conditions in each capsule's `metadata_<ID>.json`.
+idle bench. Full conditions in each capsule's `metadata_<ID>.json`. These four
+are the verified set, covered by the signed `capsules-v1` tag.
+
+## Act 0 — the exploratory origin (historical, *not* in the verified set)
+
+| ID | Experiment | Finding |
+|---|---|---|
+| `b82b4eae` | Quack vs in-process DuckDB (first scout) | Single-replication, two-engine probe that first surfaced the trend: attach-mode overhead *growing* with scan size (2.7× @100K, 4.9× @1M). It motivated the designed experiment `3e2fe152`, whose config header still cites it. |
+
+`b82b4eae` is committed so that reference resolves and the scout is inspectable —
+but it is deliberately held to a lower bar than the verified set, and you should
+treat it accordingly:
+
+- **single replication** (no error bars), only three scale points, no pushdown variant;
+- produced under the **pre-migration hashing**, so re-running its config today
+  yields a *different* ID — it is re-runnable, not re-derivable to this ID;
+- its metadata predates the environment/seed capture, and it is **excluded from
+  the signed `capsules-v1` tag**.
+
+It is the lab-notebook entry that came first. The rigorous, verified successor is
+`3e2fe152`.
 
 ## What's in a capsule
 
