@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "timestamp": "2026-06-14T17:42:51.514175",
+    "experiment_id": "25b0e134",
+    "dagster_run_id": "f78f501a-0a88-434b-ad65-e42299f698ac",
+    "engine": "duckdb",
+    "asset": "e_25b0e134__duckdb_benchmark_analytical_wall",
+    "partition": "4_medium"
+  },
+  "metrics": {
+    "duration_seconds": 0.014299440383911132,
+    "durations_raw": [
+      0.014338970184326172,
+      0.014642000198364258,
+      0.013975143432617188,
+      0.014282941818237305,
+      0.014258146286010742
+    ],
+    "replication_factor": 5
+  },
+  "parameters": {
+    "duckdb.threads": 4,
+    "rows": 1000000
+  }
+}

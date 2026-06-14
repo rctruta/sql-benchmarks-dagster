@@ -156,7 +156,7 @@ class ExperimentCoordinator:
             return False
 
         # 1. Capture Metadata (in scratchpad first)
-        from .utils.system import capture_environment
+        from .utils.system import capture_environment, generator_id
         metadata = {
             "experiment_id": self.exp_id,
             "timestamp": time.time(),
@@ -167,6 +167,8 @@ class ExperimentCoordinator:
             # YAML omits it — a capsule must state the seed its data came
             # from, never leave it implied by a code default.
             "dataset_seed": (self.config.get("dataset") or {}).get("seed", 42),
+            # Maker's mark: which tool + build produced this capsule.
+            "generator": generator_id(),
         }
         with open(os.path.join(scratch_exp_folder, f"metadata_{self.exp_id}.json"), "w") as f:
             json.dump(metadata, f, indent=4)

@@ -93,14 +93,25 @@ Managed with a strict separation between Harness and Scenario:
 
 ---
 
-## Experiment Library
+## Published Experiments — the Quack investigation
 
-| Experiment | YAML Config | SQL Scenario | Description |
-| :--- | :--- | :--- | :--- |
-| **Selectivity Cliff** | [selectivity_test.yaml](sql_benchmarks/experiments/archive/selectivity_test.yaml) | `/selectivity/` | Testing row-store vs columnar on varying scan selectivity. |
-| **Null Density** | [null_identity.yaml](sql_benchmarks/experiments/queue/null_identity.yaml) | `/null_logic/` | Benchmarking 3-Valued Logic vs Identity Logic in Joins. |
-| **Sentinel Optimization**| [null_sentinel.yaml](sql_benchmarks/experiments/queue/null_sentinel.yaml) | `/null_sentinel/` | Testing materialization prep vs query-time 2VL logic. |
-| **Recursive Depth** | [recursivity_test.yaml](sql_benchmarks/experiments/archive/recursivity_test.yaml) | `/recursion/` | Measuring the performance of deep Recursive CTEs. |
+The first published study with this lab: an independent measurement of DuckDB's
+**Quack** client-server protocol (beta, v1.5.3). Each row links the runnable
+config to its committed, verifiable capsule. Full numbers, scaling exponents,
+and verification steps in [docs/published_capsules.md](docs/published_capsules.md).
+
+| Act | Question | Config | Capsule | Finding |
+| :--- | :--- | :--- | :--- | :--- |
+| **I** | What does the protocol cost? | [quack_execution_modes.yaml](sql_benchmarks/experiments/queue/quack_execution_modes.yaml) | `b8e2bfaf` | Attach-mode overhead grows with scan size (2.6× → **9.5×** at 10M rows); pushdown stays flat at ~2×. |
+| **II** | Why is pushdown ~2× and not 1×? | [quack_residual_threads.yaml](sql_benchmarks/experiments/queue/quack_residual_threads.yaml) | `25b0e134` | The residual tracks reduced server-side parallelism (~2–4 of 8 threads), not transport. |
+| **III** | Does it generalize to joins? | [tpch_quack_validation.yaml](sql_benchmarks/experiments/queue/tpch_quack_validation.yaml) | `b198363e` | On canonical TPC-H Q3, pushdown holds (~1.7×); attach mode **cannot run the join at all** (DNF). |
+| **IV** | Does it beat the incumbent? | [quack_vs_postgres.yaml](sql_benchmarks/experiments/queue/quack_vs_postgres.yaml) | `902d1277` | DuckDB-over-Quack (pushdown) beats PostgreSQL by up to **13.2×**, and the gap widens with scale. |
+
+*Act 0 (`b82b4eae`) is the exploratory scout that started it — see published_capsules.md.*
+
+The lab also ships scenario suites for other studies — `selectivity/`,
+`null_logic/`, `null_sentinel/`, `recursion/`, `sort_spill/`, `tpch/`, and more
+under `sql_benchmarks/scripts/sql/` — each runnable across the engine matrix.
 
 ---
 

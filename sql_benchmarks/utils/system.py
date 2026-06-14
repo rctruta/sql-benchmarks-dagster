@@ -37,6 +37,25 @@ def capture_environment() -> dict:
         pass
     return env
 
+
+def generator_id() -> str:
+    """
+    The capsule's maker's mark + the exact code revision that produced it —
+    a SLSA-style 'builder' identity. Stamped into every capsule's metadata so
+    each artifact says which tool, at which build, generated it.
+    Falls back to the bare slug outside a git checkout.
+    """
+    import subprocess
+    from ..constants import LAB_SLUG, ROOT_DIR
+    try:
+        sha = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=ROOT_DIR, capture_output=True, text=True, timeout=5,
+        ).stdout.strip()
+        return f"{LAB_SLUG}@{sha}" if sha else LAB_SLUG
+    except Exception:
+        return LAB_SLUG
+
 def thrash_os_cache(override_gb=None):
     """
     Forces OS Page Cache eviction by writing to a memory-mapped file 
