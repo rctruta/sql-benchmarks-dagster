@@ -57,14 +57,16 @@ license.xml
 dagster_home/
 .telemetry/
 
-# --- Markdown: root *.md ignored by default to keep scratch local
-# (e.g. ARTICLE_DRAFT.md); named project docs are tracked explicitly,
-# and everything under docs/ is tracked wholesale. ---
-*.md
-!README.md
-!AGENTS.md
-!FAQ.md
-!docs/*.md
+# --- Local-only / non-committed (Markdown is otherwise tracked by default) ---
+# Put any local notes/drafts in scratch/ — nothing there is committed except
+# its README. This replaces the old blanket '*.md' ignore, which silently hid
+# new docs (it once dropped FAQ.md).
+scratch/*
+!scratch/README.md
+ARTICLE_DRAFT.md                                   # article scaffold (local)
+architecture/                                      # unpublished red-team/AI-security WIP
+sql_benchmarks/experiments/reports/                # runtime-generated report output
+.pytest_cache/                                     # test cache
 audit.lock
 
 # --- PUBLISHED CAPSULES ---------------------------------------------------
