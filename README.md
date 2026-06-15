@@ -11,6 +11,12 @@ This platform is a specialized laboratory for testing SQL performance hypotheses
 
 The core of the system is a **Deterministic Orchestration Harness** that guarantees that if the logic or the environment changes, the benchmark result changes. If they do not, the result is addressable and cached.
 
+**Scope:** the focus to date is **synthetic and canonical (TPC-H) data**, which
+is the right instrument for *mechanism* experiments — where controlled,
+reproducible data isolates the variable under test. Real-data support exists but
+is experimental; see the [FAQ](FAQ.md) for the synthetic-vs-real rationale, the
+container model, and the roadmap (AI-security testbed, real-data trust chain).
+
 ---
 
 ## Key Features & Innovations
