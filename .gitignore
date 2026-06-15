@@ -111,6 +111,8 @@ venv.old*
 !sql_benchmarks/experiments/results/2d0105fe/integrity.seal.ots
 !sql_benchmarks/experiments/results/40f422d5/integrity.seal.ots
 !sql_benchmarks/experiments/results/86aececc/integrity.seal.ots
+!sql_benchmarks/experiments/results/461beee8/integrity.seal.ots
+!sql_benchmarks/experiments/results/28f7aa1c/integrity.seal.ots
 
 # Act 0 — exploratory origin capsule (historical; not part of the verified
 # signed set; pre-migration hashing so not re-derivable to this ID)
