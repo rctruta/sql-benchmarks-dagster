@@ -48,9 +48,9 @@ Benchmarks are defined as N-dimensional matrices in YAML. The platform expands t
 ## Usage & Technical Setup
 
 ### Prerequisites
-*   **Docker & Docker Compose**: For containerized engine management.
-*   **Python 3.11+**: Core platform runtime.
-*   **Dagster**: Orchestration and state management.
+*   **[uv](https://astral.sh/uv)**: the project's Python environment & dependency manager (fast, modern). `setup.sh` uses it, and it can install Python 3.11 for you.
+*   **Python 3.11+**: core runtime (uv provisions it if missing).
+*   **Docker**: for the containerized engines (Postgres, TypeDB), which the harness manages itself — *not* required for the DuckDB-only quickstart.
 
 ### Installation & Setup
 The laboratory includes a comprehensive setup script that manages virtual environments, dependencies, and directory initialization.
@@ -74,7 +74,7 @@ While the system is powered by Dagster, the primary interface is the CLI for aut
 ./run.sh queue --auto
 
 # SINGLE EXPERIMENT: Pass a specific config path
-./run.sh sql_benchmarks/experiments/queue/baseline.yaml --auto
+./run.sh sql_benchmarks/experiments/queue/quack_execution_modes.yaml --auto
 ```
 
 ---
