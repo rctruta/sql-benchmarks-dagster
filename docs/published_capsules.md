@@ -93,7 +93,7 @@ To verify authorship after cloning (one-time setup, then `git verify-tag`):
 
 ```
 git config gpg.ssh.allowedSignersFile .github/allowed_signers
-git verify-tag sqlbenchdag-quack-v1-20260614     # → Good "git" signature for ramona.truta@gmail.com
+git verify-tag sqlbenchdag-quack-v1-20260614     # → Good "git" signature (release author)
 ```
 
 The repo ships `.github/allowed_signers` mapping the author's identity to the
