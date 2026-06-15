@@ -73,18 +73,26 @@ audit.lock
 # Canonical evidence for published claims is committed deliberately: anyone
 # citing experiment ID X can open results/X and verify. Everything else in
 # results/ and configs/ remains runtime state and stays ignored.
-!sql_benchmarks/experiments/results/48c92f31/
-!sql_benchmarks/experiments/results/48c92f31/**
-!sql_benchmarks/experiments/results/2d0105fe/
-!sql_benchmarks/experiments/results/2d0105fe/**
-!sql_benchmarks/experiments/results/40f422d5/
-!sql_benchmarks/experiments/results/40f422d5/**
-!sql_benchmarks/experiments/configs/config_48c92f31.yaml
-!sql_benchmarks/experiments/configs/config_2d0105fe.yaml
-!sql_benchmarks/experiments/configs/config_40f422d5.yaml
-!sql_benchmarks/experiments/results/86aececc/
-!sql_benchmarks/experiments/results/86aececc/**
-!sql_benchmarks/experiments/configs/config_86aececc.yaml
+#
+# NOTE: these !-rules are DOCUMENTATION of the published set, not the mechanism.
+# A directory-level ignore (results/ above) cannot be undone by a child !-rule
+# (git's parent-dir rule), so capsules are committed with `git add -f` — see
+# docs/PUBLISHING.md. Keep this list in sync with the real tracked set:
+#   git ls-files sql_benchmarks/experiments/results/ | cut -d/ -f4 | sort -u
+#
+# quack-v1 release (sqlbenchdag-quack-v1-20260614):
+!sql_benchmarks/experiments/results/b8e2bfaf/
+!sql_benchmarks/experiments/results/b8e2bfaf/**
+!sql_benchmarks/experiments/results/25b0e134/
+!sql_benchmarks/experiments/results/25b0e134/**
+!sql_benchmarks/experiments/results/902d1277/
+!sql_benchmarks/experiments/results/902d1277/**
+!sql_benchmarks/experiments/results/b198363e/
+!sql_benchmarks/experiments/results/b198363e/**
+!sql_benchmarks/experiments/configs/config_b8e2bfaf.yaml
+!sql_benchmarks/experiments/configs/config_25b0e134.yaml
+!sql_benchmarks/experiments/configs/config_902d1277.yaml
+!sql_benchmarks/experiments/configs/config_b198363e.yaml
 
 # Selectivity study — indexed vs no-index Postgres + Quack/DuckDB lanes
 !sql_benchmarks/experiments/results/461beee8/
@@ -107,10 +115,10 @@ sql_benchmarks/experiments/wip/
 venv.old*
 
 # OpenTimestamps proofs for published capsule seals
-!sql_benchmarks/experiments/results/48c92f31/integrity.seal.ots
-!sql_benchmarks/experiments/results/2d0105fe/integrity.seal.ots
-!sql_benchmarks/experiments/results/40f422d5/integrity.seal.ots
-!sql_benchmarks/experiments/results/86aececc/integrity.seal.ots
+!sql_benchmarks/experiments/results/b8e2bfaf/integrity.seal.ots
+!sql_benchmarks/experiments/results/25b0e134/integrity.seal.ots
+!sql_benchmarks/experiments/results/902d1277/integrity.seal.ots
+!sql_benchmarks/experiments/results/b198363e/integrity.seal.ots
 !sql_benchmarks/experiments/results/461beee8/integrity.seal.ots
 !sql_benchmarks/experiments/results/28f7aa1c/integrity.seal.ots
 

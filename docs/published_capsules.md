@@ -67,6 +67,9 @@ The three columnar/Quack lanes (DuckDB, pushdown, attach) below are read from
 its natural tool — Postgres a B-tree, DuckDB/Quack automatic min-max zonemaps.
 Index build happens at ingestion, outside the timed query loop.
 
+Both capsules are integrity-sealed, OpenTimestamped (Bitcoin-anchored), and
+covered by the signed `sqlbenchdag-quack-selectivity-v1-20260615` tag.
+
 ![Selectivity sweep at 10M rows](figures/selectivity_461beee8.png)
 
 **Median query time (ms), 1M rows:**
