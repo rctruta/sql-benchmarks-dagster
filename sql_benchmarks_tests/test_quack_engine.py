@@ -83,7 +83,7 @@ def test_engine_delegates_bulk_load():
         engine = QuackEngine(data_folder="/tmp/q")
         engine.bulk_load(filepath="/tmp/x.parquet", table_name="t_tiny", partition_key="tiny")
         MockClient.return_value.bulk_load.assert_called_once_with(
-            "/tmp/x.parquet", "t_tiny", "tiny"
+            "/tmp/x.parquet", "t_tiny", "tiny", None
         )
 
 

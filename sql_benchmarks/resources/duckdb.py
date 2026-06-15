@@ -22,10 +22,10 @@ class DuckDBEngine(ConfigurableResource):
     def get_engine_name(self) -> str:
         return "duckdb"
 
-    def bulk_load(self, filepath: str, table_name: str, partition_key: str) -> None:
+    def bulk_load(self, filepath: str, table_name: str, partition_key: str, table_def: dict = None) -> None:
         """Delegates the bulk loading operation to the client."""
         client = self._get_client()
-        client.bulk_load(filepath, table_name, partition_key)
+        client.bulk_load(filepath, table_name, partition_key, table_def)
 
              
     def run_query(self,

@@ -75,10 +75,10 @@ class QuackClient:
 
     # --- IBenchmarkEngine-facing operations -------------------------------
 
-    def bulk_load(self, filepath: str, target_table_name: str, partition_key: str) -> None:
+    def bulk_load(self, filepath: str, target_table_name: str, partition_key: str, table_def: dict = None) -> None:
         # The server holds the db file open; loading requires exclusive access.
         self.stop_server()
-        self._duck.bulk_load(filepath, target_table_name, partition_key)
+        self._duck.bulk_load(filepath, target_table_name, partition_key, table_def)
 
     def run_query(self,
                   sql: str,

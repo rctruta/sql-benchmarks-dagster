@@ -1,0 +1,23 @@
+{
+  "rows": 1000000,
+  "columns": {
+    "id": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 1000000,
+      "dtype": "Int64"
+    },
+    "selectivity_code": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 6,
+      "dtype": "String"
+    },
+    "payload": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 1000000,
+      "dtype": "String"
+    }
+  }
+}

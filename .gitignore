@@ -86,6 +86,14 @@ audit.lock
 !sql_benchmarks/experiments/results/86aececc/**
 !sql_benchmarks/experiments/configs/config_86aececc.yaml
 
+# Selectivity study — indexed vs no-index Postgres + Quack/DuckDB lanes
+!sql_benchmarks/experiments/results/461beee8/
+!sql_benchmarks/experiments/results/461beee8/**
+!sql_benchmarks/experiments/configs/config_461beee8.yaml
+!sql_benchmarks/experiments/results/28f7aa1c/
+!sql_benchmarks/experiments/results/28f7aa1c/**
+!sql_benchmarks/experiments/configs/config_28f7aa1c.yaml
+
 # Work-in-progress experiment configs (unpublished research — local only)
 sql_benchmarks/experiments/wip/
 
