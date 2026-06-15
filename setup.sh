@@ -1,28 +1,27 @@
 #!/bin/bash
 set -e
 
-echo "--- SQL Benchmarking Laboratory: Environment Setup ---"
+echo "--- SQL Benchmarking Laboratory: Environment Setup (uv) ---"
 
-# 0. Require Python 3.11+ (fail fast — matches pyproject.toml requires-python)
-if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)'; then
-    echo "ERROR: Python 3.11+ required (found: $(python3 --version 2>&1))."
-    echo "Tip: with uv installed, 'uv venv venv --python 3.11' downloads one automatically."
+# 0. Require uv — the project's environment & dependency manager.
+if ! command -v uv >/dev/null 2>&1; then
+    echo "ERROR: uv is required. Install it:"
+    echo "  curl -LsSf https://astral.sh/uv/install.sh | sh"
+    echo "  (see https://astral.sh/uv)"
     exit 1
 fi
 
-# 1. Create Virtual Environment
+# 1. Create the virtual environment (uv fetches Python 3.11 automatically if needed)
 if [ ! -d "venv" ]; then
-    echo "[1/4] Creating virtual environment..."
-    python3 -m venv venv
+    echo "[1/4] Creating virtual environment with uv (Python 3.11)..."
+    uv venv venv --python 3.11
 else
     echo "[1/4] Virtual environment already exists."
 fi
 
-# 2. Update Pip and Install Packages
-echo "[2/4] Installing dependencies..."
-source venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
+# 2. Install dependencies with uv
+echo "[2/4] Installing dependencies with uv..."
+uv pip install --python venv/bin/python -r requirements.txt
 
 # 3. Create Required Directories
 echo "[3/4] Initializing filesystem..."
@@ -35,8 +34,8 @@ mkdir -p sql_benchmarks/experiments/results
 
 # 4. Verify environment
 echo "[4/4] Verifying environment..."
-python3 -c "import dagster; import duckdb; import polars; print('  Core dependencies: OK')"
-docker info > /dev/null 2>&1 && echo "  Docker: OK" || echo "  Docker: not found (Postgres engine will be unavailable)"
+venv/bin/python -c "import dagster; import duckdb; import polars; print('  Core dependencies: OK')"
+docker info > /dev/null 2>&1 && echo "  Docker: OK" || echo "  Docker: not found (Postgres/TypeDB engines unavailable; DuckDB quickstart still works)"
 
 echo "--------------------------------------------------------"
 echo "SETUP COMPLETE!"
