@@ -86,15 +86,6 @@ still carries an exploit. *Structure is not security.* What the lab already
 provides is the part that matters: a sealed, timestamped capsule is reproducible
 evidence with full provenance — exploit or benchmark alike.
 
-## Roadmap (in priority order)
-
-1. **AI-security testbed** — repurpose the harness for adversarial testing of
-   agentic pipelines; expand the semantic auditor into Pydantic/ontology-backed
-   exploit-validation rules.
-2. **Real-data support** — schema validation + input-content checksums, to bring
-   the trust chain to production data.
-3. **Methodology article** — the architecture writeup these experiments reference.
-
 ## How do I verify a published result without trusting the author?
 
 See [docs/published_capsules.md](docs/published_capsules.md) — every capsule is
