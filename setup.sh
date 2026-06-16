@@ -14,7 +14,7 @@ fi
 # 1. Create the virtual environment (uv fetches Python 3.11 automatically if needed)
 if [ ! -d "venv" ]; then
     echo "[1/4] Creating virtual environment with uv (Python 3.11)..."
-    uv venv venv --python 3.11
+    uv venv venv --python 3.11 --prompt sqlbenchdag
 else
     echo "[1/4] Virtual environment already exists."
 fi
