@@ -19,8 +19,14 @@ class PostgresDDLGenerator:
         for idx in self.def_.get('indexes', []):
             cols = idx.get('columns', [])
             if not cols: continue
-            name = idx.get('name', f"idx_{self.name}_{'_'.join(cols)}")
-            sqls.append(f"CREATE INDEX IF NOT EXISTS {name} ON {self.name} ({', '.join(cols)});")
+            # Index names are schema-global in Postgres, but the same table_def is
+            # applied to every partition's physical table. A fixed config name would
+            # collide across partitions — and CREATE INDEX IF NOT EXISTS would
+            # SILENTLY skip all but the first. Scope the name to the physical table
+            # so it is unique, and omit IF NOT EXISTS so a genuine collision is loud.
+            base = idx.get('name') or f"idx_{'_'.join(cols)}"
+            name = f"{base}_{self.name}"
+            sqls.append(f"CREATE INDEX {name} ON {self.name} ({', '.join(cols)});")
         return sqls
 
     def generate_fk_sqls(self):

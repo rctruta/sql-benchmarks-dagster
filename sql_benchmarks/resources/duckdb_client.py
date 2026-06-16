@@ -65,7 +65,10 @@ class DuckDBClient:
     
     # --- IBenchmarkEngine Implementation (Execution Logic) ---
     
-    def bulk_load(self, filepath: str, target_table_name: str, partition_key: str) -> None:
+    def bulk_load(self, filepath: str, target_table_name: str, partition_key: str, table_def: dict = None) -> None:
+        # table_def is accepted for interface symmetry; DuckDB is columnar and
+        # relies on automatic min-max zonemaps, so declared B-tree indexes/PKs
+        # are not applied here.
         db_path = self._get_db_path(partition_key)
 
         # Validate inputs before constructing SQL.

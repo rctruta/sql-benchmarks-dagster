@@ -1,0 +1,54 @@
+meta:
+  name: "Quack Selectivity: does attach mode push predicates down?"
+  description: >
+    Closes the open boundary from the execution-modes study, whose query had
+    no WHERE clause. The selectivity suite filters to a different fraction of
+    rows per query (0.1%–20%). The question: is attach-mode cost FLAT across
+    selectivity (it streams the whole table and filters client-side — the
+    streaming-scan mechanism, now under filtering) or does it TRACK selectivity
+    (it pushes the predicate to the server)? In-process DuckDB and pushdown are
+    the references; Postgres is included as a row-store comparison. Postgres
+    gets a B-tree index on selectivity_code (its natural tool for selective
+    lookups, applied at ingestion outside the timed query loop); DuckDB/Quack
+    are columnar and rely on automatic min-max zonemaps — each engine at its
+    best. Identical data, identical SQL, cold cache, replication 5.
+
+dataset:
+  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  seed: 42
+  tables:
+    skewed_data:
+      rows: rows
+      columns:
+        - name: id
+          provider: sequence
+          primary_key: true
+        - name: selectivity_code
+          provider: choice
+          options: ["sel_0_1", "sel_1", "sel_5", "sel_10", "sel_20", "filler"]
+          weights: [0.001, 0.01, 0.05, 0.10, 0.20, 0.639]
+        - name: payload
+          provider: text_concat
+          prefix: "PADDING_DATA_TO_FORCE_REAL_SCAN_COST_AAAAAAAAAAAAAAAAAAAA_"
+          source: id
+      indexes:
+        - name: idx_skewed_selectivity_code
+          columns: [selectivity_code]
+
+definitions:
+  rows:
+    medium: 1_000_000
+    large: 10_000_000
+
+execution:
+  test_suite: selectivity
+  engines:
+    - duckdb
+    - quack
+    - quack_pushdown
+    - postgres
+  replication: 5
+  matrix:
+    rows:
+      - medium
+      - large

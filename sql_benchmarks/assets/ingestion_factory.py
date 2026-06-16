@@ -68,9 +68,10 @@ def make_ingestion_asset(engine: str, table_name: str):
 
         # 4. Use the polymorphic bulk_load method
         db.bulk_load(
-            filepath=parquet_path, 
-            table_name=target_table_name, 
-            partition_key=partition_key
+            filepath=parquet_path,
+            table_name=target_table_name,
+            partition_key=partition_key,
+            table_def=TABLES_CONFIG.get(table_name),
         )
         
         return None 

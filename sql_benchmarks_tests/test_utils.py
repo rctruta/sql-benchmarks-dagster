@@ -103,6 +103,21 @@ def test_ddl_pk_generation():
     gen = PostgresDDLGenerator(table_def, "users_small", "small")
     assert "PRIMARY KEY (id)" in gen.generate_pk_sql()
 
+
+def test_ddl_index_names_unique_per_partition():
+    """Regression: a fixed config index name must not collide across partitions.
+    Postgres index names are schema-global, but the same table_def is applied to
+    every physical (per-partition) table — so the generated name must embed the
+    physical table name, and must NOT use IF NOT EXISTS (which silently skipped
+    all but the first partition's index)."""
+    table_def = {"indexes": [{"name": "idx_sel", "columns": ["code"]}]}
+    large = PostgresDDLGenerator(table_def, "skewed_data_large", "large").generate_index_sqls()
+    medium = PostgresDDLGenerator(table_def, "skewed_data_medium", "medium").generate_index_sqls()
+    assert large and medium
+    assert large[0] != medium[0]                 # distinct names — no collision
+    assert "IF NOT EXISTS" not in large[0]        # collisions must be loud
+    assert "ON skewed_data_large" in large[0]
+
 from sql_benchmarks.utils import common
 
 MOCK_CONFIG_PAYLOAD = {

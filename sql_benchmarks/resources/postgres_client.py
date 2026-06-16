@@ -56,7 +56,7 @@ class PostgresClient:
             return time.time() - start
 
     # Updated signature to accept partition_key (passed from factory), even if unused logic-wise
-    def bulk_load(self, file_path: str, table_name: str, partition_key: str = None):
+    def bulk_load(self, file_path: str, table_name: str, partition_key: str = None, table_def: dict = None):
         print(f"Streaming {file_path} to {table_name}...")
 
         if file_path.endswith(".parquet"):
@@ -65,13 +65,34 @@ class PostgresClient:
             self._create_schema(table_name, df_schema)
             # 2. Stream Data
             self._stream_parquet(file_path, table_name)
-            
+
         elif file_path.endswith(".json"):
              self._stream_json(file_path, table_name)
         elif file_path.endswith(".csv"):
              self._stream_csv(file_path, table_name)
 
         self._execute_internal(f"ANALYZE {table_name};")
+
+        # Apply declared schema constraints (PK, indexes, FKs) AFTER the bulk
+        # load — building them post-load is correct and faster than per-row.
+        # This is one-time setup cost, outside the timed query loop.
+        if table_def:
+            self._apply_constraints(table_def, table_name, partition_key)
+
+    def _apply_constraints(self, table_def: dict, table_name: str, partition_key: str):
+        from ..utils.ddl import PostgresDDLGenerator
+        gen = PostgresDDLGenerator(table_def, table_name, partition_key)
+        statements = []
+        pk_sql = gen.generate_pk_sql()
+        if pk_sql:
+            statements.append(pk_sql)
+        statements.extend(gen.generate_index_sqls())
+        statements.extend(gen.generate_fk_sqls())
+        for sql in statements:
+            self._execute_internal(sql)
+        if statements:
+            # Refresh stats so the planner can choose an index scan.
+            self._execute_internal(f"ANALYZE {table_name};")
 
     def _create_schema(self, table_name: str, sample_df: pl.DataFrame):
         """

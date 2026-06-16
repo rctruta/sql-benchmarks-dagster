@@ -49,11 +49,11 @@ class PostgresEngine(ConfigurableResource):
         client = self._get_client()
         return client.run_query(sql=sql, pg_settings=engine_params)
 
-    def bulk_load(self, filepath: str, table_name: str, partition_key: str) -> None:
-        self.setup_docker()      
+    def bulk_load(self, filepath: str, table_name: str, partition_key: str, table_def: dict = None) -> None:
+        self.setup_docker()
         self._wait_for_ready()
         client = self._get_client()
-        client.bulk_load(filepath, table_name, partition_key)
+        client.bulk_load(filepath, table_name, partition_key, table_def)
 
     def get_engine_name(self) -> str:
         return "postgres"

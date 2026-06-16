@@ -112,8 +112,10 @@ and verification steps in [docs/published_capsules.md](docs/published_capsules.m
 | **II** | Why is pushdown ~2× and not 1×? | [quack_residual_threads.yaml](sql_benchmarks/experiments/queue/quack_residual_threads.yaml) | `25b0e134` | The residual tracks reduced server-side parallelism (~2–4 of 8 threads), not transport. |
 | **III** | Does it generalize to joins? | [tpch_quack_validation.yaml](sql_benchmarks/experiments/queue/tpch_quack_validation.yaml) | `b198363e` | On canonical TPC-H Q3, pushdown holds (~1.7×); attach mode **cannot run the join at all** (DNF). |
 | **IV** | Does it beat the incumbent? | [quack_vs_postgres.yaml](sql_benchmarks/experiments/queue/quack_vs_postgres.yaml) | `902d1277` | DuckDB-over-Quack (pushdown) beats PostgreSQL by up to **13.2×**, and the gap widens with scale. |
+| **V** | What does an index buy — and cost? | [quack_selectivity.yaml](sql_benchmarks/experiments/queue/quack_selectivity.yaml) | `461beee8` · `28f7aa1c` | The Postgres optimizer tipping point: an index-only scan wins at 0.1% selectivity, but a bitmap heap scan at 5% is **slower than a seq scan** on a cold cache. Indexed vs no-index, EXPLAIN-verified. |
 
-*Act 0 (`b82b4eae`) is the exploratory scout that started it — see published_capsules.md.*
+*Act 0 (`b82b4eae`) is the exploratory scout that started it — see [docs/published_capsules.md](docs/published_capsules.md).*
+*Act V is covered by its own signed tag, `sqlbenchdag-quack-selectivity-v1-20260615`.*
 
 The lab also ships scenario suites for other studies — `selectivity/`,
 `null_logic/`, `null_sentinel/`, `recursion/`, `sort_spill/`, `tpch/`, and more
