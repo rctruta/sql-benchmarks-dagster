@@ -55,6 +55,27 @@ Two things are not yet built, and both matter for the lab's guarantees:
 
 Until those land, real-data runs are exploratory.
 
+## Does the lab build indexes (primary keys, secondary indexes)?
+
+Yes. A table's declared `primary_key:` and `indexes:` are applied to Postgres at
+ingestion (the DuckDB/Quack engines are columnar and use automatic min-max
+zonemaps instead, so they ignore them). The index is built during the
+ingestion/setup phase — *outside* the timed query loop — so a query measures
+steady-state latency against an already-indexed table, not the one-time build
+cost. Index names are scoped to each partition's physical table, so the same
+table definition can be applied across a matrix without collisions.
+
+But an index is not free, and not always a win. The selectivity study (indexed
+capsule `461beee8` vs no-index `28f7aa1c`) shows Postgres's B-tree winning big on
+a highly selective query — an Index-Only Scan, 4.3× faster at 0.1% of 10M rows —
+yet becoming a *liability* at moderate selectivity on a cold cache: at 5%, the
+planner's Bitmap Heap Scan does enough random heap reads to run *slower than a
+plain sequential scan*. Because the harness measures cold cache (it flushes the
+OS page cache and restarts the container before every query), it surfaces this
+directly; a warm cache would favour the index more broadly. The lesson is that
+"add an index" is a conditional, not a law — see
+[docs/published_capsules.md](docs/published_capsules.md).
+
 ## Can this lab be used for AI-security research?
 
 Yes — it's the top roadmap direction, and the architecture generalizes directly.
