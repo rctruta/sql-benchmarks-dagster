@@ -78,14 +78,13 @@ directly; a warm cache would favour the index more broadly. The lesson is that
 
 ## Can this lab be used for AI-security research?
 
-Yes — it's the top roadmap direction, and the architecture generalizes directly.
-Experiments become adversarial inputs; engines become models or agent configs;
-and the **semantic auditor** — today a proof-of-concept that rejects results
-violating basic invariants before they're sealed — grows into a validation gate
-that asks whether a *structurally valid* (e.g. Pydantic-passing) model output
-still carries an exploit. *Structure is not security.* The reproducible, sealed,
-timestamped capsule then becomes reproducible **exploit evidence** with full
-provenance.
+The architecture generalizes: experiments are adversarial inputs, engines are
+models or agent configs, and the **semantic auditor** (today a proof-of-concept
+that rejects results violating basic invariants before they're sealed) is the
+seed of a validation gate — one that asks whether a *structurally valid* output
+still carries an exploit. *Structure is not security.* What the lab already
+provides is the part that matters: a sealed, timestamped capsule is reproducible
+evidence with full provenance — exploit or benchmark alike.
 
 ## Roadmap (in priority order)
 
