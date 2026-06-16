@@ -126,3 +126,6 @@ venv.old*
 # signed set; pre-migration hashing so not re-derivable to this ID)
 !sql_benchmarks/experiments/results/b82b4eae/
 !sql_benchmarks/experiments/results/b82b4eae/**
+
+# OpenTimestamps upgrade backups — never commit
+*.ots.bak

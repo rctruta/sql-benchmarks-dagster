@@ -1,4 +1,6 @@
 import os
+import glob
+import shutil
 import yaml
 import jinja2
 import jinja2.meta
@@ -208,6 +210,37 @@ def get_engine_sql_dialect(engine_name: str) -> str:
     (sql/<suite>/<dialect>/). The single source of truth for dialect reuse.
     """
     return ENGINE_SQL_DIALECTS.get(engine_name, engine_name)
+
+def copy_suite_queries(capsule_dir: str) -> int:
+    """Embed into the capsule (as queries/) the exact SQL that ran: for each
+    engine in the capsule's config, the .sql files of its dialect directory.
+    This is the subset of the suite the experiment's engines actually used — a
+    reader's convenience copy, NOT a hash input. The Experiment ID hashes the
+    full suite from source, independently of the capsule. Returns file count."""
+    cfg_path = os.path.join(capsule_dir, "experiment_config.yaml")
+    if not os.path.exists(cfg_path):
+        return 0
+    with open(cfg_path) as f:
+        config = yaml.safe_load(f) or {}
+    execution = config.get("execution", {})
+    if not execution.get("test_suite"):
+        return 0
+    dialects = {get_engine_sql_dialect(e) for e in execution.get("engines", [])}
+    src = get_target_sql_dir(config)
+    dest = os.path.join(capsule_dir, "queries")
+    if os.path.isdir(dest):
+        shutil.rmtree(dest)
+    written = 0
+    for dialect in sorted(dialects):
+        dialect_dir = os.path.join(src, dialect)
+        if not os.path.isdir(dialect_dir):
+            continue
+        for sql_file in sorted(glob.glob(os.path.join(dialect_dir, "*.sql"))):
+            out = os.path.join(dest, dialect, os.path.basename(sql_file))
+            os.makedirs(os.path.dirname(out), exist_ok=True)
+            shutil.copy2(sql_file, out)
+            written += 1
+    return written
 
 def get_engine_benchmark_group(engine_name: str) -> str:
     """

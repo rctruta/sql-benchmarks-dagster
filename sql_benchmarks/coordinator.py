@@ -8,6 +8,7 @@ import json
 from .validator import ExperimentValidator
 from .constants import ROOT_DIR, CONFIG_ARCHIVE_DIR, EXPERIMENTS_DIR, PROCESSED_SUFFIX, RESULTS_DIR, VIOLATIONS_DIR, REPORTS_DIR, AUDIT_LOCK_PATH, ACTIVE_CONFIG_PATH
 from .utils.hasher import generate_experiment_hash, generate_integrity_seal
+from .utils.common import copy_suite_queries
 from .utils.semantic_auditor import SemanticAuditor
 from .harness import IsolationHarness
 
@@ -228,6 +229,12 @@ class ExperimentCoordinator:
         # real active.yaml — it was written before the scratchpad redirect.
         experiment_config_dest = os.path.join(canonical_exp_folder, "experiment_config.yaml")
         shutil.copy(ACTIVE_CONFIG_PATH, experiment_config_dest)
+
+        # 3.4 Embed the queries that ran — the selected engines' dialect SQL —
+        # into queries/ so a reader sees them without tracing fragments to
+        # source. A convenience copy; the Experiment ID hashes the full suite
+        # from source independently (see utils.common.copy_suite_queries).
+        copy_suite_queries(canonical_exp_folder)
 
         # 3.5 Seal the capsule: aggregate hash over every file in the final
         # canonical folder (the seal itself excluded). verify_capsule.py

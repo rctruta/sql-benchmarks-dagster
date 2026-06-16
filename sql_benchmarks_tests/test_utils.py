@@ -118,6 +118,27 @@ def test_ddl_index_names_unique_per_partition():
     assert "IF NOT EXISTS" not in large[0]        # collisions must be loud
     assert "ON skewed_data_large" in large[0]
 
+
+def test_copy_suite_queries_selects_only_engine_dialects(tmp_path, monkeypatch):
+    """queries/ embeds only the dialects the config's engines use — not the
+    whole suite. Regression for the selected-dialect capsule embedding."""
+    from sql_benchmarks.utils import common
+    suite = tmp_path / "suite"
+    for dialect in ("duckdb", "postgres", "actian"):
+        (suite / dialect).mkdir(parents=True)
+        (suite / dialect / "q.sql").write_text(f"SELECT 1; -- {dialect}")
+    monkeypatch.setattr(common, "get_target_sql_dir", lambda cfg: str(suite))
+    capsule = tmp_path / "cap"
+    capsule.mkdir()
+    # quack maps to the duckdb dialect; actian is in the suite but not run.
+    (capsule / "experiment_config.yaml").write_text(
+        "execution:\n  test_suite: suite\n  engines: [duckdb, quack, postgres]\n"
+    )
+    n = common.copy_suite_queries(str(capsule))
+    got = {p.parent.name for p in (capsule / "queries").rglob("*.sql")}
+    assert got == {"duckdb", "postgres"}   # actian excluded — only what ran
+    assert n == 2
+
 from sql_benchmarks.utils import common
 
 MOCK_CONFIG_PAYLOAD = {
