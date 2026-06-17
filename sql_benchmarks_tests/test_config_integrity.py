@@ -87,3 +87,50 @@ def test_repo_yaml_validity(filepath):
     # If these fail, the experiment was scientifically invalid and should probably be deleted/fixed.
     validate_stats(config, filepath)
     validate_integrity(config, filepath)
+
+# ==========================================
+# 3. CAPSULE CONFIG IS BYTE-FAITHFUL TO SOURCE
+# ==========================================
+def test_capsule_config_is_verbatim_source_not_redump(tmp_path):
+    """Regression: the capsule's experiment_config.yaml must be the author's
+    exact source bytes, NOT a yaml.dump re-serialization. A round-trip launders
+    intent-bearing formatting (underscored ints, folded prose, unicode dashes),
+    misrepresenting 'the exact config that ran'. The Experiment ID hashes the
+    parsed dict, so verbatim archival changes no ID."""
+    from sql_benchmarks.coordinator import ExperimentCoordinator
+
+    raw = (
+        "meta:\n"
+        '  name: "selectivity – a test"\n'      # real en-dash
+        "  description: >\n"
+        "    a folded prose block — readable on purpose.\n"   # em-dash, folded
+        "definitions:\n"
+        "  rows:\n"
+        "    large: 10_000_000\n"               # underscored int, readable
+    )
+    src = tmp_path / "exp.yaml"
+    src.write_text(raw, encoding="utf-8")
+
+    coord = ExperimentCoordinator(str(src))
+    # run() captures this at validation; emulate that one step here.
+    coord._source_yaml = src.read_text(encoding="utf-8")
+    dest = tmp_path / "experiment_config.yaml"
+    coord._archive_source_config(str(dest))
+
+    archived = dest.read_text(encoding="utf-8")
+    assert archived == raw                      # byte-identical
+    assert "10_000_000" in archived             # underscores survive
+    assert "–" in archived and "—" in archived  # real dashes, not \uXXXX
+
+    # And prove the relic we removed WOULD have mangled it:
+    redump = yaml.dump(yaml.safe_load(raw), sort_keys=False)
+    assert "10_000_000" not in redump           # int underscores lost
+    assert "\\u2013" in redump or "–" not in redump  # dash escaped under default dump
+
+
+def test_archive_source_config_fails_loud_when_uncaptured(tmp_path):
+    """No silent provenance hole: archiving with no captured source must raise."""
+    from sql_benchmarks.coordinator import ExperimentCoordinator
+    coord = ExperimentCoordinator(str(tmp_path / "nope.yaml"))
+    with pytest.raises(RuntimeError):
+        coord._archive_source_config(str(tmp_path / "out.yaml"))
