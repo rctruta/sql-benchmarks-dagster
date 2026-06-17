@@ -1,0 +1,27 @@
+#!/bin/sh
+# Keep the experiment catalog honest. If a commit touches the published capsule
+# set (or the generator) without refreshing docs/experiments.md, fail loud —
+# a stale catalog advertises experiments that don't match the repo.
+#
+# Installed by setup.sh via: git config core.hooksPath .githooks
+set -e
+
+ROOT="$(git rev-parse --show-toplevel)"
+
+# Only enforce when something that affects the catalog is staged, so unrelated
+# commits never depend on a working Python environment.
+if git diff --cached --name-only | grep -qE '^(sql_benchmarks/experiments/results/|docs/experiments\.md|scripts/tools/gen_experiment_catalog\.py)'; then
+    PY="$ROOT/venv/bin/python"
+    [ -x "$PY" ] || PY="$(command -v python3 || true)"
+    if [ -z "$PY" ]; then
+        echo "pre-commit: no python found to verify the experiment catalog" >&2
+        exit 1
+    fi
+    if ! "$PY" "$ROOT/scripts/tools/gen_experiment_catalog.py" --check; then
+        echo "" >&2
+        echo "  -> The experiment catalog is stale. Regenerate and re-stage:" >&2
+        echo "       python scripts/tools/gen_experiment_catalog.py" >&2
+        echo "       git add docs/experiments.md" >&2
+        exit 1
+    fi
+fi

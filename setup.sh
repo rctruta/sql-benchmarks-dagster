@@ -32,6 +32,12 @@ mkdir -p sql_benchmarks/experiments/queue
 mkdir -p sql_benchmarks/experiments/archive
 mkdir -p sql_benchmarks/experiments/results
 
+# 3b. Install git hooks (keeps the experiment catalog from going stale)
+if [ -d .git ] || git rev-parse --git-dir >/dev/null 2>&1; then
+    git config core.hooksPath .githooks
+    echo "  Git hooks: enabled (.githooks)"
+fi
+
 # 4. Verify environment
 echo "[4/4] Verifying environment..."
 venv/bin/python -c "import dagster; import duckdb; import polars; print('  Core dependencies: OK')"
