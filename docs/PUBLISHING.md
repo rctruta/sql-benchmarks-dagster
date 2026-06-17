@@ -24,6 +24,11 @@ python scripts/dev/timestamp_capsule.py <id>
 # 3. Commit the capsule + proof. results/ is gitignored, so FORCE-add it.
 git add -f sql_benchmarks/experiments/results/<id>
 git add sql_benchmarks/experiments/configs/config_<id>.yaml   # if present
+
+# 3b. Refresh the experiment catalog (the pre-commit hook enforces this).
+python scripts/tools/gen_experiment_catalog.py
+git add docs/experiments.md
+
 git commit -m "feat: publish capsule <id> — <one-line finding>"
 
 # 4. Sign the release tag (YOUR key — this is the authorship guarantee).
