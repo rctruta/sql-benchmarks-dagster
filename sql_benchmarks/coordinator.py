@@ -24,7 +24,11 @@ class ExperimentCoordinator:
         self.headless = headless
         self.config = None
         self.exp_id = None
-        
+        # Raw source bytes, captured at validation — the exact text that was
+        # parsed and hashed. Archived verbatim into the capsule so the stored
+        # config is the author's file, not a re-serialization of it.
+        self._source_yaml = None
+
     def run(self) -> bool:
         # 0. Safety Check
         if os.path.exists(AUDIT_LOCK_PATH):
@@ -34,8 +38,9 @@ class ExperimentCoordinator:
         # Phase 1: STRICT VALIDATION
         try:
             with open(self.target_yaml, "r") as f:
-                self.config = yaml.safe_load(f)
-            
+                self._source_yaml = f.read()
+            self.config = yaml.safe_load(self._source_yaml)
+
             ExperimentValidator.validate(self.config, source_label=os.path.basename(self.target_yaml))
             
             # Derive Identity (STRICT SHA-BASED)
@@ -224,11 +229,16 @@ class ExperimentCoordinator:
         # Update csv_target to canonical location for final log message
         csv_target = os.path.join(canonical_exp_folder, f"{self.exp_id}.csv")
 
-        # 3. Copy experiment config into results folder for traceability.
-        # ACTIVE_CONFIG_PATH (the module-level constant) still points to the
-        # real active.yaml — it was written before the scratchpad redirect.
+        # 3. Archive the EXACT source config into the capsule.
+        # Byte-faithful: the author's original file, NOT a yaml.dump
+        # re-serialization. A round-trip launders formatting that carries intent
+        # — underscored ints (1_000_000 -> 1000000), folded prose blocks ->
+        # escaped one-liners, real unicode dashes -> \uXXXX — and so the stored
+        # file would misrepresent "the exact config that ran." The Experiment ID
+        # is hashed from the PARSED dict, so byte-faithful archival changes no
+        # ID; the ID itself is recorded in the folder name and metadata_<ID>.json.
         experiment_config_dest = os.path.join(canonical_exp_folder, "experiment_config.yaml")
-        shutil.copy(ACTIVE_CONFIG_PATH, experiment_config_dest)
+        self._archive_source_config(experiment_config_dest)
 
         # 3.4 Embed the queries that ran — the selected engines' dialect SQL —
         # into queries/ so a reader sees them without tracing fragments to
@@ -258,3 +268,15 @@ class ExperimentCoordinator:
 
         print(f"[SUCCESS] Experiment {self.exp_id} finalized. Results at {csv_target}")
         return is_semantically_valid
+
+    def _archive_source_config(self, dest_path: str) -> None:
+        """Write the captured source YAML (the exact bytes that were parsed and
+        hashed) verbatim into the capsule. Fail loud if it was never captured —
+        an empty/missing archived config is a silent provenance hole."""
+        if not self._source_yaml:
+            raise RuntimeError(
+                "REFUSED: no source config captured; cannot archive the capsule's "
+                "experiment_config.yaml. (Was the coordinator run via run()?)"
+            )
+        with open(dest_path, "w", encoding="utf-8") as f:
+            f.write(self._source_yaml)
