@@ -1,9 +1,32 @@
 [project]
-name = "sql_benchmarks"
+name = "sqlbenchdag"
 version = "0.1.0"
-description = "SQL Benchmarks V7 Platform"
+description = "A reproducible, content-addressed SQL engine benchmarking laboratory."
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Ramona C. Truta" }]
+keywords = [
+    "benchmarking",
+    "sql",
+    "duckdb",
+    "postgres",
+    "dagster",
+    "reproducibility",
+    "provenance",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Database",
+    "Topic :: Scientific/Engineering",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+]
 dependencies = [
     "dagster",
     "dagster-cloud",
@@ -31,9 +54,16 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "dagster-webserver", 
+    "dagster-webserver",
     "pytest"
 ]
+
+[project.urls]
+Homepage = "https://github.com/rctruta/sql-benchmarks-dagster"
+Repository = "https://github.com/rctruta/sql-benchmarks-dagster"
+
+[project.scripts]
+sqlbench = "sql_benchmarks.cli:main"
 
 [build-system]
 requires = ["setuptools"]
@@ -45,6 +75,15 @@ code_location_name = "sql_benchmarks"
 
 [tool.setuptools.packages.find]
 exclude = ["sql_benchmarks_tests"]
+
+# Ship the SQL suites and the experiment template, but NOT local result
+# capsules (experiments/results/**/*.yaml) — those are run output, not package data.
+[tool.setuptools.package-data]
+sql_benchmarks = [
+    "scripts/sql/**/*.sql",
+    "scripts/sql/**/*.sql.template",
+    "experiments/templates/*.yaml",
+]
 
 [tool.pytest.ini_options]
 # Migrated from pytest.ini. Filters target deprecation warnings raised by
