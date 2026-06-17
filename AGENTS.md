@@ -22,7 +22,8 @@ is machine-first. An agent can verify a performance hypothesis here instead of a
 
 1. **Hypothesis** — e.g. "Quack's attach mode degrades with scan size."
 2. **Submit** — write a YAML config to `sql_benchmarks/experiments/queue/` (configs outside
-   the experiments directory are rejected).
+   the experiments directory are rejected). Start from the annotated, schema-valid
+   template: `sql_benchmarks/experiments/templates/experiment_template.yaml`.
 3. **Execute** — `./run.sh sql_benchmarks/experiments/queue/my_exp.yaml --auto`
 4. **Identity** — the system derives the 8-character **Experiment ID**: a SHA-256 fingerprint
    of the config + the SQL + all measurement-relevant Python (orchestration, engine clients,
@@ -34,7 +35,10 @@ is machine-first. An agent can verify a performance hypothesis here instead of a
    - `fragments/*.json` — atomic per-partition measurements including `durations_raw`
      (every replication, not just the mean)
    - `metadata_<ID>.json` — the **conditions**: engine/Python versions, OS, machine, cores, RAM
-   - `experiment_config.yaml` — the exact config that ran
+   - `experiment_config.yaml` — the exact config that ran, archived **verbatim** (the
+     author's source bytes, not a re-serialization)
+   - `queries/<dialect>/*.sql` — the exact SQL each engine ran (the dialect set the
+     config's engines selected)
 
 **Zero-cost cache lookup**: identical question ⇒ identical ID. Check
 `results/<ID>/` before running; if it exists, the answer is already on disk.
