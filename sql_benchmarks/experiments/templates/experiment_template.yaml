@@ -1,0 +1,99 @@
+# =============================================================================
+# EXPERIMENT TEMPLATE — copy this, fill it in, drop the copy in experiments/queue/
+# =============================================================================
+# This is a complete, VALID experiment. Copy it, rename it (e.g.
+# my_experiment.yaml), edit the values, and place it in experiments/queue/ to run.
+#
+# The contract is enforced fail-fast at validation: sql_benchmarks/utils/schema.py
+# (Pydantic). If a field is wrong or missing, the run is rejected before anything
+# executes — there is no "partly valid" experiment.
+#
+# Two things worth knowing before you start:
+#   1. The Experiment ID is a SHA-256 of the PARSED config + the SQL + the
+#      measurement code. Change the question (engines, data, seed, suite, matrix)
+#      and the ID changes. Reformat the file (comments, spacing, quote style) and
+#      it does NOT — formatting is normalized out, like a code comment.
+#   2. Your file is archived into the capsule VERBATIM (byte-for-byte, comments
+#      and all). What you write here is what a reader sees in results/<ID>/.
+# =============================================================================
+
+meta:
+  # Human-readable identity. Optional, but always set them — they are how you and
+  # anyone else tell experiments apart. NOT hashed (the ID ignores meta), so you
+  # can fix a typo here without changing the ID.
+  name: "Short name of the experiment"
+  # The hypothesis, in prose. What question does this run answer?
+  description: >
+    One or more sentences stating the hypothesis and why this experiment tests
+    it. Folded blocks like this stay readable in the archived capsule.
+
+dataset:
+  # The data generator plugin. declarative_gen builds synthetic data from the
+  # column specs below. (For file-based data, use `paths:` instead of `tables:`.)
+  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  # Base seed for synthetic data. HASHED — change it and the ID changes, so two
+  # experiments on different data can never share an identity. Defaults to 42.
+  seed: 42
+  tables:
+    # Table name — referenced by the SQL suite as {{ <name>_table }}.
+    my_table:
+      # Row count: a literal int, or a name from `definitions.rows` below so the
+      # matrix can sweep across scales.
+      rows: rows
+      columns:
+        # sequence: monotonic 1..N. Mark the primary key here.
+        - name: id
+          provider: sequence
+          primary_key: true
+        # choice: categorical values with weights (weights should sum to ~1.0).
+        # Use this to control selectivity — the fraction of rows a filter matches.
+        - name: category
+          provider: choice
+          options: ["a", "b", "c"]
+          weights: [0.1, 0.3, 0.6]
+        # random_int / random_float: numeric ranges via min/max.
+        - name: amount
+          provider: random_float
+          min: 0.0
+          max: 100.0
+        # text_concat: builds a string column (e.g. padding to force real scan
+        # cost). `source` references another column; `prefix` is a literal.
+        - name: payload
+          provider: text_concat
+          prefix: "PADDING_"
+          source: id
+      # OPTIONAL. Indexes built at ingestion, OUTSIDE the timed query loop.
+      # Row stores (Postgres) use these; columnar engines ignore them and rely on
+      # their own min-max zonemaps. Drop this block if you don't want indexes.
+      indexes:
+        - name: idx_my_table_category
+          columns: [category]
+
+# Named scales referenced by `rows:` above and swept by the matrix.
+definitions:
+  rows:
+    medium: 1_000_000
+    large: 10_000_000
+
+execution:
+  # The SQL suite to run: scripts/sql/<test_suite>/<dialect>/*.sql
+  test_suite: selectivity
+  # REQUIRED. Engines to run. Each maps to a SQL dialect directory.
+  # Available: duckdb, quack, quack_pushdown, postgres, actian, typedb.
+  engines:
+    - duckdb
+    - quack
+    - quack_pushdown
+    - postgres
+  # Replications per measured point. Raw per-rep timings are kept in the capsule.
+  replication: 5
+  # OPTIONAL per-engine tuning, namespaced by engine. Each engine sees only its
+  # own namespace. Delete if you don't need it.
+  # engine_params:
+  #   postgres: {work_mem: "64MB", random_page_cost: 1.1}
+  #   duckdb:   {threads: 4}
+  # The matrix: every combination becomes one isolated, cold-cache measurement.
+  matrix:
+    rows:
+      - medium
+      - large

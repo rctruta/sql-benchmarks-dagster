@@ -77,6 +77,9 @@ While the system is powered by Dagster, the primary interface is the CLI for aut
 ./run.sh sql_benchmarks/experiments/queue/quack_execution_modes.yaml --auto
 ```
 
+To write your own experiment, start from the annotated template and see the
+catalog of published runs in **[docs/experiments.md](docs/experiments.md)**.
+
 ---
 
 ## Project Structure
