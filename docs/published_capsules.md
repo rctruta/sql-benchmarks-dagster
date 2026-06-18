@@ -167,18 +167,16 @@ convenience, not the source of truth.
 A benchmark you have to take on faith isn't evidence. Each published capsule
 carries four independent guarantees, and you can check every one yourself:
 
-| Guarantee | Answers | Mechanism | How you check it |
-|---|---|---|---|
-| **Reproducibility** | Did this question produce this result? | content-addressed Experiment ID | re-run the config → same ID |
-| **Integrity** | Have the bytes changed since publication? | `integrity.seal` (SHA-256 over the capsule) | `verify_capsule.py <ID>` |
-| **Timestamp** | Did this exist when claimed — not backdated? | `integrity.seal.ots` (OpenTimestamps → Bitcoin) | `ots verify .../integrity.seal.ots` |
-| **Authorship** | Who produced it? | signed git tag | `git verify-tag <tag>` |
+| Guarantee | Required? | Answers | Mechanism | How you check it |
+|---|---|---|---|---|
+| **Reproducibility** | **Automatic** | Did this question produce this result? | content-addressed Experiment ID | re-run the config → same ID |
+| **Integrity** | **Automatic** | Have the bytes changed since publication? | `integrity.seal` (SHA-256 over the capsule) | `verify_capsule.py <ID>` |
+| **Timestamp** | **Optional** | Did this exist when claimed — not backdated? | `integrity.seal.ots` (OpenTimestamps → Bitcoin) | `ots verify .../integrity.seal.ots` |
+| **Authorship** | **Optional** | Who produced it? | signed git tag | `git verify-tag <tag>` |
 
-Together: **a result you can trust without trusting the person who ran it.**
-
-Reproducibility and Integrity are **automatic** on every run; Timestamp and
-Authorship are **optional** producer steps added at publish time. To generate
-all four yourself, see [PUBLISHING.md](PUBLISHING.md).
+Together: **a result you can trust without trusting the person who ran it.** The
+two automatic guarantees come free with every run; to add the optional proofs
+yourself, see [PUBLISHING.md](PUBLISHING.md).
 
 ```
 python scripts/dev/verify_capsule.py <ID>     # checks integrity + timestamp
