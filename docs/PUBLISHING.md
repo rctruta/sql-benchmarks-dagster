@@ -12,6 +12,11 @@ checkout holds the capsule — no dependence on anyone else's working copy.
 | **Timestamp** | `integrity.seal.ots` — you stamp it (two phases, below) |
 | **Authorship** | signed git tag — your key, your manual act |
 
+> **Two of these are optional.** Reproducibility and Integrity are automatic on
+> every run — free, always present. Timestamp and Authorship are manual; add them
+> only when you publicly stake a claim. A local or exploratory capsule needs
+> neither and is still reproducible and tamper-evident.
+
 ## At publish time (once)
 
 ```bash

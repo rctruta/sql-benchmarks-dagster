@@ -176,6 +176,10 @@ carries four independent guarantees, and you can check every one yourself:
 
 Together: **a result you can trust without trusting the person who ran it.**
 
+Reproducibility and Integrity are **automatic** on every run; Timestamp and
+Authorship are **optional** producer steps added at publish time. To generate
+all four yourself, see [PUBLISHING.md](PUBLISHING.md).
+
 ```
 python scripts/dev/verify_capsule.py <ID>     # checks integrity + timestamp
 ```
