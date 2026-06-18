@@ -162,6 +162,9 @@ same ID, or the comparison is refused by construction.
 
 See [docs/published_capsules.md](docs/published_capsules.md) for the full trust
 chain (reproducibility, integrity, timestamp, authorship) and how to verify each.
+Reproducibility and integrity are **automatic** on every run; timestamp and
+signature are **optional** steps you add only when publishing — the producer
+workflow is [docs/PUBLISHING.md](docs/PUBLISHING.md).
 
 ---
 

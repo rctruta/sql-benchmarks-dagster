@@ -86,8 +86,25 @@ still carries an exploit. *Structure is not security.* What the lab already
 provides is the part that matters: a sealed, timestamped capsule is reproducible
 evidence with full provenance — exploit or benchmark alike.
 
+## Do I have to sign and timestamp every experiment?
+
+No. Two of the four trust-chain guarantees are **automatic**; two are **optional**.
+
+- **Automatic, every run, zero steps** — the content-addressed **Experiment ID**
+  (reproducibility) and the **`integrity.seal`** (tamper-evidence). Every capsule
+  has both, whether you publish it or not.
+- **Optional, manual, only when you publicly stake a claim** — the
+  **OpenTimestamps** proof (trustless evidence it wasn't backdated) and the
+  **signed git tag** (authorship).
+
+A capsule is complete, reproducible, and tamper-evident *without* the optional
+two. Sign and timestamp a **published** result; skip both for a local or
+exploratory one. The producer steps live in
+[docs/PUBLISHING.md](docs/PUBLISHING.md).
+
 ## How do I verify a published result without trusting the author?
 
 See [docs/published_capsules.md](docs/published_capsules.md) — every capsule is
-reproducible (re-run → same ID), integrity-sealed, OpenTimestamped, and the
-release is signed (`git verify-tag`).
+reproducible (re-run → same ID), integrity-sealed, and (if published)
+OpenTimestamped and signed (`git verify-tag`). To produce those proofs yourself,
+see [docs/PUBLISHING.md](docs/PUBLISHING.md).

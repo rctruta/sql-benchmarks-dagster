@@ -8,9 +8,9 @@ confirmed the calendar's commitment, run THIS to fetch the on-chain attestation
 and bake it into the .ots so it verifies offline forever — no trust in the
 calendar, no dependency on anyone.
 
-Usage:  python scripts/dev/upgrade_capsule.py <experiment_id>
-Then commit the upgraded proof:
-        git commit -am "chore: finalize OTS attestation for <id>"
+Usage:  python scripts/dev/upgrade_capsule.py <experiment_id> [<experiment_id> ...]
+Then commit the upgraded proof(s):
+        git commit -am "chore: finalize OTS attestation"
 
 Requires: pip install opentimestamps-client   (provides the `ots` CLI)
 
@@ -56,7 +56,8 @@ def upgrade_capsule(exp_id: str) -> bool:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Finalize a capsule's OTS proof.")
-    parser.add_argument("id", help="8-character Experiment ID")
+    parser = argparse.ArgumentParser(description="Finalize one or more capsules' OTS proofs.")
+    parser.add_argument("ids", nargs="+", metavar="id", help="8-character Experiment ID(s)")
     args = parser.parse_args()
-    sys.exit(0 if upgrade_capsule(args.id) else 1)
+    results = [upgrade_capsule(exp_id) for exp_id in args.ids]
+    sys.exit(0 if all(results) else 1)
