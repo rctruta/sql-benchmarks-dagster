@@ -1,0 +1,70 @@
+meta:
+  name: "Scaling depth: is the 1M->10M kink a boundary or just acceleration?"
+  description: >
+    find_kink.py on the published capsules flags a consistent per-decade slowdown
+    spike at the 1M->10M interval across duckdb, quack, and quack_pushdown
+    (~1.7x/decade up to 1M, then ~6-11x). This experiment tests what that kink is.
+    Two fixes over the original 4-point matrix: add 10K to make the low decades
+    evenly spaced (a clean per-decade baseline), and add 100M as a point ABOVE the
+    kink — the decisive one. If per-decade settles back after 10M, the kink is a
+    localized cache-hierarchy boundary; if it keeps climbing, it is monotonic
+    acceleration, not a kink. analytical_wall is a 12-group aggregation, so its
+    operator memory does NOT scale with N — this isolates scan/cache scaling, and
+    memory_limit is deliberately NOT swept here (see memory_spill_probe.yaml for
+    the operator-memory question). Cold cache, replication 5.
+    Note: attach (quack) and postgres at 100M may be very slow or DNF — that is
+    recorded as data, not treated as failure.
+
+dataset:
+  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  tables:
+    analytical_data:
+      rows: rows
+      columns:
+        - name: id
+          provider: sequence
+          primary_key: true
+        - name: region
+          provider: choice
+          options: ["North", "South", "East", "West"]
+        - name: category
+          provider: choice
+          options: ["A", "B", "C"]
+        - name: price
+          provider: random_float
+          min_value: 10.0
+          max_value: 500.0
+        - name: quantity
+          provider: random_int
+          min_value: 1
+          max_value: 100
+        - name: discount
+          provider: random_float
+          min_value: 0.0
+          max_value: 0.30
+
+definitions:
+  rows:
+    tiny:   1_000
+    xs:     10_000
+    small:  100_000
+    medium: 1_000_000
+    large:  10_000_000
+    xlarge: 100_000_000
+
+execution:
+  test_suite: analytical_wall
+  engines:
+    - duckdb
+    - quack
+    - quack_pushdown
+    - postgres
+  replication: 5
+  matrix:
+    rows:
+      - tiny
+      - xs
+      - small
+      - medium
+      - large
+      - xlarge
