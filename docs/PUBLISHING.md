@@ -5,17 +5,15 @@ produces all four. **Run every step from your own checkout** (after `git pull`);
 the scripts resolve paths relative to themselves, so they act on whatever
 checkout holds the capsule — no dependence on anyone else's working copy.
 
-| Guarantee | How it gets there |
-|---|---|
-| **Reproducibility** | content-addressed Experiment ID — automatic on every run |
-| **Integrity** | `integrity.seal` — automatic when the experiment finalizes |
-| **Timestamp** | `integrity.seal.ots` — you stamp it (two phases, below) |
-| **Authorship** | signed git tag — your key, your manual act |
+| Guarantee | How it happens | Required? |
+|---|---|---|
+| **Reproducibility** | content-addressed Experiment ID | **Automatic** — every run |
+| **Integrity** | `integrity.seal` over the capsule | **Automatic** — at finalize |
+| **Timestamp** | `integrity.seal.ots` (you stamp it — two phases, below) | **Optional** — publish only |
+| **Authorship** | signed git tag (your key) | **Optional** — publish only |
 
-> **Two of these are optional.** Reproducibility and Integrity are automatic on
-> every run — free, always present. Timestamp and Authorship are manual; add them
-> only when you publicly stake a claim. A local or exploratory capsule needs
-> neither and is still reproducible and tamper-evident.
+A local or exploratory capsule needs neither optional step — it is still
+reproducible and tamper-evident from the two automatic ones.
 
 ## At publish time (once)
 
