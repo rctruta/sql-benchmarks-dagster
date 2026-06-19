@@ -35,17 +35,20 @@ climbs with scan size; pushdown tracks in-process DuckDB at a flat ~2×:
 
 | ID | Experiment | Finding |
 |---|---|---|
-| [`b82b4eae`](../sql_benchmarks/experiments/results/b82b4eae/) | Quack vs in-process DuckDB (first scout) | Single-replication, two-engine probe that first surfaced the trend: attach-mode overhead *growing* with scan size (2.7× @100K, 4.9× @1M). It motivated the designed experiment `b8e2bfaf`, whose config header still cites it. |
+| [`b82b4eae`](../sql_benchmarks/experiments/results/b82b4eae/) | Quack vs in-process DuckDB (first scout) | Three-replication, two-engine probe (pre-migration format kept only the aggregate, not per-rep timings) that first surfaced the trend: attach-mode overhead *growing* with scan size (2.7× @100K, 4.9× @1M). It motivated the designed experiment `b8e2bfaf`, whose config header still cites it. |
 
 `b82b4eae` is committed so that reference resolves and the scout is inspectable —
 but it is deliberately held to a lower bar than the verified set, and you should
 treat it accordingly:
 
-- **single replication** (no error bars), only three scale points, no pushdown variant;
+- **three replications, aggregate only** — the pre-migration format kept the
+  summary, not the per-rep timings (so no error bars); only three scale points;
+  no pushdown variant;
 - produced under the **pre-migration hashing**, so re-running its config today
   yields a *different* ID — it is re-runnable, not re-derivable to this ID;
-- its metadata predates the environment/seed capture, and it is **excluded from
-  the signed `sqlbenchdag-quack-v1-20260614` tag**.
+- its metadata predates the environment/seed capture; and although its files are
+  committed under the signed `sqlbenchdag-quack-v1-20260614` tag — the signature
+  covers their bytes — it sits outside the curated *verified set* this page relies on.
 
 It is the lab-notebook entry that came first. The rigorous, verified successor is
 `b8e2bfaf`.
