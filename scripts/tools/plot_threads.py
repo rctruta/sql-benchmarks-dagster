@@ -21,14 +21,14 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-RESULTS = os.path.join(REPO_ROOT, "sql_benchmarks", "experiments", "results")
+from _plotlib import REPO_ROOT, RESULTS_DIR, style
+
 OUT = os.path.join(REPO_ROOT, "scratch", "figures")
 
 
 def load(exp_id):
     s = {}
-    for p in glob.glob(os.path.join(RESULTS, exp_id, "fragments", "*.json")):
+    for p in glob.glob(os.path.join(RESULTS_DIR, exp_id, "fragments", "*.json")):
         d = json.load(open(p))
         par, m = d.get("parameters", {}), d.get("metrics", {})
         raw = m.get("durations_raw") or (
@@ -67,7 +67,7 @@ def main(exp_id="25b0e134"):
         durs = [statistics.median(dd[t]) * 1000 for t in threads]
         push = statistics.median([v for vals in pd.values() for v in vals]) * 1000
         label_n = f"{int(rows):,} rows"
-        plt.plot(threads, durs, marker="o", color=c, label=f"in-process DuckDB — {label_n}")
+        plt.plot(threads, durs, marker="o", color=c, label=f"{style('duckdb')[0]} — {label_n}")
         plt.axhline(push, ls="--", color=c, alpha=0.8)
         eff = effective_threads(threads, durs, push)
         if eff:
