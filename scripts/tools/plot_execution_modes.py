@@ -16,14 +16,7 @@ import sys
 
 import matplotlib.pyplot as plt
 
-RESULTS_DIR = os.path.join("sql_benchmarks", "experiments", "results")
-
-ENGINE_STYLE = {
-    "duckdb":         ("DuckDB in-process", "#2f6f4f", "o"),
-    "quack":          ("Quack attach (ATTACH + USE)", "#b3402a", "s"),
-    "quack_pushdown": ("Quack pushdown (remote.query)", "#3b6ea5", "^"),
-    "postgres":       ("PostgreSQL (Docker)", "#7a5ea8", "D"),
-}
+from _plotlib import RESULTS_DIR, style, bench_string
 
 
 def load_fragments(exp_id):
@@ -61,7 +54,7 @@ def main():
 
     fig, ax = plt.subplots(figsize=(8, 5))
     for engine, points in series.items():
-        label, color, marker = ENGINE_STYLE.get(engine, (engine, None, "o"))
+        label, color, marker = style(engine)
         xs = [rows for rows, _ in points]
         med = [sorted(raw)[len(raw) // 2] for _, raw in points]
         lo = [min(raw) for _, raw in points]
@@ -73,8 +66,8 @@ def main():
     ax.set_yscale("log")
     ax.set_xlabel("Table rows (log scale)")
     ax.set_ylabel("Query duration, ms (log scale, median of replications)")
-    bench = f"{env.get('machine', '')} · {env.get('cpu_count_logical', '?')} cores · DuckDB {env.get('duckdb', '?')}"
-    ax.set_title(f"Quack protocol cost by execution mode — experiment {exp_id}\n"
+    bench = bench_string(env, engines=series.keys())
+    ax.set_title(f"Query cost by engine — experiment {exp_id}\n"
                  f"cold cache, bands = replication min–max · {bench}", fontsize=10)
     ax.legend(frameon=False)
     ax.grid(True, which="both", alpha=0.25)
