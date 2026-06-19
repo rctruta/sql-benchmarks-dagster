@@ -25,3 +25,18 @@ if git diff --cached --name-only | grep -qE '^(sql_benchmarks/experiments/result
         exit 1
     fi
 fi
+
+# Keep doc CLAIMS honest. When docs or the capsule set change, every capsule a
+# doc cites must resolve to a real, git-tracked, sealed capsule — catches
+# fabricated/stale IDs and broken links (the recurring hand-typed-fact bug).
+# Stdlib only, so it runs even without a venv.
+if git diff --cached --name-only | grep -qE '^(README\.md|AGENTS\.md|docs/|sql_benchmarks/experiments/results/)'; then
+    PY="$ROOT/venv/bin/python"
+    [ -x "$PY" ] || PY="$(command -v python3 || true)"
+    if [ -n "$PY" ] && ! "$PY" "$ROOT/scripts/tools/verify_doc_claims.py" --check; then
+        echo "" >&2
+        echo "  -> A doc cites a capsule that isn't tracked+sealed. Fix the reference," >&2
+        echo "     or add a known non-capsule hex to IGNORE in verify_doc_claims.py." >&2
+        exit 1
+    fi
+fi
