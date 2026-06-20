@@ -7,9 +7,9 @@ Publication-time action (deliberate, network-required), distinct from sealing
 Bitcoin-anchored proof that the seal hash existed by a point in time, so a
 result cannot be silently backdated or tampered-then-resealed.
 
-Usage:  python scripts/dev/timestamp_capsule.py <experiment_id>
+Usage:  python scripts/dev/timestamp_capsule.py <experiment_id> [<experiment_id> ...]
 Then later (after a Bitcoin block confirms, ~hours):
-        ots upgrade sql_benchmarks/experiments/results/<id>/integrity.seal.ots
+        python scripts/dev/upgrade_capsule.py <experiment_id> [<experiment_id> ...]
 
 Requires: pip install opentimestamps-client
 """
@@ -42,7 +42,8 @@ def timestamp_capsule(exp_id: str) -> bool:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="OpenTimestamp a capsule seal.")
-    parser.add_argument("id", help="8-character Experiment ID")
+    parser = argparse.ArgumentParser(description="OpenTimestamp one or more capsule seals.")
+    parser.add_argument("ids", nargs="+", metavar="id", help="8-character Experiment ID(s)")
     args = parser.parse_args()
-    sys.exit(0 if timestamp_capsule(args.id) else 1)
+    results = [timestamp_capsule(exp_id) for exp_id in args.ids]
+    sys.exit(0 if all(results) else 1)
