@@ -271,12 +271,16 @@ class ExperimentCoordinator:
 
     def _archive_source_config(self, dest_path: str) -> None:
         """Write the captured source YAML (the exact bytes that were parsed and
-        hashed) verbatim into the capsule. Fail loud if it was never captured —
+        hashed) into the capsule, prefixed with a one-line provenance header that
+        stamps the Experiment ID. The header is a YAML comment, so it is invisible
+        to the hash (the ID is computed from the parsed config) and the body below
+        stays byte-identical to the author's source. Fail loud if never captured —
         an empty/missing archived config is a silent provenance hole."""
         if not self._source_yaml:
             raise RuntimeError(
                 "REFUSED: no source config captured; cannot archive the capsule's "
                 "experiment_config.yaml. (Was the coordinator run via run()?)"
             )
+        header = f"# experiment_id: {self.exp_id}  (run conditions: metadata_{self.exp_id}.json)\n"
         with open(dest_path, "w", encoding="utf-8") as f:
-            f.write(self._source_yaml)
+            f.write(header + self._source_yaml)

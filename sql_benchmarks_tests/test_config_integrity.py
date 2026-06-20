@@ -92,11 +92,12 @@ def test_repo_yaml_validity(filepath):
 # 3. CAPSULE CONFIG IS BYTE-FAITHFUL TO SOURCE
 # ==========================================
 def test_capsule_config_is_verbatim_source_not_redump(tmp_path):
-    """Regression: the capsule's experiment_config.yaml must be the author's
-    exact source bytes, NOT a yaml.dump re-serialization. A round-trip launders
-    intent-bearing formatting (underscored ints, folded prose, unicode dashes),
-    misrepresenting 'the exact config that ran'. The Experiment ID hashes the
-    parsed dict, so verbatim archival changes no ID."""
+    """Regression: the capsule's experiment_config.yaml is the author's exact
+    source bytes (NOT a yaml.dump re-serialization, which would launder
+    intent-bearing formatting — underscored ints, folded prose, unicode dashes),
+    prefixed with a one-line provenance header stamping the Experiment ID. The
+    header is a comment, so it's invisible to parsing/hash; the body stays
+    byte-identical to source."""
     from sql_benchmarks.coordinator import ExperimentCoordinator
 
     raw = (
@@ -112,15 +113,18 @@ def test_capsule_config_is_verbatim_source_not_redump(tmp_path):
     src.write_text(raw, encoding="utf-8")
 
     coord = ExperimentCoordinator(str(src))
-    # run() captures this at validation; emulate that one step here.
+    # run() captures this at validation and sets exp_id; emulate those two steps.
     coord._source_yaml = src.read_text(encoding="utf-8")
+    coord.exp_id = "deadbeef"
     dest = tmp_path / "experiment_config.yaml"
     coord._archive_source_config(str(dest))
 
     archived = dest.read_text(encoding="utf-8")
-    assert archived == raw                      # byte-identical
+    assert archived.startswith("# experiment_id: deadbeef")  # ID stamped in the file
+    assert archived.endswith(raw)               # body byte-identical to source
     assert "10_000_000" in archived             # underscores survive
     assert "–" in archived and "—" in archived  # real dashes, not \uXXXX
+    assert yaml.safe_load(archived) == yaml.safe_load(raw)   # header is a comment → ID-invariant
 
     # And prove the relic we removed WOULD have mangled it:
     redump = yaml.dump(yaml.safe_load(raw), sort_keys=False)
