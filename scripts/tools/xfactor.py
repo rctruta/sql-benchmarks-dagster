@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-X-factor table: each engine's median duration vs a baseline engine, per scale.
+X-factor table: each engine's mean duration vs a baseline engine, per scale.
 
-The engineer's view — "how many times slower than the floor, at MY data size" —
-complementing the log-log scaling exponent (the asymptotic shape). Reads the
-capsule's sealed fragments only, so it can't drift from the numbers.
+Uses the MEAN of the replications — the same statistic the capsule's <ID>.csv
+`Duration` column reports — so this tool agrees with the sealed capsule (median
+would diverge). The engineer's view — "how many times slower than the floor, at
+MY data size" — complementing the log-log scaling exponent (the asymptotic shape).
 
 Usage:  python scripts/tools/xfactor.py <experiment_id> [--baseline duckdb]
 Prints a Markdown table to stdout.
@@ -19,7 +20,7 @@ import sys
 from _plotlib import RESULTS_DIR
 
 
-def medians(capsule: str) -> dict:
+def means(capsule: str) -> dict:
     s: dict = {}
     for p in glob.glob(os.path.join(capsule, "fragments", "*.json")):
         with open(p) as f:
@@ -31,7 +32,7 @@ def medians(capsule: str) -> dict:
             [m["duration_seconds"]] if m.get("duration_seconds") is not None else [])
         if raw:
             s.setdefault(d["meta"]["engine"], {}).setdefault(int(par["rows"]), []).extend(raw)
-    return {e: {n: statistics.median(v) for n, v in by.items()} for e, by in s.items()}
+    return {e: {n: statistics.mean(v) for n, v in by.items()} for e, by in s.items()}
 
 
 def main():
@@ -40,7 +41,7 @@ def main():
     ap.add_argument("--baseline", default="duckdb")
     args = ap.parse_args()
 
-    s = medians(os.path.join(RESULTS_DIR, args.exp_id))
+    s = means(os.path.join(RESULTS_DIR, args.exp_id))
     if args.baseline not in s:
         sys.exit(f"baseline '{args.baseline}' not among capsule engines: {sorted(s)}")
     others = sorted(e for e in s if e != args.baseline)
