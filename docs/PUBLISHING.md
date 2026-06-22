@@ -15,6 +15,17 @@ checkout holds the capsule — no dependence on anyone else's working copy.
 A local or exploratory capsule needs neither optional step — it is still
 reproducible and tamper-evident from the two automatic ones.
 
+## Release discipline (why the ID is reproducible)
+
+The Experiment ID hashes the **measurement code** along with the config and SQL —
+deliberately broad, so *any* change that could affect a result changes the ID
+(loud), never silently keeps it (which would be the integrity hole this lab
+exists to expose). The consequence: **freeze the code, mint the capsules, and tag
+that exact commit as one act.** Don't edit hashed code after minting a release —
+re-running a config on a *different* build yields a *different* ID, by design.
+Each capsule also stamps its build (`generator: sqlbenchdag@<sha>` in metadata),
+so reproduction is always against the recorded build, not arbitrary HEAD.
+
 ## At publish time (once)
 
 ```bash

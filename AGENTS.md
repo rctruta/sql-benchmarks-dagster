@@ -74,8 +74,11 @@ Engines: `duckdb` (in-process), `quack` (DuckDB client-server, attach mode),
 
 ## Trust rules for agents
 
-- **The ID is the receipt.** It fingerprints the question (config + SQL + code). The capsule's
-  `metadata` block records the bench it ran on. Compare ratios across benches, not milliseconds.
+- **The ID is the receipt.** It fingerprints the question (config + SQL + measurement code) — so it
+  *changes when the measurement code changes*. Reproduce against the build the capsule records
+  (`generator` in its `metadata`, e.g. `sqlbenchdag@<sha>`), not arbitrary HEAD; on a different build
+  you get a different ID, by design. The `metadata` also records the bench — compare ratios across
+  benches, not milliseconds.
 - **DNF rows are findings**, not errors — e.g. Quack beta cannot run multi-table joins in
   attach mode; the CSV says so honestly.
 - **Spread is published.** `durations_raw` exists so you can check that a claim is not an
