@@ -9,6 +9,10 @@ fingerprint of the experiment's config, SQL, and all measurement-relevant
 code. The capsules below are committed in full (`sql_benchmarks/experiments/results/<ID>/`)
 so any cited number can be inspected down to its raw replication measurements.
 
+**Engine names** (as they appear in each capsule's `<ID>.csv` `Engine` column):
+`duckdb` = in-process DuckDB (the floor) · `quack` = Quack **attach** mode (ATTACH + USE) ·
+`quack_pushdown` = Quack pushdown (`remote.query()`) · `postgres` = PostgreSQL (Docker).
+
 | ID | Experiment | Config | Finding |
 |---|---|---|---|
 | [`b8e2bfaf`](../sql_benchmarks/experiments/results/b8e2bfaf/) | Quack execution modes | [quack_execution_modes.yaml](../sql_benchmarks/experiments/queue/quack_execution_modes.yaml) | Attach-mode overhead grows with scan size (2.6× @100K → 9.5× @10M rows); pushdown stays flat at ~2×. Mechanism: attach mode streams table data client-side; pushdown ships only results. [Figure](figures/execution_modes_b8e2bfaf.png) |
