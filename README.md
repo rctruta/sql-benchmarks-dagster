@@ -53,7 +53,13 @@ Benchmarks are defined as N-dimensional matrices in YAML. The platform expands t
 *   **Docker**: for the containerized engines (Postgres, TypeDB), which the harness manages itself — *not* required for the DuckDB-only quickstart.
 
 ### Installation & Setup
-The laboratory includes a comprehensive setup script that manages virtual environments, dependencies, and directory initialization.
+
+**From PyPI** — the lab is installable, which gives you the tooling and the `sqlbench` CLI:
+```bash
+pip install sqlbenchdag
+```
+
+**From source** — clone the repo to also get the published capsules (`sql_benchmarks/experiments/results/`) and the full harness. The laboratory includes a comprehensive setup script that manages virtual environments, dependencies, and directory initialization.
 
 ```bash
 # 1. Automate Setup
