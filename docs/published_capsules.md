@@ -81,7 +81,7 @@ carries four independent guarantees, and you can check every one yourself:
 
 | Guarantee | Required? | Answers | Mechanism | How you check it |
 |---|---|---|---|---|
-| **Reproducibility** | **Automatic** | Did this question produce this result? | content-addressed Experiment ID | re-run the config → same ID |
+| **Reproducibility** | **Automatic** | Did this question produce this result? | content-addressed Experiment ID | re-run the config **on its recorded build** → same ID |
 | **Integrity** | **Automatic** | Have the bytes changed since publication? | `integrity.seal` (SHA-256 over the capsule) | `verify_capsule.py <ID>` |
 | **Timestamp** | **Optional** | Did this exist when claimed — not backdated? | `integrity.seal.ots` (OpenTimestamps → Bitcoin) | `ots verify .../integrity.seal.ots` |
 | **Authorship** | **Optional** | Who produced it? | signed git tag | `git verify-tag <tag>` |
