@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+title: "sqlbenchdag: a reproducible SQL benchmarking laboratory"
+message: "If you use this software or its published capsules, please cite it."
+type: software
+authors:
+  - given-names: "Ramona C."
+    family-names: Truta
+    orcid: "https://orcid.org/0009-0008-4886-7777"
+repository-code: "https://github.com/rctruta/sql-benchmarks-dagster"
+url: "https://github.com/rctruta/sql-benchmarks-dagster"
+abstract: >-
+  A SQL benchmarking laboratory that produces reproducible experiments, not just
+  numbers. Every experiment is identified by a content-addressed Experiment ID
+  (a hash of its config, SQL, and measurement code) and published as a capsule
+  that is integrity-sealed, OpenTimestamps-anchored to Bitcoin, and covered by a
+  signed release tag — so any cited result can be re-run and verified without
+  trusting the author.
+keywords:
+  - benchmarking
+  - reproducibility
+  - DuckDB
+  - PostgreSQL
+  - SQL
+  - Dagster
+  - data-engineering
+license: Apache-2.0
+version: 0.1.0
+date-released: "2026-06-22"
