@@ -25,10 +25,13 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 sys.path.insert(0, REPO_ROOT)
 
 from sql_benchmarks.utils.hasher import generate_integrity_seal
+from sql_benchmarks.constants import RESULTS_DIR
 
 
 def verify_capsule(exp_id: str) -> bool:
-    results_dir = os.path.join(REPO_ROOT, "sql_benchmarks", "experiments", "results", exp_id)
+    # Honor RESULTS_DIR (SB_RESULTS_DIR-overridable) so a capsule in a non-default
+    # location (e.g. an isolated/throwaway run) can be verified too.
+    results_dir = os.path.join(RESULTS_DIR, exp_id)
     if not os.path.isdir(results_dir):
         print(f"ERROR: Result capsule for {exp_id} not found at {results_dir}")
         return False
