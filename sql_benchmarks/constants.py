@@ -21,7 +21,7 @@ REPORTS_DIR = os.getenv("SB_REPORTS_DIR", os.path.join(EXPERIMENTS_DIR, "reports
 
 # 4. FILES
 ACTIVE_CONFIG_PATH = os.getenv("ACTIVE_CONFIG_PATH", os.path.join(EXPERIMENTS_DIR, "active.yaml"))
-CONFIG_ARCHIVE_DIR = os.path.join(EXPERIMENTS_DIR, "configs")
+CONFIG_ARCHIVE_DIR = os.getenv("SB_CONFIG_ARCHIVE_DIR", os.path.join(EXPERIMENTS_DIR, "configs"))
 PROCESSED_SUFFIX = ".processed"
 EXPERIMENT_EXTENSIONS = (".yaml", ".yml")
 
