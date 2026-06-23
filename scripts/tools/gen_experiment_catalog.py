@@ -37,8 +37,14 @@ def row_for(capsule_dir: str):
     engines = ", ".join(execution.get("engines", [])) or "—"
     suite = execution.get("test_suite") or "—"
     sealed = "✓" if os.path.exists(os.path.join(capsule_dir, "integrity.seal")) else "—"
+    # Capsule tier: declared in meta.tier (verified | exploratory). Absent => "—"
+    # (undeclared) — NOT assumed, because sealed legacy capsules can't be
+    # retroactively tiered without breaking their integrity seal. Future capsules
+    # declare it explicitly; this labels a tracked capsule so an exploratory one
+    # can't pass as verified just by being committed.
+    tier = (meta.get("tier") or "—").strip().strip("'\"")
     link = f"[`{exp_id}`](../sql_benchmarks/experiments/results/{exp_id}/)"
-    return (name, f"| {link} | {name} | {engines} | {suite} | {sealed} |")
+    return (name, f"| {link} | {name} | {tier} | {engines} | {suite} | {sealed} |")
 
 
 def tracked_capsule_ids() -> set:
@@ -66,8 +72,8 @@ def build_table() -> str:
             if os.path.isdir(d) and os.path.basename(d) in published
             for r in [row_for(d)] if r]
     rows.sort(key=lambda nr: nr[0].lower())  # by experiment name
-    header = ("| Capsule | Name | Engines | Suite | Sealed |\n"
-              "|---|---|---|---|---|")
+    header = ("| Capsule | Name | Tier | Engines | Suite | Sealed |\n"
+              "|---|---|---|---|---|---|")
     body = "\n".join(line for _, line in rows)
     return f"{header}\n{body}\n\n*{len(rows)} capsules. Generated from the sealed configs — regenerate with `python scripts/tools/gen_experiment_catalog.py`.*"
 
