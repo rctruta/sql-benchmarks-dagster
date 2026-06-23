@@ -20,6 +20,45 @@ def resolve_params_recursive(obj, params):
         return resolve_params_recursive(obj.model_dump(), params)
     return obj
 
+def _derive_table(table_name, target_path, derive):
+    """Carve a NULL-free fragment from its parent's already-generated parquet.
+
+    horizontal: keep rows whose null-pattern over `on` matches `present`
+                (present cols non-null, the rest null), then select `select`.
+    vertical:   optionally keep rows where `where_not_null` is present, then
+                select `select` (the core's mandatory cols, or [pk, attribute]).
+    """
+    parent = derive["from"]
+    fname = os.path.basename(target_path)
+    # target filename is "{table_name}_{partition_key}.parquet"; the parent's
+    # parquet sits beside it as "{parent}_{partition_key}.parquet".
+    suffix = fname[len(table_name) + 1:]
+    parent_path = os.path.join(os.path.dirname(target_path), f"{parent}_{suffix}")
+    df = pl.read_parquet(parent_path)
+
+    if derive["strategy"] == "horizontal":
+        present = set(derive["present"])
+        cond = None
+        for c in derive["on"]:
+            term = pl.col(c).is_not_null() if c in present else pl.col(c).is_null()
+            cond = term if cond is None else (cond & term)
+        if cond is not None:
+            df = df.filter(cond)
+    elif derive["strategy"] == "vertical" and derive.get("where_not_null"):
+        df = df.filter(pl.col(derive["where_not_null"]).is_not_null())
+
+    df = df.select(derive["select"])
+    df.write_parquet(target_path)
+    return MaterializeResult(
+        metadata={
+            "path": MetadataValue.path(target_path),
+            "row_count": MetadataValue.int(df.height),
+            "table": table_name,
+            "derived_from": parent,
+        }
+    )
+
+
 def generate(context, params, table_name, target_path, dataset_config):
     
     # 1. SCHEMA VALIDATION
@@ -32,6 +71,12 @@ def generate(context, params, table_name, target_path, dataset_config):
     raw_table_def = tables.get(table_name)
     if not raw_table_def:
         raise ValueError(f"Table '{table_name}' not defined in dataset config.")
+
+    # Derived (decomposed) tables are carved from their parent's already-generated
+    # parquet, not generated fresh. See ConfigLoader._expand_decompositions.
+    derive = raw_table_def.get("_derive")
+    if derive:
+        return _derive_table(table_name, target_path, derive)
 
     # Validate using Pydantic (Throws ValidationError if invalid)
     # We strip unknown fields if strict mode is issue, but Schema is set to 'allow' extra.
