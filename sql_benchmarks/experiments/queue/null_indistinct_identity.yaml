@@ -1,0 +1,66 @@
+meta:
+  name: "NULL identity: 3VL vs hand-decomposed 2VL vs IS NOT DISTINCT FROM"
+  description: >
+    Revisiting Enrico Franconi's 2VL identity theorem (R ⋈ R = R holds only when
+    NULL = NULL is treated as a match) as a performance question. SQL engines
+    expose that 2VL identity natively through the null-safe operator
+    IS NOT DISTINCT FROM. Three ways to express the same single-attribute self-join
+    identity, on a table whose only column carries the nulls:
+      - 3VL_identity:       plain `=` (nulls drop; the standard, fast baseline)
+      - 2VL_identity:       hand-decomposed (non-null hash join UNION ALL an
+                            isolated null cartesian) — the expert workaround
+      - indistinct_identity: a single IS NOT DISTINCT FROM (the natural expression;
+                            the planner picks the strategy)
+    Hypothesis: the cost of 2VL identity is dominated by the m-squared cardinality
+    of the null group (intrinsic to the answer), so it is NOT removed by reaching
+    for the native operator — but the operator and the engine decide whether you
+    HANG (Postgres nested loop) or DEGRADE gracefully (DuckDB vectorized). This
+    first run stays at safe scales (1K, 10K rows) to read the SHAPE before
+    deliberately pushing to the cliff with a statement_timeout. Reference numbers
+    (single-replication, pre-migration hashing, so re-running yields a different
+    ID): cbe57f4b and f76c619b.
+
+dataset:
+  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  seed: 42
+  tables:
+    r:
+      rows: rows
+      columns:
+        - name: join_key_a
+          provider: sequence
+          null_probability: null_probability
+
+definitions:
+  rows:
+    nano:   1_000
+    micro:  10_000
+    small:  100_000
+    medium: 1_000_000
+  null_probability:
+    p_0_1: 0.01
+    p_1:   0.1
+    p_25:  0.25
+    p_50:  0.5
+
+execution:
+  test_suite: null_logic
+  engines:
+    - duckdb
+    - postgres
+  replication: 5
+  engine_params:
+    postgres:
+      # Budget per query. On breach the query is recorded DNF (not a hang) — this
+      # is how the 100K cliff becomes a data point instead of stalling the run.
+      statement_timeout: "30s"
+  matrix:
+    rows:
+      - nano
+      - micro
+      - small
+    null_probability:
+      - p_0_1
+      - p_1
+      - p_25
+      - p_50

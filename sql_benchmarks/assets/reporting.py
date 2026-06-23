@@ -87,6 +87,11 @@ def parse_fragments_to_records(experiment_id):
             # Case-insensitive guard: 'rows' must not duplicate 'Rows'.
             existing = {c.lower() for c in row}
             for k, v in params.items():
+                # Skip nested structures (e.g. engine_params) — they aren't
+                # plottable dimensions and become unhashable DataFrame columns
+                # that break column-wise ops like nunique().
+                if isinstance(v, (dict, list)):
+                    continue
                 if k.lower() not in existing:
                     row[k] = v
 
