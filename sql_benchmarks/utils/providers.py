@@ -211,6 +211,26 @@ def generate_json_blob(rows: int, **kwargs):
     return out
 
 
+def generate_int_array(rows: int, **kwargs):
+    """Fixed-length integer arrays as Postgres array *literals* ('{3,7,2}', strings).
+
+    Pair with a column `type: 'integer[]'` (Postgres) so they COPY into a real
+    int[] column — same string+override trick as json_blob, so no polars-List ->
+    CSV serialization is needed. This yields genuine arrays IN POSTGRES (all this
+    Postgres-only transport benchmark needs); native cross-engine lists (DuckDB
+    LIST/STRUCT via parquet) are a separate, larger feature, intentionally not
+    built here. `length` = elements per array.
+    """
+    length = int(kwargs.get("length", 3))
+    lo = int(kwargs.get("min_value", 0))
+    hi = int(kwargs.get("max_value", 100))
+    vals = np.random.randint(lo, hi, size=(rows, length))
+    out = np.empty(rows, dtype=object)
+    for i in range(rows):
+        out[i] = "{" + ",".join(str(int(x)) for x in vals[i]) + "}"
+    return out
+
+
 PROVIDER_REGISTRY = {
     "sequence": generate_sequence,
     "random_int": generate_random_int,
@@ -221,4 +241,5 @@ PROVIDER_REGISTRY = {
     "foreign key": generate_foreign_key,  # Alias
     "zipf_edges": generate_zipf_edges,
     "json_blob": generate_json_blob,
+    "int_array": generate_int_array,
 }
