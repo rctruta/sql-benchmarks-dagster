@@ -40,12 +40,27 @@ class IndexDef(BaseModel):
     unique: bool = False
     method: str = "btree"
 
+class DecomposeDef(BaseModel):
+    """Declares a NULL-eliminating decomposition of a table over its nullable
+    columns. The config loader expands this into derived, NULL-free sub-tables:
+
+    - strategy: 'horizontal'  -> Franconi's 2^k null-pattern fragments; each row
+      lands in exactly one fragment (the subset of `on` columns it has present);
+      reconstruct with UNION ALL.
+    - strategy: 'vertical'    -> 3NF attribute split: a core table plus one
+      (pk, col) table per `on` column holding only the rows where col is present;
+      reconstruct with LEFT JOIN.
+    """
+    on: List[str]               # the nullable columns to decompose over
+    strategy: str = "horizontal"
+
 class TableDef(BaseModel):
     # 'rows' can be an integer literal OR a variable name reference (string)
-    rows: Optional[Union[int, str]] = None 
+    rows: Optional[Union[int, str]] = None
     columns: Optional[List[ColumnDef]] = None
     indexes: Optional[List[IndexDef]] = []
-    
+    decompose: Optional[DecomposeDef] = None
+
     # --- V2 MIGRATION: Replaces class Config: extra = 'allow' ---
     model_config = ConfigDict(extra='allow')
 
