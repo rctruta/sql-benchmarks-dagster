@@ -1,0 +1,45 @@
+meta:
+  name: "NULL identity at 100% nulls — the degenerate extreme"
+  description: >
+    Curiosity / boundary case for the NULL-identity study (see
+    null_indistinct_identity). Every row is NULL, so the self-join's null group is
+    the entire table. Predictions: 3VL (=) collapses to an EMPTY result (NULL=NULL
+    is UNKNOWN, nothing matches) → instant; while 2VL hand-decomposed and
+    IS NOT DISTINCT FROM produce the maximal N-squared cartesian. Kept at small
+    scales (1K, 10K) on purpose — at 100K the 100% case is N^2 = 1e10, which would
+    hang DuckDB (no statement_timeout guard on that engine). Postgres carries a
+    30s timeout → DNF.
+
+dataset:
+  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  seed: 42
+  tables:
+    r:
+      rows: rows
+      columns:
+        - name: join_key_a
+          provider: sequence
+          null_probability: null_probability
+
+definitions:
+  rows:
+    nano:  1_000
+    micro: 10_000
+  null_probability:
+    p_100: 1.0
+
+execution:
+  test_suite: null_logic
+  engines:
+    - duckdb
+    - postgres
+  replication: 5
+  engine_params:
+    postgres:
+      statement_timeout: "30s"
+  matrix:
+    rows:
+      - nano
+      - micro
+    null_probability:
+      - p_100
