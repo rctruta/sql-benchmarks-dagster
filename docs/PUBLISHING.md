@@ -81,3 +81,25 @@ git verify-tag <release-name>                     # authorship
 > ignore, and git cannot re-include a file whose parent directory is ignored — so
 > the `!`-allowlist lines in `.gitignore` are documentation, not the mechanism.
 > Force-add is what actually tracks a published capsule.
+
+## Capsule tier & removal (lifecycle)
+
+A committed capsule becomes a catalogued record, so adding is deliberate — and
+now reversible.
+
+- **Tier**: declare `meta.tier: verified | exploratory` in the experiment config.
+  The catalog (`docs/experiments.md`) shows it, so an *exploratory* capsule can't
+  pass as *verified* just by being committed. Capsules that predate this
+  convention show **`—` (undeclared)** — they are sealed, so their config can't be
+  edited to add a tier without breaking the integrity seal; the curated verified
+  set lives in `published_capsules.md`. Declare `tier` on all new capsules.
+- **Remove** (the inverse of `git add -f`):
+
+  ```bash
+  python scripts/dev/remove_capsule.py <id> [<id> ...]
+  ```
+
+  Deletes the capsule dir + its config-registry entry and regenerates the
+  catalog. A *tracked* capsule is `git rm`-ed (staged — commit to finalize, so
+  it's reversible until then); an untracked/local one is deleted outright. Only
+  8-hex IDs are accepted (no path traversal).
