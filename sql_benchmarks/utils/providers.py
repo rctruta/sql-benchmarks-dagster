@@ -1,3 +1,4 @@
+import json
 import numpy as np
 
 def generate_sequence(rows: int, **kwargs):
@@ -186,6 +187,30 @@ def generate_zipf_edges(rows: int, **kwargs):
     }
 
 
+def generate_json_blob(rows: int, **kwargs):
+    """A semi-structured JSON object per row (nested: scalars + a small array).
+
+    Emitted as JSON *strings* (polars Utf8). Pair with a column `type: jsonb`
+    (Postgres) so it lands as real JSONB rather than TEXT. Use for the
+    'complex data type' transport question: JSONB crosses the wire as text, so a
+    columnar driver maps it to an Arrow string — this measures fat-payload
+    transfer, not nested-Arrow construction (use an array/struct provider for
+    that). `keys` controls how many scalar keys each object carries.
+    """
+    keys = int(kwargs.get("keys", 3))
+    cats = ["alpha", "beta", "gamma", "delta"]
+    ints = np.random.randint(0, 1000, size=rows)
+    floats = np.random.rand(rows)
+    out = np.empty(rows, dtype=object)
+    for i in range(rows):
+        obj = {f"k{j}": int((ints[i] + j) % 1000) for j in range(keys)}
+        obj["score"] = round(float(floats[i]), 4)
+        obj["cat"] = cats[i % len(cats)]
+        obj["tags"] = [int(ints[i]) % 10, (int(ints[i]) // 10) % 10]
+        out[i] = json.dumps(obj, separators=(",", ":"))
+    return out
+
+
 PROVIDER_REGISTRY = {
     "sequence": generate_sequence,
     "random_int": generate_random_int,
@@ -195,4 +220,5 @@ PROVIDER_REGISTRY = {
     "foreign_key": generate_foreign_key,
     "foreign key": generate_foreign_key,  # Alias
     "zipf_edges": generate_zipf_edges,
+    "json_blob": generate_json_blob,
 }

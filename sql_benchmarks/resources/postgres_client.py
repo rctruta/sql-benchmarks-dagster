@@ -75,7 +75,11 @@ class PostgresClient:
         if file_path.endswith(".parquet"):
             # 1. Infer Schema using Polars (Fixes UndefinedTable error)
             df_schema = pl.scan_parquet(file_path).limit(1).collect()
-            self._create_schema(table_name, df_schema)
+            # Honor explicit per-column DDL type overrides (e.g. type: jsonb) so a
+            # column can land as a real DB type instead of inferred TEXT.
+            overrides = {c["name"]: c["type"] for c in (table_def or {}).get("columns", [])
+                         if isinstance(c, dict) and c.get("type")}
+            self._create_schema(table_name, df_schema, type_overrides=overrides)
             # 2. Stream Data
             self._stream_parquet(file_path, table_name)
 
@@ -107,10 +111,13 @@ class PostgresClient:
             # Refresh stats so the planner can choose an index scan.
             self._execute_internal(f"ANALYZE {table_name};")
 
-    def _create_schema(self, table_name: str, sample_df: pl.DataFrame):
+    def _create_schema(self, table_name: str, sample_df: pl.DataFrame, type_overrides: dict = None):
         """
         Creates the table schema dynamically using a robust Type Map.
+        An explicit per-column `type_overrides` (from the config's `type:` field)
+        wins over the inferred polars->pg mapping — e.g. type: jsonb.
         """
+        type_overrides = type_overrides or {}
         # Improved Type Map as requested
         type_map = {
             pl.Int8: "SMALLINT",
@@ -129,12 +136,15 @@ class PostgresClient:
 
         cols = []
         for name, dtype in sample_df.schema.items():
-            # Default to TEXT if not found, or use the mapped type
-            pg_type = type_map.get(dtype, "TEXT")
-            # Handle datetime subclasses if necessary
-            if isinstance(dtype, pl.Datetime):
-                pg_type = "TIMESTAMP"
-                
+            if name in type_overrides:
+                pg_type = type_overrides[name]            # explicit wins (e.g. jsonb)
+            else:
+                # Default to TEXT if not found, or use the mapped type
+                pg_type = type_map.get(dtype, "TEXT")
+                # Handle datetime subclasses if necessary
+                if isinstance(dtype, pl.Datetime):
+                    pg_type = "TIMESTAMP"
+
             cols.append(f'"{name}" {pg_type}')
 
         # Clean slate: Drop and Create
