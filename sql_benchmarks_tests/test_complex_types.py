@@ -43,6 +43,7 @@ def _pg_up() -> bool:
         return False
 
 
+@pytest.mark.integration
 @pytest.mark.skipif(not _pg_up(), reason="no live Postgres on :5433")
 def test_json_blob_lands_as_real_jsonb():
     from sqlalchemy import text
