@@ -3,6 +3,7 @@ import time
 import polars as pl
 import pyarrow.parquet as pq
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import OperationalError
 from typing import Dict, Any, Optional
 
 # Module-level constant so callers can identify pg-setting dimension keys
@@ -17,6 +18,7 @@ PG_SETTING_KEYS = frozenset({
     "enable_mergejoin",
     "effective_cache_size",
     "max_parallel_workers_per_gather",
+    "statement_timeout",   # budget per query; on breach the query is recorded DNF
 })
 
 
@@ -51,8 +53,19 @@ class PostgresClient:
                 conn.execute(text(f"SET {key} = :val"), {"val": str(val)})
 
             start = time.time()
-            conn.execute(text(sql))
-            conn.commit()
+            try:
+                conn.execute(text(sql))
+                conn.commit()
+            except OperationalError as e:
+                # statement_timeout fired (SQLSTATE 57014, query_canceled): the
+                # query genuinely did not finish in its budget. Record as DNF
+                # (None) — a finding, not a crash — instead of masking other errors.
+                if getattr(e.orig, "pgcode", None) == "57014":
+                    conn.rollback()
+                    print(f"[Postgres] DNF — statement_timeout "
+                          f"({pg_settings.get('statement_timeout')}) exceeded.")
+                    return None
+                raise
             return time.time() - start
 
     # Updated signature to accept partition_key (passed from factory), even if unused logic-wise

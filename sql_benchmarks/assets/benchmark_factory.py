@@ -18,6 +18,16 @@ VALID_TABLES = set(CTX['tables'])
 FULL_CONFIG = CTX['full_config']
 REPLICATION_FACTOR = FULL_CONFIG.get("execution", {}).get("replication", 1)
 
+# Every dataset column name, bound to itself, so SQL templates can reference
+# columns as {{ col }} uniformly — not just {{ tbl_table }}. A column that is
+# *parameterized* (a matrix dimension) still wins, because `dims` updates the
+# render context last. This is what makes {{ join_key_a }} resolve.
+ALL_COLUMNS = {
+    col["name"]
+    for tdef in CTX['table_defs'].values() if isinstance(tdef, dict)
+    for col in tdef.get("columns", []) if isinstance(col, dict) and "name" in col
+}
+
 def _smart_cast(val):
     if isinstance(val, (int, float, bool)): return val
     return str(val)
@@ -93,8 +103,12 @@ def make_benchmark_asset(name, engine, used_tables, raw_template, static_meta, e
         engine_params = params.get("engine_params", {}).get(engine, {})
         dims = {k: v for k, v in params.items() if k != "engine_params"}
 
-        # SQL render — dims feeds template variables; engine_params stays out of it
-        render_ctx = {f"{t}_table": f"{t}_{pk}" for t in used_tables}
+        # SQL render — precedence: matrix dims > table names > column names.
+        # columns bind to themselves; {{ tbl_table }} → physical partition table;
+        # a parameterized column/table (a matrix dim) overrides. engine_params
+        # stays out of the SQL (applied as session settings, not text).
+        render_ctx = {c: c for c in ALL_COLUMNS}
+        render_ctx.update({f"{t}_table": f"{t}_{pk}" for t in used_tables})
         render_ctx.update(dims)
         sql = jinja2.Template(raw_template).render(render_ctx)
 
