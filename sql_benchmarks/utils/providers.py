@@ -71,12 +71,26 @@ def generate_foreign_key(rows: int, table_name: str, **kwargs):
     """
     target_rows = kwargs.get("target_rows")
     distribution = kwargs.get("distribution", "uniform")
-    
+    orphan_rate = float(kwargs.get("orphan_rate", 0.0))
+
     # Range of valid IDs
     mn = 1
     # If target_rows is set, use it. Else assume self-reference up to current rows.
-    mx = (target_rows if target_rows else rows) + 1 
-    
+    mx = (target_rows if target_rows else rows) + 1
+
+    def _inject_orphans(parents):
+        """Point a fraction of keys past the parent id range (>= mx, i.e. beyond
+        target_rows) so they match no parent row — for studying outer-join /
+        FK-enforcement effects. No-op when orphan_rate == 0."""
+        if orphan_rate <= 0:
+            return parents
+        parents = parents.copy().astype(np.int64)
+        mask = np.random.rand(len(parents)) < orphan_rate
+        n = int(mask.sum())
+        if n:
+            parents[mask] = np.random.randint(mx, 2 * mx + 1, size=n)
+        return parents
+
     if distribution == "chain":
         # Point to previous ID. ID 1 points to NULL (represnted as 0 or 1? Let's say 1 to be valid FK)
         # Actually standard FK usually allows NULL. But our schema might be strict int64.
@@ -90,7 +104,7 @@ def generate_foreign_key(rows: int, table_name: str, **kwargs):
         # If we return ints, we can't have None.
         # Sticking to valid ID range [1, mx).
         parents = np.maximum(1, parents)
-        return parents
+        return _inject_orphans(parents)
 
     elif distribution == "zipf":
         # numpy zipf is z ~ 1/k^a. Returns ints >= 1.
@@ -103,10 +117,10 @@ def generate_foreign_key(rows: int, table_name: str, **kwargs):
         # Map samples to range [1, mx-1] using modulo? 
         # Better: min(samples, mx-1) to preserve frequency of 1.
         parents = np.minimum(samples, mx - 1)
-        return parents
+        return _inject_orphans(parents)
 
     else: # uniform
-        return np.random.randint(mn, mx, size=rows)
+        return _inject_orphans(np.random.randint(mn, mx, size=rows))
 
 def generate_zipf_edges(rows: int, **kwargs):
     """
