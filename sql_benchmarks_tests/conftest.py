@@ -76,6 +76,20 @@ with open(active_yaml_path, "w") as f:
     yaml.dump(test_config, f)
 
 
+# Test files whose names contain any of these need external infra (Docker
+# Postgres, the Quack server subprocess, remote Actian/TypeDB) and are auto-tagged
+# `integration` so the default CI run (`-m "not integration"`) stays green without
+# that infra. One place to maintain instead of decorating every file.
+_INTEGRATION_FILE_MARKERS = ("postgres", "quack", "actian", "typedb", "runner_integration")
+
+
+def pytest_collection_modifyitems(config, items):
+    for item in items:
+        fname = os.path.basename(str(getattr(item, "fspath", "")))
+        if any(key in fname for key in _INTEGRATION_FILE_MARKERS):
+            item.add_marker(pytest.mark.integration)
+
+
 def pytest_sessionfinish(session, exitstatus):
     """Restore the pre-session active.yaml (it is runtime state, not ours to keep)."""
     if _original_active_yaml is not None:

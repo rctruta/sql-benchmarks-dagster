@@ -24,11 +24,12 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Run Full Test Suite
+    - name: Run Test Suite (unit + logic; infra tests are tiered out)
       env:
         # This makes 'sql_benchmarks' importable without 'pip install -e .'
         PYTHONPATH: ${{ github.workspace }}
       run: |
-        # This tells pytest to ignore the Actian test file 
-        # that requires the SSH key.
-        pytest sql_benchmarks_tests/ --ignore=sql_benchmarks_tests/test_actian_integration.py -v
+        # `-m "not integration"` excludes tests needing external infra the runner
+        # doesn't have (Docker Postgres, Quack server, remote Actian/TypeDB) —
+        # auto-tagged in conftest.py. Run the full set locally with Docker up.
+        pytest sql_benchmarks_tests/ -m "not integration" -v
