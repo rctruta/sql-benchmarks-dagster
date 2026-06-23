@@ -37,12 +37,13 @@ EXPERIMENT_EXTENSIONS = (".yaml", ".yml")
 ENGINE_SQL_DIALECTS = {
     "quack": "duckdb",
     "quack_pushdown": "duckdb",
+    "postgres_transport": "postgres",   # same SQL as postgres; only the client differs
 }
 
 # Every engine the harness can run. A drift test asserts this matches the
 # resources actually registered in definitions.py — add an engine there
 # without updating this list and CI fails loudly.
-KNOWN_ENGINES = ["actian", "duckdb", "postgres", "quack", "quack_pushdown", "typedb"]
+KNOWN_ENGINES = ["actian", "duckdb", "postgres", "postgres_transport", "quack", "quack_pushdown", "typedb"]
 
 # The lab's maker's mark — carried in every capsule's `generator` field and on
 # every release tag (sqlbenchdag-<topic>-v<N>-<YYYYMMDD>). sql + bench + dag
