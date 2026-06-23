@@ -10,7 +10,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from sql_benchmarks.utils.providers import generate_json_blob
+from sql_benchmarks.utils.providers import generate_json_blob, generate_int_array
 
 PG_URI = "postgresql://postgres:password@localhost:5433/postgres_db"
 
@@ -41,6 +41,40 @@ def _pg_up() -> bool:
         return True
     except Exception:
         return False
+
+
+def test_int_array_emits_pg_array_literals():
+    np.random.seed(0)
+    arrs = generate_int_array(20, length=3)
+    assert len(arrs) == 20
+    for a in arrs:
+        assert a.startswith("{") and a.endswith("}")
+        parts = a[1:-1].split(",")
+        assert len(parts) == 3 and all(p.lstrip("-").isdigit() for p in parts)
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not _pg_up(), reason="no live Postgres on :5433")
+def test_int_array_lands_as_real_postgres_array():
+    from sqlalchemy import text
+    from sql_benchmarks.resources.postgres_client import PostgresClient
+    np.random.seed(2)
+    df = pl.DataFrame({"id": list(range(300)),
+                       "tags": [str(x) for x in generate_int_array(300, length=3)]})
+    path = os.path.join(tempfile.mkdtemp(), "a.parquet")
+    df.write_parquet(path)
+    table_def = {"columns": [{"name": "id", "provider": "sequence"},
+                             {"name": "tags", "provider": "int_array", "type": "integer[]"}]}
+    cli = PostgresClient(PG_URI)
+    cli.bulk_load(path, "intarr_pytest", table_def=table_def)
+    with cli.engine.connect() as c:
+        dtype = c.execute(text("select data_type from information_schema.columns "
+                               "where table_name='intarr_pytest' and column_name='tags'")).fetchone()[0]
+        # array_length working proves it's a genuine int[], not text
+        n = c.execute(text("select count(*) from intarr_pytest where array_length(tags,1)=3")).fetchone()[0]
+        c.execute(text("drop table if exists intarr_pytest")); c.commit()
+    assert dtype == "ARRAY"        # information_schema reports array types as 'ARRAY'
+    assert n == 300
 
 
 @pytest.mark.integration
