@@ -100,7 +100,11 @@ class QuackClient:
         con = duckdb.connect()
         # Materialize to Arrow or to Python objects — the only difference between
         # quack_arrow and quack_pushdown (isolates materialization target).
-        materialize = (lambda rel: rel.arrow()) if self.arrow else (lambda rel: rel.fetchall())
+        # .arrow() returns a LAZY RecordBatchReader — read_all() forces full
+        # materialization, so it's apples-to-apples with ADBC's fetch_arrow_table
+        # (and not just timing reader-creation). This was a real bug: timing
+        # .arrow() alone undercounted native by ~25x and faked a "protocol tax".
+        materialize = (lambda rel: rel.arrow().read_all()) if self.arrow else (lambda rel: rel.fetchall())
         try:
             con.execute("LOAD quack;")
             self._attach_with_retry(con, proc)
