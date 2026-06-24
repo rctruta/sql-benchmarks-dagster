@@ -69,7 +69,7 @@ def test_engine_delegates_run_query():
         mock_thrash.assert_called_once()
         MockClient.assert_called_once_with(
             data_folder="/tmp/q", port=9494, token="sb-local-quack-token",
-            pushdown=False,
+            pushdown=False, arrow=False,
         )
         mock_instance.run_query.assert_called_once_with(
             sql="SELECT 1", partition_key="tiny",
@@ -167,7 +167,7 @@ def test_engine_passes_pushdown_flag_to_client():
         engine.run_query(sql="SELECT 1", partition_key="tiny")
         MockClient.assert_called_once_with(
             data_folder="/tmp/q", port=9495, token="sb-local-quack-token",
-            pushdown=True,
+            pushdown=True, arrow=False,
         )
 
 

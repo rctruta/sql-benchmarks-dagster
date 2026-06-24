@@ -30,6 +30,7 @@ execution:
   test_suite: quack_transport
   engines:
     - quack_pushdown
+    - quack_arrow
     - quack_adbc
   replication: 3
   matrix:

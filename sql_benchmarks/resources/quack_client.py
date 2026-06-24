@@ -54,7 +54,7 @@ class QuackClient:
     """STATEFUL CLIENT: owns server lifecycle + measurement I/O for Quack."""
 
     def __init__(self, data_folder: str, port: int = 9494, token: str = "",
-                 pushdown: bool = False):
+                 pushdown: bool = False, arrow: bool = False):
         if not _SAFE_TOKEN.match(token):
             raise ValueError(
                 "Quack token must be >=8 chars of [A-Za-z0-9_-] "
@@ -69,6 +69,11 @@ class QuackClient:
         # executes fully SERVER-side; only the result set crosses the wire.
         # Comparing the two isolates where Quack spends its time.
         self.pushdown = pushdown
+        # Materialization target for the native client: False -> .fetchall()
+        # (Python objects), True -> .arrow() (Arrow table). The latter makes the
+        # native path apples-to-apples with the ADBC driver's fetch_arrow_table,
+        # so quack_arrow vs quack_adbc isolates the PROTOCOL, not the target.
+        self.arrow = arrow
         # File-level operations (db path layout, parquet bulk load) are
         # identical to the in-process duckdb engine — compose, don't copy.
         self._duck = DuckDBClient(data_folder=data_folder)
@@ -93,6 +98,9 @@ class QuackClient:
         self.stop_server()
         proc = self._start_server(db_path)
         con = duckdb.connect()
+        # Materialize to Arrow or to Python objects — the only difference between
+        # quack_arrow and quack_pushdown (isolates materialization target).
+        materialize = (lambda rel: rel.arrow()) if self.arrow else (lambda rel: rel.fetchall())
         try:
             con.execute("LOAD quack;")
             self._attach_with_retry(con, proc)
@@ -102,12 +110,12 @@ class QuackClient:
                 # Single-quote doubling is the only escaping SQL strings need.
                 wrapped = "FROM remote.query('{}')".format(sql.replace("'", "''"))
                 start = time.time()
-                con.sql(wrapped).fetchall()
+                materialize(con.sql(wrapped))
                 end = time.time()
             else:
                 con.execute("USE remote")
                 start = time.time()
-                con.sql(sql).fetchall()
+                materialize(con.sql(sql))
                 end = time.time()
             return end - start
         except duckdb.NotImplementedException as e:
