@@ -37,6 +37,10 @@ dependencies = [
     "plotly",
     "polars",
     "pyarrow",
+    # Imported directly by the package (were only present transitively via dagster).
+    "duckdb",
+    "jinja2",
+    "pydantic",
     "psycopg2-binary",
     "sqlalchemy",
     "psutil",
@@ -62,7 +66,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "dagster-webserver",
-    "pytest"
+    "pytest",
+    "matplotlib"
 ]
 
 [project.urls]
