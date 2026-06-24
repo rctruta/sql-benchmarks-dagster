@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "timestamp": "2026-06-24T11:25:00.089790",
+    "experiment_id": "af6ba593",
+    "dagster_run_id": "cb837eaf-0ac7-42dd-8cec-d7d12a56da27",
+    "engine": "postgres_transport",
+    "asset": "e_af6ba593__postgres_transport_benchmark_with_jsonb",
+    "partition": "psycopg_large"
+  },
+  "metrics": {
+    "duration_seconds": 143.03006704648337,
+    "durations_raw": [
+      153.5209240913391,
+      131.83402705192566,
+      143.7352499961853
+    ],
+    "replication_factor": 3
+  },
+  "parameters": {
+    "postgres_transport.client": "psycopg",
+    "rows": 10000000
+  }
+}

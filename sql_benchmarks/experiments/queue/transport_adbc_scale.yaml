@@ -1,0 +1,42 @@
+meta:
+  name: "Connectivity cost at scale: psycopg vs ADBC vs connectorx to 10M (cross-over)"
+  tier: exploratory
+  description: >
+    Scale extension of the transport experiment (capsule 139340a3) to 10M rows,
+    to test whether the primitive cross-over holds. At 100K/1M, Arrow carried a
+    fixed overhead that LOST on primitives (ADBC 1.68x slower @100K -> ~tied @1M)
+    while winning on nested. Question: does Arrow win on primitives at 10M as the
+    fixed overhead amortizes, or not? This is TRANSPORT (trivial SELECT *), not
+    query execution. Cold-cache, sealed. NOTE: psycopg row-fetch of nested at 10M
+    may be very slow/heavy (materializing ~10M Python objects) — that collapse is
+    itself a finding.
+dataset:
+  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  seed: 42
+  tables:
+    wide:
+      rows: rows
+      columns:
+        - {name: id, provider: sequence, primary_key: true}
+        - {name: n, provider: random_int, min_value: 0, max_value: 1000}
+        - {name: payload, provider: json_blob, type: jsonb}
+        - {name: tags, provider: int_array, length: 3, type: "integer[]"}
+definitions:
+  rows:
+    small:  100_000
+    medium: 1_000_000
+    large:  10_000_000
+execution:
+  test_suite: transport
+  engines:
+    - postgres_transport
+  replication: 3
+  matrix:
+    rows:
+      - small
+      - medium
+      - large
+    postgres_transport.client:
+      - psycopg
+      - adbc
+      - connectorx

@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "timestamp": "2026-06-24T11:34:30.137167",
+    "experiment_id": "af6ba593",
+    "dagster_run_id": "ac3a8951-bb89-49e6-ba5c-4109e20ee6cb",
+    "engine": "postgres_transport",
+    "asset": "e_af6ba593__postgres_transport_benchmark_primitives",
+    "partition": "connectorx_medium"
+  },
+  "metrics": {
+    "duration_seconds": 0.6368225415547689,
+    "durations_raw": [
+      0.6353490352630615,
+      0.6401703357696533,
+      0.6349482536315918
+    ],
+    "replication_factor": 3
+  },
+  "parameters": {
+    "postgres_transport.client": "connectorx",
+    "rows": 1000000
+  }
+}
