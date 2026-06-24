@@ -121,6 +121,46 @@ class QuackClient:
             con.close()
             self.stop_server()
 
+    def run_query_adbc(self, sql: str, partition_key: str,
+                       engine_params: Dict[str, Any] = None) -> Optional[float]:
+        """Same cold-started Quack server, but measured through GizmoData's
+        ADBC Quack driver (Arrow) instead of the native client — isolates the
+        result-transport client (everything else identical). Times execute ->
+        result fully materialized as an Arrow table."""
+        import adbc_driver_quack as q
+        import adbc_driver_quack.dbapi as qd
+
+        db_path = self._duck._get_db_path(partition_key)
+        self.stop_server()
+        proc = self._start_server(db_path)
+        uri = f"quack://localhost:{self.port}"
+        deadline = time.time() + 15.0
+        conn = None
+        last_err = None
+        while time.time() < deadline:                 # ADBC connect = readiness probe
+            if proc.poll() is not None:
+                _, stderr = proc.communicate()
+                self.stop_server()
+                raise RuntimeError(f"Quack server exited before serving {uri}. Stderr:\n{stderr}")
+            try:
+                conn = qd.connect(uri, db_kwargs={q.DatabaseOptions.TOKEN.value: self.token})
+                break
+            except Exception as e:
+                last_err = e
+                time.sleep(0.2)
+        if conn is None:
+            self.stop_server()
+            raise RuntimeError(f"ADBC could not connect to Quack {uri} in 15s: {last_err}")
+        try:
+            cur = conn.cursor()
+            start = time.time()
+            cur.execute(sql)
+            cur.fetch_arrow_table()                   # force full materialization
+            return time.time() - start
+        finally:
+            conn.close()
+            self.stop_server()
+
     # --- Server lifecycle --------------------------------------------------
 
     def stop_server(self) -> None:

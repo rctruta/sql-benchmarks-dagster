@@ -54,3 +54,21 @@ class QuackEngine(ConfigurableResource):
         # OS page cache flush; the per-query server restart in QuackClient
         # provides the engine-level cold start.
         thrash_os_cache()
+
+
+class QuackAdbcEngine(QuackEngine):
+    """Same Quack server + cold-start lifecycle as QuackEngine, but the query is
+    measured through GizmoData's ADBC Quack driver (adbc-driver-quack, Arrow)
+    instead of the native client. Comparing 'quack_pushdown' vs 'quack_adbc' on
+    identical data/SQL/server isolates the result-transport CLIENT — the
+    native-vs-standardized question. Own data_folder + port so it never contends
+    with the native quack engines."""
+
+    def get_engine_name(self) -> str:
+        return "quack_adbc"
+
+    def run_query(self, sql: str, partition_key: str,
+                  engine_params: Dict[str, Any] = None) -> Optional[float]:
+        self.clear_cache()
+        return self._get_client().run_query_adbc(
+            sql=sql, partition_key=partition_key, engine_params=engine_params)

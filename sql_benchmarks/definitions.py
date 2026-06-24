@@ -22,7 +22,7 @@ from .resources.postgres import PostgresEngine
 from .resources.duckdb import DuckDBEngine
 from .resources.actian import ActianEngine
 from .resources.typedb_engine import TypeDBEngine
-from .resources.quack import QuackEngine
+from .resources.quack import QuackEngine, QuackAdbcEngine
 from .resources.postgres_transport import PostgresTransportEngine
 from .constants import DATA_DIR
 from .jobs import benchmark_job
@@ -107,6 +107,15 @@ defs = Definitions(
         "quack_pushdown": QuackEngine(
             data_folder=os.path.join(DATA_DIR, "quack_pushdown"),
             port=int(os.getenv("SB_QUACK_PUSHDOWN_PORT", "9495")),
+            token=os.getenv("SB_QUACK_TOKEN", "sb-local-quack-token"),
+            pushdown=True,
+        ),
+        # DuckDB-over-Quack measured through GizmoData's ADBC Quack driver
+        # (adbc-driver-quack, Arrow) instead of the native client — isolates the
+        # standardized transport vs the native one. Own port/folder.
+        "quack_adbc": QuackAdbcEngine(
+            data_folder=os.path.join(DATA_DIR, "quack_adbc"),
+            port=int(os.getenv("SB_QUACK_ADBC_PORT", "9496")),
             token=os.getenv("SB_QUACK_TOKEN", "sb-local-quack-token"),
             pushdown=True,
         ),
