@@ -113,6 +113,15 @@ defs = Definitions(
         # DuckDB-over-Quack measured through GizmoData's ADBC Quack driver
         # (adbc-driver-quack, Arrow) instead of the native client — isolates the
         # standardized transport vs the native one. Own port/folder.
+        # Native Quack client, but materialized to Arrow (.arrow()) — the
+        # apples-to-apples baseline for quack_adbc (same target, native protocol).
+        "quack_arrow": QuackEngine(
+            data_folder=os.path.join(DATA_DIR, "quack_arrow"),
+            port=int(os.getenv("SB_QUACK_ARROW_PORT", "9497")),
+            token=os.getenv("SB_QUACK_TOKEN", "sb-local-quack-token"),
+            pushdown=True,
+            arrow=True,
+        ),
         "quack_adbc": QuackAdbcEngine(
             data_folder=os.path.join(DATA_DIR, "quack_adbc"),
             port=int(os.getenv("SB_QUACK_ADBC_PORT", "9496")),

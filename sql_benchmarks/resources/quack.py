@@ -24,11 +24,14 @@ class QuackEngine(ConfigurableResource):
     # attach mode (False): client-side planning via USE remote.
     # pushdown (True): SQL text shipped via remote.query() — server-side execution.
     pushdown: bool = False
+    # Native materialization target: False -> .fetchall() (Python), True -> .arrow().
+    # quack_arrow (arrow=True) is the apples-to-apples native baseline for quack_adbc.
+    arrow: bool = False
     model_config = ConfigDict(extra='forbid')
 
     def _get_client(self) -> QuackClient:
         return QuackClient(data_folder=self.data_folder, port=self.port,
-                           token=self.token, pushdown=self.pushdown)
+                           token=self.token, pushdown=self.pushdown, arrow=self.arrow)
 
     # --- IBenchmarkEngine Implementation (Delegation) ---
 
