@@ -221,9 +221,14 @@ def generate_int_array(rows: int, **kwargs):
     LIST/STRUCT via parquet) are a separate, larger feature, intentionally not
     built here. `length` = elements per array.
     """
-    length = int(kwargs.get("length", 3))
-    lo = int(kwargs.get("min_value", 0))
-    hi = int(kwargs.get("max_value", 100))
+    # ColumnDef is dumped with min_value/max_value PRESENT as None (real schema
+    # fields), so .get(k, default) returns None — coalesce explicitly.
+    def _intkw(key, default):
+        v = kwargs.get(key)
+        return int(v) if v is not None else default
+    length = _intkw("length", 3)
+    lo = _intkw("min_value", 0)
+    hi = _intkw("max_value", 100)
     vals = np.random.randint(lo, hi, size=(rows, length))
     out = np.empty(rows, dtype=object)
     for i in range(rows):
