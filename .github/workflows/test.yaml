@@ -24,6 +24,14 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
+    - name: Check Dependency Drift
+      env:
+        PYTHONPATH: ${{ github.workspace }}
+      run: |
+        # Fail loudly if any imported or runtime-loaded package isn't declared —
+        # how the ADBC drivers once went undeclared and broke reproducibility.
+        python scripts/dev/check_deps.py
+
     - name: Run Full Test Suite
       env:
         # This makes 'sql_benchmarks' importable without 'pip install -e .'
