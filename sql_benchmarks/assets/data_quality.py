@@ -67,6 +67,26 @@ def make_quality_asset(table_name):
         if row_count == 0:
              raise ValueError(f"Table {table_name} is empty!")
 
+        # Datagen↔stats contract: fail loudly if the generated data drifts from
+        # what the config DECLARED (wrong dtype, wrong null rate, missing column)
+        # — profiling alone silently records drift instead of catching it.
+        # Skipped when no table_def is available (e.g. unit tests that stub
+        # load_context); a contract can only be checked against a declaration.
+        from ..utils.datagen_contract import verify_stats_against_config
+        table_def = ctx.get("table_defs", {}).get(table_name)
+        if table_def:
+            violations, skipped = verify_stats_against_config(table_def, stats)
+            if violations:
+                raise ValueError(
+                    f"Datagen contract violated for '{table_name}_{partition_key}': "
+                    + "; ".join(violations)
+                )
+            if skipped:
+                context.log.info(
+                    f"Datagen contract for '{table_name}_{partition_key}': "
+                    f"{len(skipped)} check(s) skipped (unverifiable): {skipped}"
+                )
+
         # Results are isolated by current_exp_id in RESULTS_DIR
         target_path = os.path.join(RESULTS_DIR, current_exp_id, "data_stats", f"{table_name}_{partition_key}.stats.json")
         stats_dir = os.path.dirname(target_path)
