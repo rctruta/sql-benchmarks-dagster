@@ -1,0 +1,29 @@
+{
+  "rows": 1000000,
+  "columns": {
+    "id": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 1000000,
+      "dtype": "Int64"
+    },
+    "n": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 1000,
+      "dtype": "Int64"
+    },
+    "payload": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 987536,
+      "dtype": "String"
+    },
+    "tags": {
+      "null_count": 0,
+      "null_percent": 0.0,
+      "cardinality": 631586,
+      "dtype": "String"
+    }
+  }
+}
