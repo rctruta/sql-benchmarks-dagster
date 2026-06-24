@@ -31,12 +31,15 @@ from _plotlib import REPO_ROOT, RESULTS_DIR
 
 OUT = os.path.join(REPO_ROOT, "scratch", "figures")
 
-# payload key (from the SQL file name) -> (legend label, color)
+# payload key (from the SQL file name) -> (legend label, color).
+# Labels state the FULL column set, because these are four INDEPENDENT queries
+# (a 2x2 of {int[]?} x {jsonb?}), not a cumulative stack — "+ jsonb" contains
+# NO int[]. Ambiguous "+x" labels misread as running totals.
 PAYLOADS = {
-    "primitives": ("primitives", "#777777"),
-    "with_array": ("+ int[]", "#2ca02c"),
-    "with_jsonb": ("+ jsonb", "#ff7f0e"),
-    "nested": ("jsonb + int[]", "#d62728"),
+    "primitives": ("id, n  (2 ints)", "#777777"),
+    "with_array": ("2 ints + int[]", "#2ca02c"),
+    "with_jsonb": ("2 ints + jsonb", "#ff7f0e"),
+    "nested": ("2 ints + jsonb + int[]", "#d62728"),
 }
 
 
@@ -90,7 +93,7 @@ def plot(exp_id: str) -> None:
         ax.set_xscale("log")
         ax.set_xlabel("rows pulled (log)")
         ax.grid(True, which="both", ls=":", alpha=0.4)
-        ax.legend(title="payload", fontsize=8)
+        ax.legend(title="SELECT columns (4 independent queries)", fontsize=8)
 
     axL.axhline(1.0, color="k", ls="--", lw=1, alpha=0.6)
     axL.set_ylabel("ADBC speedup over psycopg2  (psycopg2 / ADBC)")
