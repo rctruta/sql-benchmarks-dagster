@@ -80,6 +80,11 @@ class PostgresClient:
             overrides = {c["name"]: c["type"] for c in (table_def or {}).get("columns", [])
                          if isinstance(c, dict) and c.get("type")}
             self._create_schema(table_name, df_schema, type_overrides=overrides)
+            # Fail loudly if a declared `type:` override did NOT actually land as
+            # that Postgres type (e.g. jsonb silently degraded to text). Verified
+            # against live information_schema before any data is streamed.
+            if overrides and table_def:
+                self._verify_type_overrides(table_name, table_def)
             # 2. Stream Data
             self._stream_parquet(file_path, table_name)
 
@@ -110,6 +115,24 @@ class PostgresClient:
         if statements:
             # Refresh stats so the planner can choose an index scan.
             self._execute_internal(f"ANALYZE {table_name};")
+
+    def _verify_type_overrides(self, table_name: str, table_def: dict):
+        """Assert every config `type:` override actually landed in Postgres,
+        reading the live information_schema. Raises on any mismatch (fail-fast)."""
+        from ..utils.datagen_contract import verify_pg_schema
+        with self.engine.connect() as conn:
+            rows = conn.execute(text(
+                "SELECT column_name, data_type, udt_name "
+                "FROM information_schema.columns "
+                "WHERE table_name = :t AND table_schema = current_schema()"
+            ), {"t": table_name}).fetchall()
+        pg_columns = {r[0]: {"data_type": r[1], "udt_name": r[2]} for r in rows}
+        violations = verify_pg_schema(table_def, pg_columns)
+        if violations:
+            raise ValueError(
+                f"Postgres type-override contract violated for '{table_name}': "
+                + "; ".join(violations)
+            )
 
     def _create_schema(self, table_name: str, sample_df: pl.DataFrame, type_overrides: dict = None):
         """
