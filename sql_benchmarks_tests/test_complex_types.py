@@ -45,7 +45,9 @@ def _pg_up() -> bool:
 
 def test_int_array_emits_pg_array_literals():
     np.random.seed(0)
-    arrs = generate_int_array(20, length=3)
+    # Pass min_value/max_value=None to mimic ColumnDef.model_dump() (real schema
+    # fields dumped as None) — regression guard for int(None) crash on the lab path.
+    arrs = generate_int_array(20, length=3, min_value=None, max_value=None)
     assert len(arrs) == 20
     for a in arrs:
         assert a.startswith("{") and a.endswith("}")
