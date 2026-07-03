@@ -26,9 +26,11 @@ The whole point of validating at submission is to catch problems *before* they g
 
 ## 3. Status endpoint is non-idempotent — every poll retriggers execute_run.py
 
-Log evidence: same `ConfigLoader` crash appearing twice, from two consecutive `GET /v1/experiments/<id>/status` calls. That means the status endpoint isn't just reading state from disk — it's spinning up a full Dagster load on every check. Wasteful (heavy import per poll) and non-idempotent (side effects on read).
+**Verified stale 2026-07-03 by direct measurement.** Instrumented `subprocess.run` and `ConfigLoader.__init__` counters against the current handler; three `GET /v1/experiments/<id>/status` calls produced zero of each. The endpoint is pure filesystem reads (fragments, CSV, config archive, and the new failure marker from #2).
 
-**Rough shape of fix:** status endpoint reads from disk-based state (queue file, results dir, failure marker), never invokes the executor. Execution is a *separate* concern — a background worker or an explicit `POST /v1/experiments/<id>/execute` call, not a side effect of GET.
+The one visible ConfigLoader instantiation at API startup was traced to `sql_benchmarks/utils/common.py:19` — an eager `_GLOBAL_COMPILER = ConfigLoader()` at module import time, pulled in via `api/routers/experiments.py → coordinator → utils.hasher → utils.common`. That was import-time cost, not per-poll cost, but it was worth closing: the API had no business parsing `active.yaml` just to boot. Made lazy in the same PR (`_get_global_compiler()` initializes on first `load_context()` call). Dagster's `CTX = load_context()` in `assets/*_factory.py` still fires eagerly at asset-definition time — same fail-hard behavior, just at first use instead of at module import.
+
+The original TODO #3 evidence was likely a background-task crash from `_run_experiment` running once (submission time), not a per-poll retrigger. TODO #2's failure marker now surfaces those to `/status` cleanly.
 
 ## 4. Agent workflow vs. human workflow — surface the same thing
 
