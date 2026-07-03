@@ -1,12 +1,16 @@
 # TODO — Known Architectural Gaps
 
-Findings from working sessions that need addressing, but were out of scope of the immediate work. Not a bug tracker — those are separate issues. This is a running log of architectural questions and layered-validation gaps surfaced while iterating on the autonomous agent (`scripts/autonomous_agent.py`) and the REST API.
+Running log of architectural questions and layered-validation gaps surfaced while iterating on the autonomous agent (`scripts/autonomous_agent.py`) and the REST API. Not a bug tracker — those are separate issues.
 
-Date opened: 2026-07-03.
+**Status summary (2026-07-03):** the punch list opened this day is resolved. Every item has shipped, been verified stale, been verified closed by audit, or been deliberately deferred with recorded options. Only `#5b` (ID widening) remains as a future decision waiting for a real trigger (capsule count approaching the birthday bound, or an organic collision detected via `#5a`). All other items are done.
+
+Date opened: 2026-07-03. Punch list closed: 2026-07-03.
 
 ---
 
 ## 1. Two-layer validation with different rigor
+
+**STATUS: SHIPPED via PR #110** — API + coordinator + ConfigLoader all call the same `validate_experiment_config` at `sql_benchmarks/validation.py`; matrix-missing configs now return 422 at submission instead of the previous 202-then-crash.
 
 The submission-time API contract (`api_submission`) accepts YAML that the deeper executor (`execute_run.py` → `ConfigLoader`) rejects. Observed live:
 
@@ -20,13 +24,15 @@ The whole point of validating at submission is to catch problems *before* they g
 
 ## 2. Failed executions do not surface to status
 
+**STATUS: SHIPPED via PR #111** — coordinator writes `results/<id>/failure.json` at every failure point (execution, drift, no_results, catch-all); status endpoint reads it and returns `{"status": "failed", "detail": "[stage] error"}`; belt-and-suspenders catch-all in the API background task.
+
 `execute_run.py` crashed and printed `[FAILURE] Technical execution failed.` But `GET /v1/experiments/<id>/status` kept returning `queued` — never `failed`. The agent had no way to know the run had already died; it polled 12+ times against a dead experiment.
 
 **Rough shape of fix:** on execute_run.py failure, write a failure marker (`results/<id>/failure.json` with the exception text and traceback) that the status endpoint reads. `{"status": "failed", "detail": "<error text>"}` returned to the agent lets the coaching-on-tool-error logic in `autonomous_agent.py` (PR #106) actually kick in — the agent retries with a fixed YAML.
 
 ## 3. Status endpoint is non-idempotent — every poll retriggers execute_run.py
 
-**Verified stale 2026-07-03 by direct measurement.** Instrumented `subprocess.run` and `ConfigLoader.__init__` counters against the current handler; three `GET /v1/experiments/<id>/status` calls produced zero of each. The endpoint is pure filesystem reads (fragments, CSV, config archive, and the new failure marker from #2).
+**STATUS: CLOSED via PR #112 — verified stale 2026-07-03 by direct measurement.** Instrumented `subprocess.run` and `ConfigLoader.__init__` counters against the current handler; three `GET /v1/experiments/<id>/status` calls produced zero of each. The endpoint is pure filesystem reads (fragments, CSV, config archive, and the new failure marker from #2).
 
 The one visible ConfigLoader instantiation at API startup was traced to `sql_benchmarks/utils/common.py:19` — an eager `_GLOBAL_COMPILER = ConfigLoader()` at module import time, pulled in via `api/routers/experiments.py → coordinator → utils.hasher → utils.common`. That was import-time cost, not per-poll cost, but it was worth closing: the API had no business parsing `active.yaml` just to boot. Made lazy in the same PR (`_get_global_compiler()` initializes on first `load_context()` call). Dagster's `CTX = load_context()` in `assets/*_factory.py` still fires eagerly at asset-definition time — same fail-hard behavior, just at first use instead of at module import.
 
@@ -34,7 +40,7 @@ The original TODO #3 evidence was likely a background-task crash from `_run_expe
 
 ## 4. Agent workflow vs. human workflow — surface the same thing
 
-**Verified closed 2026-07-03 by audit.** #4 was the design principle behind #1-#3; those PRs realized it. Concrete parity between the CLI path (`./run.sh <yaml> --auto` → `run_experiment.py` → `coordinator.run()`) and the API path (`POST /v1/experiments` → `_run_experiment` → `coordinator.run()`) after #109-#112:
+**STATUS: CLOSED via PR #113 — verified by audit 2026-07-03.** #4 was the design principle behind #1-#3; those PRs realized it. Concrete parity between the CLI path (`./run.sh <yaml> --auto` → `run_experiment.py` → `coordinator.run()`) and the API path (`POST /v1/experiments` → `_run_experiment` → `coordinator.run()`) after #109-#112:
 
 | Concern | State |
 |---|---|
@@ -50,6 +56,8 @@ The design principle is realized. No remaining concrete gap.
 
 ### 4a. `active.yaml` was doing three jobs — one file, three roles
 
+**STATUS: SHIPPED via PR #109** — file gitignored + untracked; proper decoupling of runtime staging from tracked file deliberately left as follow-up.
+
 Surfaced 2026-07-03. `sql_benchmarks/experiments/active.yaml` was simultaneously (a) the human's canonical entry file, (b) the coordinator's runtime staging (overwritten on every run at `coordinator.py:67-69` with the experiment_id-injected config), and (c) the source for the registry archive copy at `coordinator.py:260`. Every run left an uncommitted diff on a tracked file; multiple worktrees each accumulated their own orphan diffs; tests worked around it with a save-and-restore in `conftest.py`.
 
 **Immediate fix (this branch):** gitignore `experiments/active.yaml` and untrack it. Coordinator still writes locally per run, but the write no longer produces git noise. Tests' `conftest.py` was updated to prefer `archive/baseline.yaml` as the stable reference (previously it fell through to whatever `active.yaml` happened to be after the last coordinator write).
@@ -57,6 +65,8 @@ Surfaced 2026-07-03. `sql_benchmarks/experiments/active.yaml` was simultaneously
 **Still open (proper decoupling — deferred):** the coordinator should stage to a runtime-only path (e.g., `dagster_home/current.yaml`) and the registry archive at `coordinator.py:260` should serialize from `self._source_yaml` directly instead of re-reading a file. That eliminates the tracked-file dependency entirely — role (b) and role (c) stop sharing a path with role (a). Not blocking agentic robustness work, but the right shape for the long term.
 
 ## 5. Capsule ID collision — what's the fallback?
+
+**STATUS:** #5a SHIPPED (PR #114) — detection classifies fresh/duplicate/collision. #5b DEFERRED — ID widening options B1–B4 preserved; wait for real trigger. #5c SHIPPED (PR #116) — set-like list canonicalization so permutation resubmits register as duplicate not collision.
 
 Content-addressed IDs are 8 hex chars of SHA-256 = 32 bits of collision space. Birthday-bound collision expected around ~65k capsules; possible much sooner in adversarial or accident cases.
 
@@ -112,7 +122,7 @@ Engine params (`execution.engine_params.<engine>.<param>`) are DICTS, not lists 
 
 ## 6. AGENTS.md loading is opt-in for standalone scripts
 
-**Closed 2026-07-03 as YAGNI (extract when justified, not before).** Standalone Python scripts (`scripts/autonomous_agent.py`) don't automatically read AGENTS.md the way harnesses like Claude Code or Cursor do — that's harness-level behavior. PR #107 added an explicit `load_agents_md()` (~40 lines) to the agent script.
+**STATUS: CLOSED via PR #113 as YAGNI 2026-07-03 (extract when justified, not before).** Standalone Python scripts (`scripts/autonomous_agent.py`) don't automatically read AGENTS.md the way harnesses like Claude Code or Cursor do — that's harness-level behavior. PR #107 added an explicit `load_agents_md()` (~40 lines) to the agent script.
 
 Decision: not extracting `sql_benchmarks.agent_utils` speculatively. The extraction cost (module boundary, tests, docs) exceeds the current benefit (one caller). When a second agent script appears that needs the same loader — or when the loader grows beyond what fits in a single script — extract then. The one-caller shape is not a smell; the extract-for-hypothetical-reuse is. See also: [experiment config design memory](/Users/ramona/.claude/projects/-Users-ramona-Projects-sql-benchmarks-dagster/memory/experiment-config-design.md) — same principle (no templating until a real second consumer appears).
 
