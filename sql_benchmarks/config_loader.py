@@ -32,8 +32,8 @@ class ConfigLoader:
             raise ValueError(f"CRITICAL: Failed to parse {self.config_path}: {e}")
 
         # --- STRICT SCHEMA & SEMANTIC VALIDATION ---
-        from .validator import ExperimentValidator
-        ExperimentValidator.validate(self._raw_config, source_label=self.config_path)
+        from .validation import validate_experiment_config
+        validate_experiment_config(self._raw_config, source_label=self.config_path)
 
         self.execution = self._raw_config.get("execution", {})
         self.definitions = self._raw_config.get("definitions", {})

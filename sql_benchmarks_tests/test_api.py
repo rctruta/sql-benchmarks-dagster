@@ -249,7 +249,7 @@ def test_submit_invalid_yaml_rejected(client):
 
 def test_submit_validation_failure_rejected(client):
     with patch.object(
-        experiments_router.ExperimentValidator, "validate",
+        experiments_router, "validate_experiment_config",
         side_effect=ValueError("missing dataset section"),
     ):
         resp = client.post("/v1/experiments", json={"config_yaml": VALID_YAML})
@@ -259,7 +259,7 @@ def test_submit_validation_failure_rejected(client):
 
 def test_submit_queues_and_writes_yaml(client, fake_lab):
     new_id = "feed0001"
-    with patch.object(experiments_router.ExperimentValidator, "validate"), \
+    with patch.object(experiments_router, "validate_experiment_config"), \
          patch.object(experiments_router, "generate_experiment_hash", return_value=new_id), \
          patch.object(experiments_router, "_run_experiment") as run_mock:
         resp = client.post("/v1/experiments", json={"config_yaml": VALID_YAML})
@@ -277,7 +277,7 @@ def test_submit_queues_and_writes_yaml(client, fake_lab):
 
 
 def test_submit_duplicate_returns_existing_id(client):
-    with patch.object(experiments_router.ExperimentValidator, "validate"), \
+    with patch.object(experiments_router, "validate_experiment_config"), \
          patch.object(experiments_router, "generate_experiment_hash", return_value=EXP_ID), \
          patch.object(experiments_router, "_run_experiment") as run_mock:
         resp = client.post("/v1/experiments", json={"config_yaml": VALID_YAML})
