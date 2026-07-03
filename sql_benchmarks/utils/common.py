@@ -9,33 +9,46 @@ from ..constants import ACTIVE_CONFIG_PATH, ENGINE_SQL_DIALECTS, SQL_DIR
 from ..config_loader import ConfigLoader
 from typing import Dict, Any
 
-# Initialize the compiler once globally
-# NOTE: If this fails to initialize due to a strict violation, the error will propagate up 
-# when Dagster tries to load definitions, which is the correct fail-hard behavior.
 # ==========================================
 # 1. CONTEXT & CONFIG LOADING
 # ==========================================
-try:
-    _GLOBAL_COMPILER = ConfigLoader()
-except ValueError as e:
-    # Propagate structural errors during load time
-    raise e 
+#
+# The compiler is created lazily on first load_context() call, not at import
+# time. Rationale: sql_benchmarks.utils.common gets pulled in transitively by
+# many entry points that DON'T need Dagster's compiled scenario config —
+# notably the FastAPI app (via coordinator → hasher → this module) and the CLI
+# validator. Eager instantiation forced those entry points to parse and
+# validate active.yaml just to boot, and refused to boot at all if active.yaml
+# was missing or malformed. Dagster's asset factories still call load_context()
+# eagerly at module import (CTX = load_context() in assets/*_factory.py), so
+# from Dagster's perspective the fail-hard behavior is preserved — it just
+# fires at first load_context() rather than at import of common.py.
+_GLOBAL_COMPILER = None
+
+
+def _get_global_compiler() -> ConfigLoader:
+    global _GLOBAL_COMPILER
+    if _GLOBAL_COMPILER is None:
+        _GLOBAL_COMPILER = ConfigLoader()
+    return _GLOBAL_COMPILER
+
 
 def load_context() -> Dict[str, Any]:
     """
     Returns a consolidated context dictionary containing all derived and raw configuration
     needed by asset factories. This replaces the old context loading logic.
     """
-    raw_config = _GLOBAL_COMPILER.get_full_config()
+    compiler = _get_global_compiler()
+    raw_config = compiler.get_full_config()
     
     # --- Tracing All Necessary Context for Asset Factories ---
     
     # 1. Core Config Blocks
     context = {
         "full_config": raw_config,
-        "execution": _GLOBAL_COMPILER.execution,
-        "definitions": _GLOBAL_COMPILER.definitions,
-        "dataset_config": _GLOBAL_COMPILER.dataset, # Used by benchmark_factory for schema inference
+        "execution": compiler.execution,
+        "definitions": compiler.definitions,
+        "dataset_config": compiler.dataset, # Used by benchmark_factory for schema inference
     }
 
     # 2. Derived/Extracted Context (Crucial for Downstream Logic)
@@ -54,7 +67,7 @@ def load_context() -> Dict[str, Any]:
     context["meta"] = raw_config.get("meta", {})
     
     # E. Full Scenario Config
-    context["scenario_config"] = _GLOBAL_COMPILER.scenario_config
+    context["scenario_config"] = compiler.scenario_config
     
     return context
 

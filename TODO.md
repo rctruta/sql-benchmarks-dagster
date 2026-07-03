@@ -26,19 +26,65 @@ The whole point of validating at submission is to catch problems *before* they g
 
 ## 3. Status endpoint is non-idempotent — every poll retriggers execute_run.py
 
-Log evidence: same `ConfigLoader` crash appearing twice, from two consecutive `GET /v1/experiments/<id>/status` calls. That means the status endpoint isn't just reading state from disk — it's spinning up a full Dagster load on every check. Wasteful (heavy import per poll) and non-idempotent (side effects on read).
+**Verified stale 2026-07-03 by direct measurement.** Instrumented `subprocess.run` and `ConfigLoader.__init__` counters against the current handler; three `GET /v1/experiments/<id>/status` calls produced zero of each. The endpoint is pure filesystem reads (fragments, CSV, config archive, and the new failure marker from #2).
 
-**Rough shape of fix:** status endpoint reads from disk-based state (queue file, results dir, failure marker), never invokes the executor. Execution is a *separate* concern — a background worker or an explicit `POST /v1/experiments/<id>/execute` call, not a side effect of GET.
+The one visible ConfigLoader instantiation at API startup was traced to `sql_benchmarks/utils/common.py:19` — an eager `_GLOBAL_COMPILER = ConfigLoader()` at module import time, pulled in via `api/routers/experiments.py → coordinator → utils.hasher → utils.common`. That was import-time cost, not per-poll cost, but it was worth closing: the API had no business parsing `active.yaml` just to boot. Made lazy in the same PR (`_get_global_compiler()` initializes on first `load_context()` call). Dagster's `CTX = load_context()` in `assets/*_factory.py` still fires eagerly at asset-definition time — same fail-hard behavior, just at first use instead of at module import.
+
+The original TODO #3 evidence was likely a background-task crash from `_run_experiment` running once (submission time), not a per-poll retrigger. TODO #2's failure marker now surfaces those to `/status` cleanly.
 
 ## 4. Agent workflow vs. human workflow — surface the same thing
 
-Ramona's observation from a working session: the workflow when a human runs an experiment (`./run.sh <yaml> --auto`) and when an agent runs one (`POST /v1/experiments`) should be as close as possible. Right now they're separate code paths with different validation and different failure semantics.
+**Verified closed 2026-07-03 by audit.** #4 was the design principle behind #1-#3; those PRs realized it. Concrete parity between the CLI path (`./run.sh <yaml> --auto` → `run_experiment.py` → `coordinator.run()`) and the API path (`POST /v1/experiments` → `_run_experiment` → `coordinator.run()`) after #109-#112:
 
-Each tool call should return something validated with the same rigor as the CLI would produce. This isn't a single bug; it's a design principle worth carrying into #1, #2, #3 above.
+| Concern | State |
+|---|---|
+| Validation contract | Same after #110 (both call `validate_experiment_config`) |
+| Config hashing | Same code path (`generate_experiment_hash`) |
+| Runtime staging file | Same after #109 (both gitignored, no shared-state coupling) |
+| Failure surfacing | Same after #111 (both write `results/<id>/failure.json`; the API reads it) |
+| Startup cost | Same after #112 (both lazy on the ConfigLoader) |
+| Registry check for duplicates | API upfront (202 + `status="duplicate"`); CLI at `coordinator.run:53` (prints "SKIPPING"). Same effect, different response surface. |
+| Caller feedback shape | API async (submit → poll `/status`); CLI sync (exit code). Inherent architectural difference, not a parity gap. |
+
+The design principle is realized. No remaining concrete gap.
+
+### 4a. `active.yaml` was doing three jobs — one file, three roles
+
+Surfaced 2026-07-03. `sql_benchmarks/experiments/active.yaml` was simultaneously (a) the human's canonical entry file, (b) the coordinator's runtime staging (overwritten on every run at `coordinator.py:67-69` with the experiment_id-injected config), and (c) the source for the registry archive copy at `coordinator.py:260`. Every run left an uncommitted diff on a tracked file; multiple worktrees each accumulated their own orphan diffs; tests worked around it with a save-and-restore in `conftest.py`.
+
+**Immediate fix (this branch):** gitignore `experiments/active.yaml` and untrack it. Coordinator still writes locally per run, but the write no longer produces git noise. Tests' `conftest.py` was updated to prefer `archive/baseline.yaml` as the stable reference (previously it fell through to whatever `active.yaml` happened to be after the last coordinator write).
+
+**Still open (proper decoupling — deferred):** the coordinator should stage to a runtime-only path (e.g., `dagster_home/current.yaml`) and the registry archive at `coordinator.py:260` should serialize from `self._source_yaml` directly instead of re-reading a file. That eliminates the tracked-file dependency entirely — role (b) and role (c) stop sharing a path with role (a). Not blocking agentic robustness work, but the right shape for the long term.
 
 ## 5. Capsule ID collision — what's the fallback?
 
 Content-addressed IDs are 8 hex chars of SHA-256 = 32 bits of collision space. Birthday-bound collision expected around ~65k capsules; possible much sooner in adversarial or accident cases.
+
+### 5a. Detection — SHIPPED 2026-07-03 in `sql_benchmarks/capsule_registry.py`
+
+The correctness half of the problem is closed. `check_registry(exp_id, config, archive_dir)` returns one of:
+- `"fresh"` — no archived config with this exp_id; proceed normally.
+- `"duplicate"` — archived config parses to the same dict (minus `meta`) as the submitted one; this is a legitimate re-submission.
+- `"collision"` — archived config parses to a DIFFERENT dict; genuine 32-bit hash collision; refuse loudly.
+
+Comparison rule: deep equality on the parsed YAML trees, with `meta` stripped from both sides (because the hasher at `utils/hasher.py:51` excludes `meta` from the hash input — otherwise a re-submit with a renamed experiment would falsely trip). Robust to whitespace, comments, key-reordering; sensitive to real content differences.
+
+Wired at both surfaces (the workflow-parity discipline from #4):
+- API: `POST /v1/experiments` → `409 Conflict` with a diagnostic message on collision.
+- CLI: `coordinator.run()` prints `[CRITICAL]` and returns False on collision.
+
+An unparseable archived config is classified as `"collision"` — we never silently overwrite what we can't verify.
+
+### 5b. ID widening — DEFERRED, options preserved for when it becomes real
+
+Not shipped, not needed today. Recording the options so the decision has valid context when the pressure arrives. Trigger: capsule count within ~10× of the 65k birthday bound, OR the first organic collision observed via 5a.
+
+- **B1. Stay at 8 chars, rely on 5a.** Current state. Correct until collision density grows. Zero migration cost. Recommended default.
+- **B2. Extend to 12 chars only on collision.** Creates dual-format IDs (8 vs 12), mixed display, docs and release manifests must handle both. Migration pain scales with existing capsule count. **Not recommended.**
+- **B3. Extend to 16 chars everywhere.** Cleanest going forward, but invalidates every existing 8-char reference: published capsule tables in `docs/published_capsules.md`, the `sqlbenchdag-quack-v1` release manifest, ORCID/CITATION.cff references, external citations already in the wild. Breaks the maker's mark discipline. **Not recommended.**
+- **B4. Full 64-char SHA-256 always; 8-char is a display prefix.** Registry keyed on full hash. Longest reach and the only option that preserves existing 8-char references (as display shortcuts). Requires filesystem migration for existing capsules (`configs/config_<8>.yaml → configs/config_<64>.yaml` + a lookup index). **The right answer if we ever need one.**
+
+If B becomes real: prefer B4. Design the migration script alongside the code change; keep 8-char display everywhere the maker's mark appears.
 
 ### 5c. Set-like list canonicalization — SHIPPED (this PR)
 
@@ -62,9 +108,13 @@ Explicitly NOT registered (order matters):
 
 Engine params (`execution.engine_params.<engine>.<param>`) are DICTS, not lists — already order-invariant via `json.dumps(sort_keys=True)`. Runtime iteration order in the drivers follows Python dict insertion order; harmless for current allowlist (session-level `SET` statements are commutative for the params we allow). If a future engine param needs deterministic SET order, that's a driver concern, not a hashing concern.
 
+**Interaction with 5a:** `check_registry` compares parsed YAML trees. Since ConfigLoader now canonicalizes on load, permutation-resubmits (same experiment, matrix values reordered) hash to the same exp_id and their parsed dicts compare equal → classified `"duplicate"`, not `"collision"`.
+
 ## 6. AGENTS.md loading is opt-in for standalone scripts
 
-Standalone Python scripts (`scripts/autonomous_agent.py`) don't automatically read AGENTS.md the way harnesses like Claude Code or Cursor do — that's harness-level behavior. PR #107 added explicit `load_agents_md()` to the agent script; any *future* agents that talk to the sqlbenchdag API need the same pattern (or need a shared library that does it). Worth extracting to `sql_benchmarks.agent_utils` if a second agent shows up.
+**Closed 2026-07-03 as YAGNI (extract when justified, not before).** Standalone Python scripts (`scripts/autonomous_agent.py`) don't automatically read AGENTS.md the way harnesses like Claude Code or Cursor do — that's harness-level behavior. PR #107 added an explicit `load_agents_md()` (~40 lines) to the agent script.
+
+Decision: not extracting `sql_benchmarks.agent_utils` speculatively. The extraction cost (module boundary, tests, docs) exceeds the current benefit (one caller). When a second agent script appears that needs the same loader — or when the loader grows beyond what fits in a single script — extract then. The one-caller shape is not a smell; the extract-for-hypothetical-reuse is. See also: [experiment config design memory](/Users/ramona/.claude/projects/-Users-ramona-Projects-sql-benchmarks-dagster/memory/experiment-config-design.md) — same principle (no templating until a real second consumer appears).
 
 ---
 

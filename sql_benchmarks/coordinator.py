@@ -5,8 +5,11 @@ import time
 import subprocess
 import sys
 import json
-from .validator import ExperimentValidator
+import traceback
+from .validation import validate_experiment_config
 from .canonicalization import canonicalize
+from .failure_marker import write_failure_marker
+from .capsule_registry import check_registry
 from .constants import ROOT_DIR, CONFIG_ARCHIVE_DIR, EXPERIMENTS_DIR, PROCESSED_SUFFIX, RESULTS_DIR, VIOLATIONS_DIR, REPORTS_DIR, AUDIT_LOCK_PATH, ACTIVE_CONFIG_PATH
 from .utils.hasher import generate_experiment_hash, generate_integrity_seal
 from .utils.common import copy_suite_queries
@@ -30,6 +33,17 @@ class ExperimentCoordinator:
         # config is the author's file, not a re-serialization of it.
         self._source_yaml = None
 
+    def _write_failure(self, stage: str, error: str, tb: str = None) -> None:
+        """Write results/<exp_id>/failure.json so /status can surface the failure.
+        No-op if the exp_id hasn't been assigned yet (validation failures happen
+        before the hash is computed and have no ID to key the marker on)."""
+        if not self.exp_id:
+            return
+        try:
+            write_failure_marker(RESULTS_DIR, self.exp_id, stage, error, tb)
+        except Exception as e:
+            print(f"[WARN] could not write failure marker for {self.exp_id}: {e}")
+
     def run(self) -> bool:
         # 0. Safety Check
         if os.path.exists(AUDIT_LOCK_PATH):
@@ -49,7 +63,7 @@ class ExperimentCoordinator:
             # author's exact bytes — so byte-fidelity provenance is preserved.
             self.config = canonicalize(self.config)
 
-            ExperimentValidator.validate(self.config, source_label=os.path.basename(self.target_yaml))
+            validate_experiment_config(self.config, source_label=os.path.basename(self.target_yaml))
             
             # Derive Identity (STRICT SHA-BASED)
             self.exp_id = generate_experiment_hash(self.config, ROOT_DIR)
@@ -57,10 +71,21 @@ class ExperimentCoordinator:
             self.config["meta"] = self.config.get("meta", {})
             self.config["meta"]["experiment_id"] = self.exp_id
             
-            # Check Registry
-            if os.path.exists(os.path.join(CONFIG_ARCHIVE_DIR, f"config_{self.exp_id}.yaml")):
+            # Check Registry: dispatch on three-way collision detection so a
+            # 32-bit hash collision (different config, same 8-char exp_id)
+            # can never silently return wrong results (TODO #5).
+            registry_status = check_registry(self.exp_id, self.config, CONFIG_ARCHIVE_DIR)
+            if registry_status == "duplicate":
                 print(f"[INFO] SKIPPING: Experiment {self.exp_id} already exists in registry.")
                 return True
+            if registry_status == "collision":
+                print(
+                    f"[CRITICAL] Hash collision: experiment_id {self.exp_id} is "
+                    "already held by a different config. Refusing to run "
+                    "(would silently overwrite / mis-attribute results). "
+                    "See TODO.md #5."
+                )
+                return False
                 
         except Exception as e:
             print(f"[REJECTED] Experiment contract failed validation: {e}")
@@ -92,28 +117,48 @@ class ExperimentCoordinator:
         print(f"[INFO] Executing {self.exp_id} in isolated scratchpad...")
         
         try:
-            # Prepare environment
-            local_env = os.environ.copy()
-            success = self._execute_direct(local_env)
-            
-            if not success:
-                print(f"[FAILURE] Technical execution failed.")
-                return False
+            try:
+                # Prepare environment
+                local_env = os.environ.copy()
+                success = self._execute_direct(local_env)
 
-            # Phase 4: CODE-DRIFT GATE
-            # The Experiment ID was computed from the code at submission; if
-            # the package changed during execution, the ID no longer names
-            # what actually ran. Refuse to finalize — loudly.
-            drift = harness.check_integrity()
-            if drift:
-                print(f"[CRITICAL] Code drift detected during execution — results NOT committed:")
-                for d in drift:
-                    print(f"           {d}")
-                return False
+                if not success:
+                    self._write_failure(
+                        "execution",
+                        "Technical execution failed (subprocess returned non-zero exit code).",
+                    )
+                    print(f"[FAILURE] Technical execution failed.")
+                    return False
 
-            # Phase 5: FINAL VERIFICATION & REGISTRY
-            return self._finalize_results()
-            
+                # Phase 4: CODE-DRIFT GATE
+                # The Experiment ID was computed from the code at submission; if
+                # the package changed during execution, the ID no longer names
+                # what actually ran. Refuse to finalize — loudly.
+                drift = harness.check_integrity()
+                if drift:
+                    self._write_failure(
+                        "drift",
+                        "Code drift detected during execution: " + "; ".join(drift),
+                    )
+                    print(f"[CRITICAL] Code drift detected during execution — results NOT committed:")
+                    for d in drift:
+                        print(f"           {d}")
+                    return False
+
+                # Phase 5: FINAL VERIFICATION & REGISTRY
+                return self._finalize_results()
+
+            except Exception as e:
+                # Catch-all so unexpected exceptions in the execution/finalize
+                # path still produce a failure marker the /status endpoint can
+                # surface. Without this, the FastAPI background task would
+                # swallow the exception and the poller would hang on 'queued'.
+                self._write_failure(
+                    "coordinator_exception",
+                    f"{type(e).__name__}: {e}",
+                    traceback.format_exc(),
+                )
+                raise
         finally:
             harness.cleanup()
 
@@ -166,6 +211,10 @@ class ExperimentCoordinator:
         dashboard_target = os.path.join(scratch_exp_folder, f"{self.exp_id}.html")
 
         if not os.path.exists(csv_target) and not os.path.exists(dashboard_target):
+            self._write_failure(
+                "no_results",
+                f"Run finished but produced no CSV or dashboard (looked at {csv_target}).",
+            )
             print(f"[ERROR] Run finished but no results found (Checked {csv_target} and {dashboard_target})")
             return False
 
