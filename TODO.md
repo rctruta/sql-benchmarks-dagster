@@ -36,6 +36,14 @@ Ramona's observation from a working session: the workflow when a human runs an e
 
 Each tool call should return something validated with the same rigor as the CLI would produce. This isn't a single bug; it's a design principle worth carrying into #1, #2, #3 above.
 
+### 4a. `active.yaml` was doing three jobs — one file, three roles
+
+Surfaced 2026-07-03. `sql_benchmarks/experiments/active.yaml` was simultaneously (a) the human's canonical entry file, (b) the coordinator's runtime staging (overwritten on every run at `coordinator.py:67-69` with the experiment_id-injected config), and (c) the source for the registry archive copy at `coordinator.py:260`. Every run left an uncommitted diff on a tracked file; multiple worktrees each accumulated their own orphan diffs; tests worked around it with a save-and-restore in `conftest.py`.
+
+**Immediate fix (this branch):** gitignore `experiments/active.yaml` and untrack it. Coordinator still writes locally per run, but the write no longer produces git noise. Tests' `conftest.py` was updated to prefer `archive/baseline.yaml` as the stable reference (previously it fell through to whatever `active.yaml` happened to be after the last coordinator write).
+
+**Still open (proper decoupling — deferred):** the coordinator should stage to a runtime-only path (e.g., `dagster_home/current.yaml`) and the registry archive at `coordinator.py:260` should serialize from `self._source_yaml` directly instead of re-reading a file. That eliminates the tracked-file dependency entirely — role (b) and role (c) stop sharing a path with role (a). Not blocking agentic robustness work, but the right shape for the long term.
+
 ## 5. Capsule ID collision — what's the fallback?
 
 Content-addressed IDs are 8 hex chars of SHA-256 = 32 bits of collision space. Birthday-bound collision expected around ~65k capsules; possible much sooner in adversarial or accident cases. Currently:

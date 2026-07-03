@@ -10,18 +10,23 @@ def load_real_config_and_shrink():
     Reads the REAL baseline.yaml from the repo.
     Shrinks row counts and matrix dimensions so tests run in milliseconds.
     """
-    baseline_path = os.path.join(EXPERIMENTS_DIR, "baseline.yaml")
-    active_path = os.path.join(EXPERIMENTS_DIR, "active.yaml")
+    # Prefer baseline.yaml (a stable, tracked reference) over active.yaml
+    # (local runtime staging, gitignored). Fall back to archive/baseline.yaml
+    # since baseline lives there in this repo. Fallback config used only if
+    # nothing on disk.
+    candidates = [
+        os.path.join(EXPERIMENTS_DIR, "baseline.yaml"),
+        os.path.join(EXPERIMENTS_DIR, "archive", "baseline.yaml"),
+        os.path.join(EXPERIMENTS_DIR, "active.yaml"),
+    ]
+    source_path = next((p for p in candidates if os.path.exists(p)), None)
     
-    # 1. Load the best available Real Config
-    source_path = baseline_path if os.path.exists(baseline_path) else active_path
-    
-    if os.path.exists(source_path):
-        with open(source_path, "r") as f:
-            config = yaml.safe_load(f) or {}
-    else:
+    if source_path is None:
         # Fallback only if NO config exists in the repo
         return get_fallback_config()
+
+    with open(source_path, "r") as f:
+        config = yaml.safe_load(f) or {}
 
     # A. Shrink Dataset
     if "dataset" in config and "tables" in config["dataset"]:

@@ -40,6 +40,12 @@ sql_benchmarks/experiments/results/
 sql_benchmarks/experiments/configs/
 sql_benchmarks/experiments/violations/
 sql_benchmarks/experiments/reports/
+# active.yaml is runtime staging — coordinator overwrites it on every run
+# with the experiment_id-injected config (coordinator.py:67-69), and tests
+# save/restore it around a session (sql_benchmarks_tests/conftest.py). It is
+# the human's local "current experiment" file, not a shared artifact —
+# tracking it produces spurious diffs on every run and cross-worktree noise.
+sql_benchmarks/experiments/active.yaml
 *.csv
 *.html
 *.log

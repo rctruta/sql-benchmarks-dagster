@@ -6,7 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from ...constants import CONFIG_ARCHIVE_DIR, EXPERIMENTS_DIR, ROOT_DIR
 from ...coordinator import ExperimentCoordinator
 from ...utils.hasher import generate_experiment_hash
-from ...validator import ExperimentValidator
+from ...validation import validate_experiment_config
 from ..data.reader import ResultReader
 from ..models.experiments import ExperimentStatus, ExperimentSubmitRequest, ExperimentSubmitResponse
 
@@ -49,7 +49,7 @@ def submit_experiment(body: ExperimentSubmitRequest, background_tasks: Backgroun
         raise HTTPException(status_code=422, detail=f"Invalid YAML: {e}")
 
     try:
-        ExperimentValidator.validate(config, source_label="api_submission")
+        validate_experiment_config(config, source_label="api_submission")
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
