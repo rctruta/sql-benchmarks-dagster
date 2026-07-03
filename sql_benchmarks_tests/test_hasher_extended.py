@@ -86,16 +86,77 @@ def test_hasher_ignores_meta_block():
         "meta": {"description": "Run 1", "experiment_id": "abc"},
         "dataset": {"tables": ["t1"]}
     }
-    
+
     config_2 = {
         "meta": {"description": "Run 2 - fixed typo", "experiment_id": "xyz"},
         "dataset": {"tables": ["t1"]}
     }
-    
+
     h1 = generate_experiment_hash(config_1, "/tmp")
     h2 = generate_experiment_hash(config_2, "/tmp")
-    
+
     assert h1 == h2
+
+
+def test_hasher_handles_nested_dict_key_ordering():
+    """
+    sort_keys=True in json.dumps sorts recursively. Extends the top-level
+    dict-ordering test to nested dicts: {execution: {a: 1, b: 2}} must hash
+    the same as {execution: {b: 2, a: 1}}.
+    """
+    config_1 = {
+        "execution": {
+            "engines": ["duckdb"],
+            "replication": 5,
+            "matrix": {"rows": [1000, 10000]},
+        },
+        "dataset": {"tables": {"t1": {"rows": 1000, "columns": []}}},
+    }
+    config_2 = {
+        "dataset": {"tables": {"t1": {"columns": [], "rows": 1000}}},
+        "execution": {
+            "matrix": {"rows": [1000, 10000]},
+            "replication": 5,
+            "engines": ["duckdb"],
+        },
+    }
+    h1 = generate_experiment_hash(config_1, "/tmp")
+    h2 = generate_experiment_hash(config_2, "/tmp")
+    assert h1 == h2, "nested dict key reordering must not change the hash"
+
+
+def test_hasher_treats_list_order_as_significant():
+    """
+    Documents current behavior: JSON serialization preserves list order, and
+    sort_keys=True does NOT sort list elements — only dict keys. So two
+    configs with reordered matrix values (or engine lists) produce different
+    hashes today.
+
+    This is the anchor test for the pending design decision: is
+    matrix.<dim> a SET (order irrelevant) or a SEQUENCE (order defines
+    iteration)? Today the hasher treats it as a sequence. If TODO #5b or a
+    successor commits to sorting set-like lists before hashing, THIS test
+    changes to `assert h1 == h2` — that flip is the migration marker.
+    """
+    config_1 = {
+        "execution": {
+            "engines": ["duckdb", "postgres"],
+            "matrix": {"rows": ["medium", "large"]},
+        },
+    }
+    config_2 = {
+        "execution": {
+            "engines": ["duckdb", "postgres"],
+            "matrix": {"rows": ["large", "medium"]},
+        },
+    }
+    h1 = generate_experiment_hash(config_1, "/tmp")
+    h2 = generate_experiment_hash(config_2, "/tmp")
+    assert h1 != h2, (
+        "current hasher treats list order as significant. "
+        "If this assertion flips, matrix values were made order-invariant — "
+        "expected under the TODO #5b matrix-canonicalization design."
+    )
 
 from sql_benchmarks.utils.hasher import normalize_python
 
