@@ -142,10 +142,24 @@ def test_score_engines_empty():
 # ---------------------------------------------------------------------------
 
 def test_list_engines(client):
+    """Quack variants (`quack`, `quack_pushdown`, `quack_adbc`, `quack_arrow`)
+    share the DuckDB SQL dialect and inherit its suite list. Similarly,
+    `postgres_transport` shares the Postgres dialect. The catalog reader
+    must expand dialect-shared SQL to the full engine set."""
     resp = client.get("/v1/catalog/engines")
     assert resp.status_code == 200
     engines = {e["name"]: e["available_suites"] for e in resp.json()["engines"]}
-    assert engines == {"duckdb": ["selectivity"], "postgres": ["selectivity"]}
+    # Fake catalog wrote SQL under selectivity/duckdb and selectivity/postgres.
+    # Every engine mapped to one of those dialects gets that suite listed.
+    assert engines == {
+        "duckdb": ["selectivity"],
+        "quack": ["selectivity"],
+        "quack_pushdown": ["selectivity"],
+        "quack_adbc": ["selectivity"],
+        "quack_arrow": ["selectivity"],
+        "postgres": ["selectivity"],
+        "postgres_transport": ["selectivity"],
+    }
 
 
 def test_list_suites_includes_sql_content(client):
@@ -156,7 +170,17 @@ def test_list_suites_includes_sql_content(client):
     suite = suites[0]
     assert suite["name"] == "selectivity"
     assert suite["benchmark_names"] == ["q_scan"]
+    # sql_content is keyed by engine name (agent-friendly). Engines sharing
+    # a dialect get the same SQL back — an agent asking for `quack` SQL
+    # gets the same text as one asking for `duckdb` SQL.
     assert suite["sql_content"]["duckdb"]["q_scan"] == "SELECT 1;"
+    assert suite["sql_content"]["quack"]["q_scan"] == "SELECT 1;"
+    assert suite["sql_content"]["quack_pushdown"]["q_scan"] == "SELECT 1;"
+    assert set(suite["engines"]) >= {
+        "duckdb", "postgres",
+        "quack", "quack_pushdown", "quack_adbc", "quack_arrow",
+        "postgres_transport",
+    }
 
 
 def test_list_templates_endpoint(client, tmp_path, monkeypatch):
