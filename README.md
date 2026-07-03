@@ -99,7 +99,8 @@ Managed with a strict separation between Harness and Scenario:
 ├── /plugins                # THE DATA: Declarative generators & scenario providers
 ├── /utils                  # THE BRAIN: AST-hashing, common logic, & system primitives
 └── /experiments            # THE LABORATORY
-    ├── active.yaml         # Current active partition matrix
+    ├── active.yaml         # LOCAL runtime staging — the coordinator overwrites
+    │                       #   this on every run (gitignored; not shared state)
     ├── /queue              # Staging area for new experiment configs
     ├── /archive            # Library of previously defined experiment templates
     ├── /configs            # Registry of immutable, hash-addressed experiment capsules
