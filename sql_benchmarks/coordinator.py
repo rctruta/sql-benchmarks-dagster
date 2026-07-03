@@ -6,11 +6,59 @@ import subprocess
 import sys
 import json
 import traceback
+from typing import Optional, Tuple
 from .validation import validate_experiment_config
 from .canonicalization import canonicalize
 from .failure_marker import write_failure_marker
 from .capsule_registry import check_registry
 from .constants import ROOT_DIR, CONFIG_ARCHIVE_DIR, EXPERIMENTS_DIR, PROCESSED_SUFFIX, RESULTS_DIR, VIOLATIONS_DIR, REPORTS_DIR, AUDIT_LOCK_PATH, ACTIVE_CONFIG_PATH
+
+
+# Markers for locating the load-bearing error line in captured subprocess
+# output. Split into two tiers so we prefer specific errors (DB / typed
+# exceptions / our own [FAILURE] tag) over generic wrappers (Dagster's
+# outer "Error occurred while executing op" line, which merely wraps the
+# real error one line up).
+_SPECIFIC_ERROR_MARKERS = (
+    "[SDK] Exception", "[FAILURE]",
+    "Catalog Error", "IntegrityError", "ProgrammingError",
+    "ValueError", "TypeError", "KeyError", "AttributeError",
+    "FileNotFoundError", "PermissionError",
+)
+_GENERIC_ERROR_MARKERS = ("Error:", "Exception:", "Traceback")
+
+
+def _extract_error_summary(captured: str) -> str:
+    """Return a one-line, load-bearing error message from subprocess output.
+
+    Prefers specific error markers (DB errors, typed Python exceptions,
+    our own [FAILURE] tag) over generic ones (`Error:`, `Exception:`).
+    Within a tier, walks from the end. Falls back to the last non-blank
+    line if nothing matches.
+
+    This becomes the `error` field of the failure marker — what the agent
+    sees as `detail` from /status. Actionable > verbose."""
+    if not captured:
+        return "subprocess produced no output"
+    lines = [ln.strip() for ln in captured.splitlines() if ln.strip()]
+    if not lines:
+        return "subprocess produced no output"
+    for line in reversed(lines):
+        if any(marker in line for marker in _SPECIFIC_ERROR_MARKERS):
+            return line
+    for line in reversed(lines):
+        if any(marker in line for marker in _GENERIC_ERROR_MARKERS):
+            return line
+    return lines[-1]
+
+
+def _tail_lines(text: str, n: int = 50) -> str:
+    """Return the last n lines of text as a single string. Used for the
+    `traceback` field of the failure marker — enough context to debug
+    without the marker file becoming a full log dump."""
+    if not text:
+        return ""
+    return "\n".join(text.splitlines()[-n:])
 from .utils.hasher import generate_experiment_hash, generate_integrity_seal
 from .utils.common import copy_suite_queries
 from .utils.semantic_auditor import SemanticAuditor
@@ -120,12 +168,19 @@ class ExperimentCoordinator:
             try:
                 # Prepare environment
                 local_env = os.environ.copy()
-                success = self._execute_direct(local_env)
+                success, captured = self._execute_direct(local_env)
 
                 if not success:
+                    # Extract the load-bearing error line for the marker's
+                    # `error` field, and the tail of the full output for
+                    # `traceback`. The agent's /status `detail` becomes
+                    # actionable (e.g., "Catalog Error: Table with name c
+                    # does not exist") instead of a useless "subprocess
+                    # returned non-zero exit code".
                     self._write_failure(
                         "execution",
-                        "Technical execution failed (subprocess returned non-zero exit code).",
+                        _extract_error_summary(captured or ""),
+                        _tail_lines(captured or "", 50),
                     )
                     print(f"[FAILURE] Technical execution failed.")
                     return False
@@ -162,16 +217,23 @@ class ExperimentCoordinator:
         finally:
             harness.cleanup()
 
-    def _execute_direct(self, local_env: dict) -> bool:
+    def _execute_direct(self, local_env: dict) -> Tuple[bool, Optional[str]]:
+        """Run the executor subprocess for each partition + a final reporting pass.
+
+        Returns (success, captured_output). captured_output is None on
+        success and the combined stdout+stderr of the first failing
+        subprocess on failure — used by run() to write an actionable
+        `error` and `traceback` into the failure marker.
+        """
         from .utils.common import generate_partition_keys
-        
-        # Generate Partition Keys
+
         matrix = self.config.get("execution", {}).get("matrix") or self.config.get("execution", {}).get("dimensions")
         keys = generate_partition_keys(matrix)
-        
+
         overall_success = True
         keys = keys if keys else [None]
-            
+        failed_output: Optional[str] = None
+
         for pk in keys:
             cmd = [sys.executable, "execute_run.py"]
             if pk:
@@ -179,16 +241,38 @@ class ExperimentCoordinator:
                 cmd.extend(["--partition", pk])
             else:
                 cmd.append("--all")
-            
-            p = subprocess.run(cmd, cwd=ROOT_DIR, env=local_env)
+
+            # capture_output=True: needed so the failure marker's error field
+            # can carry the actual DB / executor error message (previously the
+            # subprocess wrote to inherited stdout, so the coordinator only
+            # had the exit code — TODO #2's post-mortem).
+            p = subprocess.run(cmd, cwd=ROOT_DIR, env=local_env,
+                               capture_output=True, text=True)
+            # Relay to operator's terminal so long-running runs still show
+            # progress in the server log — capturing must not blind the human.
+            if p.stdout:
+                print(p.stdout, end="")
+            if p.stderr:
+                print(p.stderr, end="", file=sys.stderr)
+
             if p.returncode != 0:
                 overall_success = False
-        
+                if failed_output is None:
+                    failed_output = (p.stdout or "") + (p.stderr or "")
+
         # Final Reporting
         cmd_report = [sys.executable, "execute_run.py", "--reporting"]
-        p_report = subprocess.run(cmd_report, cwd=ROOT_DIR, env=local_env)
-        
-        return overall_success and p_report.returncode == 0
+        p_report = subprocess.run(cmd_report, cwd=ROOT_DIR, env=local_env,
+                                  capture_output=True, text=True)
+        if p_report.stdout:
+            print(p_report.stdout, end="")
+        if p_report.stderr:
+            print(p_report.stderr, end="", file=sys.stderr)
+        if p_report.returncode != 0 and failed_output is None:
+            failed_output = (p_report.stdout or "") + (p_report.stderr or "")
+
+        success = overall_success and p_report.returncode == 0
+        return success, (None if success else failed_output)
 
     def _finalize_results(self) -> bool:
         """
