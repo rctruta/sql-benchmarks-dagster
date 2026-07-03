@@ -58,8 +58,33 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "list_templates",
+            "description": "List curated experiment templates. Each is a human-authored, VALID config demonstrating a working (dataset shape + suite + engines) combination. STRONGLY RECOMMENDED before constructing YAML from scratch — the templates show you what dataset each suite expects.",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_template",
+            "description": "Fetch the full YAML text of a named template (from `list_templates`). Adapt this text (change engines, scale, matrix values) and submit via `submit_experiment`. Preferred over constructing YAML from scratch — the template already matches its suite's SQL schema.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Template name (stem without .yaml) — the `name` field from `list_templates` output."
+                    }
+                },
+                "required": ["name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "submit_experiment",
-            "description": "Submit a new benchmark experiment as a YAML string. Returns an experiment_id. You MUST use valid YAML matching the required schema.",
+            "description": "Submit a new benchmark experiment as a YAML string. Returns an experiment_id. You MUST use valid YAML matching the required schema. RECOMMENDED workflow: `get_template` first, adapt the returned YAML, then submit — this ensures the dataset shape matches the suite's SQL contract.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -170,6 +195,14 @@ def execute_tool(name: str, args: dict) -> str:
     try:
         if name == "list_suites":
             res = httpx.get(f"{API_BASE}/v1/catalog/suites", timeout=30)
+            return json.dumps(res.json(), indent=2)
+
+        elif name == "list_templates":
+            res = httpx.get(f"{API_BASE}/v1/catalog/templates", timeout=30)
+            return json.dumps(res.json(), indent=2)
+
+        elif name == "get_template":
+            res = httpx.get(f"{API_BASE}/v1/catalog/templates/{args['name']}", timeout=30)
             return json.dumps(res.json(), indent=2)
 
         elif name == "submit_experiment":
@@ -315,12 +348,20 @@ def build_system_prompt() -> str:
         "1. `list_suites` — see available test suites and the SQL each one runs. "
         "The user's goal may name a suite that doesn't exist; if so, pick the closest match "
         "from what `list_suites` returns and note the substitution in your final answer.\n"
-        "2. `submit_experiment` — submit a YAML config matching the schema in the protocol above. "
-        "If it returns a schema error, read the error, fix the specific field named, and retry. "
-        "Do NOT stop on the first error.\n"
-        "3. `get_experiment_status` — poll until status is `complete`. Pauses are handled automatically.\n"
-        "4. `compare_engines` — get the ranked cross-engine comparison.\n"
-        "5. Produce a final Markdown analysis with `FINAL ANSWER:` at the top, naming the winning "
+        "2. `list_templates` — see human-authored, VALID example configs. Each demonstrates a "
+        "working (dataset shape + suite + engines) combination. This is your best defense against "
+        "'shooting in the dark': every SQL suite expects specific tables and columns, and the templates "
+        "show you exactly what shape works.\n"
+        "3. `get_template <name>` — fetch the full YAML text of a matching template. STRONGLY PREFER "
+        "adapting an existing template over writing YAML from scratch. The template already matches its "
+        "suite's SQL contract; you would have to reverse-engineer that contract from the SQL otherwise.\n"
+        "4. `submit_experiment` — submit the adapted YAML. If it returns a schema error, read the error, "
+        "fix the specific field named, and retry. If a run comes back `failed`, read the `detail` — it "
+        "carries the actual executor error (e.g., a DB message like 'Catalog Error: Table with name c "
+        "does not exist' means your dataset is missing that table). Do NOT stop on the first error.\n"
+        "5. `get_experiment_status` — poll until status is `complete` or `failed`. Pauses are handled automatically.\n"
+        "6. `compare_engines` — get the ranked cross-engine comparison (once complete).\n"
+        "7. Produce a final Markdown analysis with `FINAL ANSWER:` at the top, naming the winning "
         "engine, the numbers that support it, and any caveats.\n\n"
         "If you have all the data and are ready to conclude, produce the final analysis. "
         "Do NOT return an empty message.\n"

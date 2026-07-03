@@ -159,6 +159,62 @@ def test_list_suites_includes_sql_content(client):
     assert suite["sql_content"]["duckdb"]["q_scan"] == "SELECT 1;"
 
 
+def test_list_templates_endpoint(client, tmp_path, monkeypatch):
+    """/v1/catalog/templates surfaces curated files under experiments/{templates,queue}/."""
+    from sql_benchmarks.api.data import templates_reader as tr
+    exp_dir = tmp_path / "exp"
+    (exp_dir / "queue").mkdir(parents=True)
+    (exp_dir / "queue" / "example.yaml").write_text(
+        'meta:\n  name: "Example template"\ndataset: {}\n'
+    )
+    monkeypatch.setattr(tr, "EXPERIMENTS_DIR", str(exp_dir))
+
+    resp = client.get("/v1/catalog/templates")
+    assert resp.status_code == 200
+    templates = resp.json()["templates"]
+    names = [t["name"] for t in templates]
+    assert "example" in names
+    example = next(t for t in templates if t["name"] == "example")
+    assert example["description"] == "Example template"
+
+
+def test_get_template_returns_content(client, tmp_path, monkeypatch):
+    from sql_benchmarks.api.data import templates_reader as tr
+    exp_dir = tmp_path / "exp"
+    (exp_dir / "queue").mkdir(parents=True)
+    yaml_body = 'meta:\n  name: "Example template"\ndataset: {}\n'
+    (exp_dir / "queue" / "example.yaml").write_text(yaml_body)
+    monkeypatch.setattr(tr, "EXPERIMENTS_DIR", str(exp_dir))
+
+    resp = client.get("/v1/catalog/templates/example")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["name"] == "example"
+    assert body["content"] == yaml_body
+
+
+def test_get_template_404_for_missing(client, tmp_path, monkeypatch):
+    from sql_benchmarks.api.data import templates_reader as tr
+    exp_dir = tmp_path / "exp"
+    (exp_dir / "queue").mkdir(parents=True)
+    monkeypatch.setattr(tr, "EXPERIMENTS_DIR", str(exp_dir))
+
+    resp = client.get("/v1/catalog/templates/nonexistent")
+    assert resp.status_code == 404
+
+
+def test_get_template_404_for_runtime_id(client, tmp_path, monkeypatch):
+    """Even if a runtime-id file exists on disk, it's not exposed as a template."""
+    from sql_benchmarks.api.data import templates_reader as tr
+    exp_dir = tmp_path / "exp"
+    (exp_dir / "queue").mkdir(parents=True)
+    (exp_dir / "queue" / "abcd1234.yaml").write_text("dataset: {}\n")
+    monkeypatch.setattr(tr, "EXPERIMENTS_DIR", str(exp_dir))
+
+    resp = client.get("/v1/catalog/templates/abcd1234")
+    assert resp.status_code == 404
+
+
 # ---------------------------------------------------------------------------
 # Results endpoints
 # ---------------------------------------------------------------------------
