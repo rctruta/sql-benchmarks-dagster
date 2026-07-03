@@ -123,3 +123,11 @@ class ResultReader:
 
     def results_exist(self, exp_id: str) -> bool:
         return os.path.isdir(os.path.join(RESULTS_DIR, exp_id))
+
+    def has_failure(self, exp_id: str) -> bool:
+        from ...failure_marker import has_failure as _has_failure
+        return _has_failure(RESULTS_DIR, exp_id)
+
+    def get_failure(self, exp_id: str) -> Optional[Dict]:
+        from ...failure_marker import read_failure_marker
+        return read_failure_marker(RESULTS_DIR, exp_id)
