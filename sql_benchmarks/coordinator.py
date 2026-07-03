@@ -5,7 +5,7 @@ import time
 import subprocess
 import sys
 import json
-from .validator import ExperimentValidator
+from .validation import validate_experiment_config
 from .constants import ROOT_DIR, CONFIG_ARCHIVE_DIR, EXPERIMENTS_DIR, PROCESSED_SUFFIX, RESULTS_DIR, VIOLATIONS_DIR, REPORTS_DIR, AUDIT_LOCK_PATH, ACTIVE_CONFIG_PATH
 from .utils.hasher import generate_experiment_hash, generate_integrity_seal
 from .utils.common import copy_suite_queries
@@ -41,7 +41,7 @@ class ExperimentCoordinator:
                 self._source_yaml = f.read()
             self.config = yaml.safe_load(self._source_yaml)
 
-            ExperimentValidator.validate(self.config, source_label=os.path.basename(self.target_yaml))
+            validate_experiment_config(self.config, source_label=os.path.basename(self.target_yaml))
             
             # Derive Identity (STRICT SHA-BASED)
             self.exp_id = generate_experiment_hash(self.config, ROOT_DIR)
