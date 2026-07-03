@@ -22,8 +22,11 @@ is machine-first. An agent can verify a performance hypothesis here instead of a
 
 1. **Hypothesis** — e.g. "Quack's attach mode degrades with scan size."
 2. **Submit** — write a YAML config to `sql_benchmarks/experiments/queue/` (configs outside
-   the experiments directory are rejected). Start from the annotated, schema-valid
-   template: `sql_benchmarks/experiments/templates/experiment_template.yaml`.
+   the experiments directory are rejected). Start from a curated template — either the
+   fully-annotated `sql_benchmarks/experiments/templates/experiment_template.yaml`, or
+   an existing valid experiment in `sql_benchmarks/experiments/queue/` (e.g.
+   `quickstart.yaml`). REST-API agents fetch templates via `GET /v1/catalog/templates`
+   and `GET /v1/catalog/templates/{name}` — see "Template discovery" below.
 3. **Execute** — `./run.sh sql_benchmarks/experiments/queue/my_exp.yaml --auto`
 4. **Identity** — the system derives the 8-character **Experiment ID**: a SHA-256 fingerprint
    of the config + the SQL + all measurement-relevant Python (orchestration, engine clients,
@@ -42,6 +45,29 @@ is machine-first. An agent can verify a performance hypothesis here instead of a
 
 **Zero-cost cache lookup**: identical question ⇒ identical ID. Check
 `results/<ID>/` before running; if it exists, the answer is already on disk.
+
+---
+
+## Template discovery (REST API)
+
+The SQL each suite runs expects a *specific* dataset shape — particular tables and columns.
+Constructing a valid dataset from scratch means reverse-engineering that contract from
+the SQL. Templates short-circuit this: they are human-curated example configs where the
+dataset and the suite already match.
+
+```
+GET /v1/catalog/templates            → [{name, description, path}, ...]
+GET /v1/catalog/templates/<name>     → {name, content, path}   # `content` is the raw YAML text
+```
+
+Templates are drawn from `experiments/templates/` and `experiments/queue/`. Runtime
+queue entries (files whose stem is an 8-char experiment_id) are excluded — they're
+coordinator artifacts, not curated examples.
+
+**Recommended REST-API flow for an agent:** `list_suites` (understand what SQL runs)
+→ `list_templates` (see available starters) → `get_template(<name>)` (fetch the YAML)
+→ adapt it (change engines, scale, matrix) → `POST /v1/experiments` (submit the adapted text).
+This gets you a working dataset shape without inferring it from SQL.
 
 ---
 
