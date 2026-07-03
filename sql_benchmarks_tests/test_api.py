@@ -277,6 +277,9 @@ def test_submit_queues_and_writes_yaml(client, fake_lab):
 
 
 def test_submit_duplicate_returns_existing_id(client):
+    """VALID_YAML strips to the same non-meta content as the fake_lab archived
+    config (both are {execution: {test_suite: selectivity}}), so this is a
+    genuine duplicate — status 'duplicate', no background task fired."""
     with patch.object(experiments_router, "validate_experiment_config"), \
          patch.object(experiments_router, "generate_experiment_hash", return_value=EXP_ID), \
          patch.object(experiments_router, "_run_experiment") as run_mock:
@@ -284,6 +287,24 @@ def test_submit_duplicate_returns_existing_id(client):
 
     assert resp.status_code == 202
     assert resp.json()["status"] == "duplicate"
+    run_mock.assert_not_called()
+
+
+def test_submit_hash_collision_rejected_with_409(client):
+    """A submission whose exp_id matches the archived one but whose CONFIG
+    differs is a genuine 32-bit hash collision. Old behavior: 202 + duplicate
+    pointing to the WRONG capsule. New behavior (TODO #5, this PR): 409 with
+    an informative message."""
+    # Submit a YAML that hashes to EXP_ID but parses to a DIFFERENT dict than
+    # the fake_lab archived config (which is {execution: {test_suite: selectivity}}).
+    colliding_yaml = "meta:\n  name: different experiment\nexecution:\n  test_suite: sort_spill\n"
+    with patch.object(experiments_router.ExperimentValidator, "validate"), \
+         patch.object(experiments_router, "generate_experiment_hash", return_value=EXP_ID), \
+         patch.object(experiments_router, "_run_experiment") as run_mock:
+        resp = client.post("/v1/experiments", json={"config_yaml": colliding_yaml})
+
+    assert resp.status_code == 409
+    assert "collision" in resp.json()["detail"].lower()
     run_mock.assert_not_called()
 
 

@@ -8,6 +8,7 @@ import json
 import traceback
 from .validation import validate_experiment_config
 from .failure_marker import write_failure_marker
+from .capsule_registry import check_registry
 from .constants import ROOT_DIR, CONFIG_ARCHIVE_DIR, EXPERIMENTS_DIR, PROCESSED_SUFFIX, RESULTS_DIR, VIOLATIONS_DIR, REPORTS_DIR, AUDIT_LOCK_PATH, ACTIVE_CONFIG_PATH
 from .utils.hasher import generate_experiment_hash, generate_integrity_seal
 from .utils.common import copy_suite_queries
@@ -62,10 +63,21 @@ class ExperimentCoordinator:
             self.config["meta"] = self.config.get("meta", {})
             self.config["meta"]["experiment_id"] = self.exp_id
             
-            # Check Registry
-            if os.path.exists(os.path.join(CONFIG_ARCHIVE_DIR, f"config_{self.exp_id}.yaml")):
+            # Check Registry: dispatch on three-way collision detection so a
+            # 32-bit hash collision (different config, same 8-char exp_id)
+            # can never silently return wrong results (TODO #5).
+            registry_status = check_registry(self.exp_id, self.config, CONFIG_ARCHIVE_DIR)
+            if registry_status == "duplicate":
                 print(f"[INFO] SKIPPING: Experiment {self.exp_id} already exists in registry.")
                 return True
+            if registry_status == "collision":
+                print(
+                    f"[CRITICAL] Hash collision: experiment_id {self.exp_id} is "
+                    "already held by a different config. Refusing to run "
+                    "(would silently overwrite / mis-attribute results). "
+                    "See TODO.md #5."
+                )
+                return False
                 
         except Exception as e:
             print(f"[REJECTED] Experiment contract failed validation: {e}")

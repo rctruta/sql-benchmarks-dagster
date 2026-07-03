@@ -58,12 +58,33 @@ Surfaced 2026-07-03. `sql_benchmarks/experiments/active.yaml` was simultaneously
 
 ## 5. Capsule ID collision — what's the fallback?
 
-Content-addressed IDs are 8 hex chars of SHA-256 = 32 bits of collision space. Birthday-bound collision expected around ~65k capsules; possible much sooner in adversarial or accident cases. Currently:
+Content-addressed IDs are 8 hex chars of SHA-256 = 32 bits of collision space. Birthday-bound collision expected around ~65k capsules; possible much sooner in adversarial or accident cases.
 
-- Question: what happens if two experiments hash to the same 8-char ID? Overwrite? Reject? Extend to 12 chars on collision?
-- Question: how would we distinguish a genuine collision (two different configs → same ID) from a re-run of an existing capsule (same config → same ID; expected)?
+### 5a. Detection — SHIPPED 2026-07-03 in `sql_benchmarks/capsule_registry.py`
 
-**Note (from Ramona):** *"i know this was not been addressed. not for now, it's more thinking required here."* Deliberately deferred; recording so it doesn't get lost.
+The correctness half of the problem is closed. `check_registry(exp_id, config, archive_dir)` returns one of:
+- `"fresh"` — no archived config with this exp_id; proceed normally.
+- `"duplicate"` — archived config parses to the same dict (minus `meta`) as the submitted one; this is a legitimate re-submission.
+- `"collision"` — archived config parses to a DIFFERENT dict; genuine 32-bit hash collision; refuse loudly.
+
+Comparison rule: deep equality on the parsed YAML trees, with `meta` stripped from both sides (because the hasher at `utils/hasher.py:51` excludes `meta` from the hash input — otherwise a re-submit with a renamed experiment would falsely trip). Robust to whitespace, comments, key-reordering; sensitive to real content differences.
+
+Wired at both surfaces (the workflow-parity discipline from #4):
+- API: `POST /v1/experiments` → `409 Conflict` with a diagnostic message on collision.
+- CLI: `coordinator.run()` prints `[CRITICAL]` and returns False on collision.
+
+An unparseable archived config is classified as `"collision"` — we never silently overwrite what we can't verify.
+
+### 5b. ID widening — DEFERRED, options preserved for when it becomes real
+
+Not shipped, not needed today. Recording the options so the decision has valid context when the pressure arrives. Trigger: capsule count within ~10× of the 65k birthday bound, OR the first organic collision observed via 5a.
+
+- **B1. Stay at 8 chars, rely on 5a.** Current state. Correct until collision density grows. Zero migration cost. Recommended default.
+- **B2. Extend to 12 chars only on collision.** Creates dual-format IDs (8 vs 12), mixed display, docs and release manifests must handle both. Migration pain scales with existing capsule count. **Not recommended.**
+- **B3. Extend to 16 chars everywhere.** Cleanest going forward, but invalidates every existing 8-char reference: published capsule tables in `docs/published_capsules.md`, the `sqlbenchdag-quack-v1` release manifest, ORCID/CITATION.cff references, external citations already in the wild. Breaks the maker's mark discipline. **Not recommended.**
+- **B4. Full 64-char SHA-256 always; 8-char is a display prefix.** Registry keyed on full hash. Longest reach and the only option that preserves existing 8-char references (as display shortcuts). Requires filesystem migration for existing capsules (`configs/config_<8>.yaml → configs/config_<64>.yaml` + a lookup index). **The right answer if we ever need one.**
+
+If B becomes real: prefer B4. Design the migration script alongside the code change; keep 8-char display everywhere the maker's mark appears.
 
 ## 6. AGENTS.md loading is opt-in for standalone scripts
 
