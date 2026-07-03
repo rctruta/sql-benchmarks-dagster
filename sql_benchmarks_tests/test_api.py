@@ -310,5 +310,58 @@ def test_status_lifecycle(client, fake_lab):
     assert client.get(f"/v1/experiments/{qid}/status").json()["status"] == "running"
 
 
+def test_status_failed_when_marker_present(client, fake_lab):
+    """After TODO #2: coordinator writes results/<id>/failure.json when a run
+    dies; /status returns 'failed' + detail so the agent stops polling a corpse."""
+    from sql_benchmarks.failure_marker import write_failure_marker
+    from sql_benchmarks.api.data import reader as reader_module
+
+    fid = "eeee0002"
+    write_failure_marker(
+        reader_module.RESULTS_DIR, fid,
+        stage="execution",
+        error="Technical execution failed (subprocess returned non-zero exit code).",
+    )
+    body = client.get(f"/v1/experiments/{fid}/status").json()
+    assert body["status"] == "failed"
+    assert body["detail"] == "[execution] Technical execution failed (subprocess returned non-zero exit code)."
+
+
+def test_status_failed_beats_running_when_both_apply(client, fake_lab):
+    """A run that produced partial fragments and THEN crashed will satisfy both
+    results_exist() (dir present) and has_failure() (marker present). The
+    failure marker is the authoritative terminal state — it wins over 'running'."""
+    from sql_benchmarks.failure_marker import write_failure_marker
+    from sql_benchmarks.api.data import reader as reader_module
+
+    fid = "eeee0003"
+    # results dir exists (partial run)
+    os.makedirs(os.path.join(reader_module.RESULTS_DIR, fid), exist_ok=True)
+    # failure marker also present
+    write_failure_marker(
+        reader_module.RESULTS_DIR, fid,
+        stage="coordinator_exception",
+        error="TypeError: unhashable dict",
+    )
+    body = client.get(f"/v1/experiments/{fid}/status").json()
+    assert body["status"] == "failed"
+    assert "TypeError" in body["detail"]
+
+
+def test_status_complete_still_wins_over_failed_marker(client, fake_lab):
+    """If for whatever reason both a completion (archived config) AND a failure
+    marker exist, 'complete' wins — a completed experiment cannot be undone by
+    a stale marker. (Should not happen in practice; belt-and-suspenders.)"""
+    from sql_benchmarks.failure_marker import write_failure_marker
+    from sql_benchmarks.api.data import reader as reader_module
+
+    write_failure_marker(
+        reader_module.RESULTS_DIR, EXP_ID,
+        stage="execution", error="stale marker",
+    )
+    body = client.get(f"/v1/experiments/{EXP_ID}/status").json()
+    assert body["status"] == "complete"
+
+
 def test_health(client):
     assert client.get("/health").json() == {"status": "ok"}
