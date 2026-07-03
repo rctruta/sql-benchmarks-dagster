@@ -32,9 +32,19 @@ Log evidence: same `ConfigLoader` crash appearing twice, from two consecutive `G
 
 ## 4. Agent workflow vs. human workflow — surface the same thing
 
-Ramona's observation from a working session: the workflow when a human runs an experiment (`./run.sh <yaml> --auto`) and when an agent runs one (`POST /v1/experiments`) should be as close as possible. Right now they're separate code paths with different validation and different failure semantics.
+**Verified closed 2026-07-03 by audit.** #4 was the design principle behind #1-#3; those PRs realized it. Concrete parity between the CLI path (`./run.sh <yaml> --auto` → `run_experiment.py` → `coordinator.run()`) and the API path (`POST /v1/experiments` → `_run_experiment` → `coordinator.run()`) after #109-#112:
 
-Each tool call should return something validated with the same rigor as the CLI would produce. This isn't a single bug; it's a design principle worth carrying into #1, #2, #3 above.
+| Concern | State |
+|---|---|
+| Validation contract | Same after #110 (both call `validate_experiment_config`) |
+| Config hashing | Same code path (`generate_experiment_hash`) |
+| Runtime staging file | Same after #109 (both gitignored, no shared-state coupling) |
+| Failure surfacing | Same after #111 (both write `results/<id>/failure.json`; the API reads it) |
+| Startup cost | Same after #112 (both lazy on the ConfigLoader) |
+| Registry check for duplicates | API upfront (202 + `status="duplicate"`); CLI at `coordinator.run:53` (prints "SKIPPING"). Same effect, different response surface. |
+| Caller feedback shape | API async (submit → poll `/status`); CLI sync (exit code). Inherent architectural difference, not a parity gap. |
+
+The design principle is realized. No remaining concrete gap.
 
 ## 5. Capsule ID collision — what's the fallback?
 
@@ -47,7 +57,9 @@ Content-addressed IDs are 8 hex chars of SHA-256 = 32 bits of collision space. B
 
 ## 6. AGENTS.md loading is opt-in for standalone scripts
 
-Standalone Python scripts (`scripts/autonomous_agent.py`) don't automatically read AGENTS.md the way harnesses like Claude Code or Cursor do — that's harness-level behavior. PR #107 added explicit `load_agents_md()` to the agent script; any *future* agents that talk to the sqlbenchdag API need the same pattern (or need a shared library that does it). Worth extracting to `sql_benchmarks.agent_utils` if a second agent shows up.
+**Closed 2026-07-03 as YAGNI (extract when justified, not before).** Standalone Python scripts (`scripts/autonomous_agent.py`) don't automatically read AGENTS.md the way harnesses like Claude Code or Cursor do — that's harness-level behavior. PR #107 added an explicit `load_agents_md()` (~40 lines) to the agent script.
+
+Decision: not extracting `sql_benchmarks.agent_utils` speculatively. The extraction cost (module boundary, tests, docs) exceeds the current benefit (one caller). When a second agent script appears that needs the same loader — or when the loader grows beyond what fits in a single script — extract then. The one-caller shape is not a smell; the extract-for-hypothetical-reuse is. See also: [experiment config design memory](/Users/ramona/.claude/projects/-Users-ramona-Projects-sql-benchmarks-dagster/memory/experiment-config-design.md) — same principle (no templating until a real second consumer appears).
 
 ---
 
