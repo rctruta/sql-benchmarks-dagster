@@ -3,6 +3,7 @@ import os
 import yaml
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
+from ...capsule_registry import check_registry
 from ...constants import CONFIG_ARCHIVE_DIR, EXPERIMENTS_DIR, ROOT_DIR
 from ...coordinator import ExperimentCoordinator
 from ...utils.hasher import generate_experiment_hash
@@ -37,11 +38,23 @@ def submit_experiment(body: ExperimentSubmitRequest, background_tasks: Backgroun
 
     exp_id = generate_experiment_hash(config, ROOT_DIR)
 
-    if os.path.exists(os.path.join(CONFIG_ARCHIVE_DIR, f"config_{exp_id}.yaml")):
+    registry_status = check_registry(exp_id, config, CONFIG_ARCHIVE_DIR)
+    if registry_status == "duplicate":
         return ExperimentSubmitResponse(
             experiment_id=exp_id,
             status="duplicate",
             detail="Results already exist for this experiment. Retrieve them at /v1/results/{exp_id}",
+        )
+    if registry_status == "collision":
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Hash collision: experiment_id {exp_id!r} is already held by a "
+                "different config in the registry. This is a genuine 32-bit "
+                "SHA-256 prefix collision; the submitted YAML does NOT match the "
+                "archived one and must be rejected to avoid returning wrong results. "
+                "See TODO.md #5 for the long-term ID-widening options."
+            ),
         )
 
     queue_dir = os.path.join(EXPERIMENTS_DIR, "queue")
