@@ -86,16 +86,104 @@ def test_hasher_ignores_meta_block():
         "meta": {"description": "Run 1", "experiment_id": "abc"},
         "dataset": {"tables": ["t1"]}
     }
-    
+
     config_2 = {
         "meta": {"description": "Run 2 - fixed typo", "experiment_id": "xyz"},
         "dataset": {"tables": ["t1"]}
     }
-    
+
     h1 = generate_experiment_hash(config_1, "/tmp")
     h2 = generate_experiment_hash(config_2, "/tmp")
-    
+
     assert h1 == h2
+
+
+def test_hasher_handles_nested_dict_key_ordering():
+    """
+    sort_keys=True in json.dumps recurses into nested dicts. Extends the
+    top-level test to prove nested reordering is also a no-op for the hash.
+    """
+    config_1 = {
+        "execution": {
+            "engines": ["duckdb"],
+            "replication": 5,
+            "matrix": {"rows": [1000, 10000]},
+        },
+        "dataset": {"tables": {"t1": {"rows": 1000, "columns": []}}},
+    }
+    config_2 = {
+        "dataset": {"tables": {"t1": {"columns": [], "rows": 1000}}},
+        "execution": {
+            "matrix": {"rows": [1000, 10000]},
+            "replication": 5,
+            "engines": ["duckdb"],
+        },
+    }
+    h1 = generate_experiment_hash(config_1, "/tmp")
+    h2 = generate_experiment_hash(config_2, "/tmp")
+    assert h1 == h2, "nested dict key reordering must not change the hash"
+
+
+def test_hasher_canonicalizes_set_like_matrix_values():
+    """
+    execution.matrix.<dim> is declared set-like in SET_LIKE_PATHS. Two
+    configs that differ only in the ORDER of matrix values must hash the
+    same — the cartesian product is identical, so the experiment is
+    identical.
+    """
+    config_1 = {"execution": {"engines": ["duckdb"], "matrix": {"rows": ["medium", "large"]}}}
+    config_2 = {"execution": {"engines": ["duckdb"], "matrix": {"rows": ["large", "medium"]}}}
+    h1 = generate_experiment_hash(config_1, "/tmp")
+    h2 = generate_experiment_hash(config_2, "/tmp")
+    assert h1 == h2
+
+
+def test_hasher_canonicalizes_set_like_engines():
+    """
+    execution.engines is declared set-like. [duckdb, postgres] and
+    [postgres, duckdb] run the same experiment.
+    """
+    config_1 = {"execution": {"engines": ["duckdb", "postgres"], "matrix": {"rows": [1000]}}}
+    config_2 = {"execution": {"engines": ["postgres", "duckdb"], "matrix": {"rows": [1000]}}}
+    h1 = generate_experiment_hash(config_1, "/tmp")
+    h2 = generate_experiment_hash(config_2, "/tmp")
+    assert h1 == h2
+
+
+def test_hasher_keeps_non_set_like_list_order_significant():
+    """
+    Lists NOT declared in SET_LIKE_PATHS still care about order. Column
+    lists are the load-bearing example: DDL column order is part of the
+    schema and can affect index prefix semantics. Two configs with
+    reordered column definitions must NOT hash the same.
+    """
+    config_1 = {
+        "dataset": {
+            "tables": {
+                "t1": {
+                    "columns": [
+                        {"name": "id", "provider": "sequence"},
+                        {"name": "val", "provider": "random_int"},
+                    ]
+                }
+            }
+        }
+    }
+    config_2 = {
+        "dataset": {
+            "tables": {
+                "t1": {
+                    "columns": [
+                        {"name": "val", "provider": "random_int"},
+                        {"name": "id", "provider": "sequence"},
+                    ]
+                }
+            }
+        }
+    }
+    h1 = generate_experiment_hash(config_1, "/tmp")
+    h2 = generate_experiment_hash(config_2, "/tmp")
+    assert h1 != h2, "sequence-like lists (columns) must still be order-sensitive"
 
 from sql_benchmarks.utils.hasher import normalize_python
 

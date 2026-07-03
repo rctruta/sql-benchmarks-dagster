@@ -6,6 +6,7 @@ import subprocess
 import sys
 import json
 from .validator import ExperimentValidator
+from .canonicalization import canonicalize
 from .constants import ROOT_DIR, CONFIG_ARCHIVE_DIR, EXPERIMENTS_DIR, PROCESSED_SUFFIX, RESULTS_DIR, VIOLATIONS_DIR, REPORTS_DIR, AUDIT_LOCK_PATH, ACTIVE_CONFIG_PATH
 from .utils.hasher import generate_experiment_hash, generate_integrity_seal
 from .utils.common import copy_suite_queries
@@ -40,6 +41,13 @@ class ExperimentCoordinator:
             with open(self.target_yaml, "r") as f:
                 self._source_yaml = f.read()
             self.config = yaml.safe_load(self._source_yaml)
+
+            # Canonicalize set-like fields BEFORE validation and hashing so the
+            # active.yaml written below reflects the canonical form the system
+            # actually operates on. The archived source config (via
+            # `_archive_source_config`) still uses `self._source_yaml` — the
+            # author's exact bytes — so byte-fidelity provenance is preserved.
+            self.config = canonicalize(self.config)
 
             ExperimentValidator.validate(self.config, source_label=os.path.basename(self.target_yaml))
             

@@ -31,6 +31,13 @@ class ConfigLoader:
         except Exception as e:
             raise ValueError(f"CRITICAL: Failed to parse {self.config_path}: {e}")
 
+        # Canonicalize set-like fields (execution.engines, execution.matrix.<dim>)
+        # so downstream iteration — partition_keys generation in particular —
+        # produces the same output regardless of the author's list-value order.
+        # See sql_benchmarks/canonicalization.py.
+        from .canonicalization import canonicalize
+        self._raw_config = canonicalize(self._raw_config)
+
         # --- STRICT SCHEMA & SEMANTIC VALIDATION ---
         from .validator import ExperimentValidator
         ExperimentValidator.validate(self._raw_config, source_label=self.config_path)

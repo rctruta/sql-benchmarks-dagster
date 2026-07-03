@@ -48,7 +48,14 @@ def generate_experiment_hash(config_dict, root_dir):
     hasher = hashlib.sha256()
 
     # 1. Hash Config
+    # Strip meta (not part of experiment identity) and canonicalize set-like
+    # fields (so [medium, large] and [large, medium] produce the same ID —
+    # see sql_benchmarks.canonicalization for the SET_LIKE_PATHS registry).
+    # sort_keys=True canonicalizes dict-key order recursively; canonicalize()
+    # handles the list-of-values dimension that json.dumps preserves in order.
+    from ..canonicalization import canonicalize
     clean_config = {k: v for k, v in config_dict.items() if k != 'meta'}
+    clean_config = canonicalize(clean_config)
     config_str = json.dumps(clean_config, sort_keys=True)
     hasher.update(config_str.encode('utf-8'))
 

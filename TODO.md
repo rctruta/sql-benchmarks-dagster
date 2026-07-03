@@ -38,12 +38,29 @@ Each tool call should return something validated with the same rigor as the CLI 
 
 ## 5. Capsule ID collision — what's the fallback?
 
-Content-addressed IDs are 8 hex chars of SHA-256 = 32 bits of collision space. Birthday-bound collision expected around ~65k capsules; possible much sooner in adversarial or accident cases. Currently:
+Content-addressed IDs are 8 hex chars of SHA-256 = 32 bits of collision space. Birthday-bound collision expected around ~65k capsules; possible much sooner in adversarial or accident cases.
 
-- Question: what happens if two experiments hash to the same 8-char ID? Overwrite? Reject? Extend to 12 chars on collision?
-- Question: how would we distinguish a genuine collision (two different configs → same ID) from a re-run of an existing capsule (same config → same ID; expected)?
+### 5c. Set-like list canonicalization — SHIPPED (this PR)
 
-**Note (from Ramona):** *"i know this was not been addressed. not for now, it's more thinking required here."* Deliberately deferred; recording so it doesn't get lost.
+Two configs that differ only in the order of a set-like list (`execution.engines: [duckdb, postgres]` vs `[postgres, duckdb]`; `execution.matrix.rows: [medium, large]` vs `[large, medium]`) now hash to the same exp_id and produce the same partition_keys. Author is no longer responsible for remembering to sort these lists.
+
+**Mechanism:** `sql_benchmarks/canonicalization.py` holds a declarative registry `SET_LIKE_PATHS` of dotted paths that are order-independent. `canonicalize(config)` returns a deep copy with those paths sorted. Called from three places:
+- `utils/hasher.py::generate_experiment_hash` — the exp_id becomes canonical.
+- `config_loader.py::ConfigLoader._load_and_validate` — partition_keys generation sees canonical order.
+- `coordinator.py::run` — the `active.yaml` written before execution is the canonical form (author's raw bytes are still preserved via `_source_yaml` → `_archive_source_config`, so the sealed capsule retains provenance).
+
+Extension rule: add a new dotted path to `SET_LIKE_PATHS` when adding a schema field that is genuinely set-like. `*` matches any dict key at that level. The safer default is NOT to declare a field set-like — sequence-ness is the correct assumption when in doubt.
+
+Currently registered:
+- `execution.engines` — the set of engines to test.
+- `execution.matrix.*` — the values for each matrix dimension.
+
+Explicitly NOT registered (order matters):
+- `dataset.tables.<t>.columns` — DDL column order.
+- `dataset.tables.<t>.indexes[N].columns` — composite index prefix.
+- `choice` provider `options` — pairs positionally with `weights` for reproducible RNG.
+
+Engine params (`execution.engine_params.<engine>.<param>`) are DICTS, not lists — already order-invariant via `json.dumps(sort_keys=True)`. Runtime iteration order in the drivers follows Python dict insertion order; harmless for current allowlist (session-level `SET` statements are commutative for the params we allow). If a future engine param needs deterministic SET order, that's a driver concern, not a hashing concern.
 
 ## 6. AGENTS.md loading is opt-in for standalone scripts
 
