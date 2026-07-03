@@ -22,10 +22,12 @@ def validate_experiment_config(config: dict, source_label: str = "config") -> No
       2. Matrix presence: `execution.matrix` must exist (was ConfigLoader-only).
       3. Alias resolvability: matrix string values must resolve through
          `definitions.<dim>` when a definition block exists (was ConfigLoader-only).
+      4. Table rows must be aliases, not literals. See _check_table_rows_are_aliases.
     """
     ExperimentValidator.validate(config, source_label)
     _check_matrix_present(config, source_label)
     _check_matrix_aliases_resolvable(config, source_label)
+    _check_table_rows_are_aliases(config, source_label)
 
 
 def _check_matrix_present(config: dict, source_label: str) -> None:
@@ -56,3 +58,38 @@ def _check_matrix_aliases_resolvable(config: dict, source_label: str) -> None:
                     f"be resolved. Definition block 'definitions.{dim_name}' exists "
                     "but is missing this alias."
                 )
+
+
+def _check_table_rows_are_aliases(config: dict, source_label: str) -> None:
+    """`dataset.tables.<name>.rows` must be a string alias (referenced under
+    `definitions.rows.<alias>`), not a literal integer.
+
+    Why enforce this: aliases feed the Jinja substitution pipeline that turns
+    `{{ <table>_table }}` in SQL into the concrete table name. Literal ints
+    silently break the substitution — SQL comes out as `FROM ` (empty), and
+    the executor dies with a downstream Parser Error that the agent has no
+    way to attribute to the literal-rows footgun. Rather than fix the
+    pipeline to handle literals, we enforce a single form: alias-only. See
+    docs/AGENTS.md 'Experiment YAML essentials' and the annotated template.
+
+    (This is the "one way to do it" principle: every accepted variation is
+    another surface for the same bug to leak through somewhere else.)"""
+    dataset = config.get("dataset") or {}
+    tables = dataset.get("tables") or {}
+    if not isinstance(tables, dict):
+        return
+    for name, tdef in tables.items():
+        if not isinstance(tdef, dict):
+            continue
+        rows = tdef.get("rows")
+        if rows is None:
+            continue
+        if isinstance(rows, int) and not isinstance(rows, bool):
+            raise ValueError(
+                f"SEMANTIC ERROR in {source_label}: "
+                f"table '{name}' has literal 'rows: {rows}'. "
+                f"Use an alias into definitions.rows instead — e.g. "
+                f"'rows: my_scale' with 'definitions.rows.my_scale: {rows}'. "
+                f"Literals are rejected because they don't feed the SQL "
+                f"template substitution pipeline correctly."
+            )

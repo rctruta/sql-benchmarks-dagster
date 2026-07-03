@@ -37,8 +37,10 @@ dataset:
   tables:
     # Table name — referenced by the SQL suite as {{ <name>_table }}.
     my_table:
-      # Row count: a literal int, or a name from `definitions.rows` below so the
-      # matrix can sweep across scales.
+      # Row count: MUST be a string alias into `definitions.rows` below.
+      # Literal ints are rejected at submission — the alias is what wires
+      # this table into the SQL template substitution pipeline. See
+      # AGENTS.md's 'Aliasing convention' note.
       rows: rows
       columns:
         # sequence: monotonic 1..N. Mark the primary key here.
