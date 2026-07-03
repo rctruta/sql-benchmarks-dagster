@@ -92,9 +92,44 @@ execution:
 ```
 
 Engines: `duckdb` (in-process), `quack` (DuckDB client-server, attach mode),
-`quack_pushdown` (server-side execution via `remote.query()`), `postgres` (Docker),
-`actian` / `typedb` (dormant/experimental). Each engine receives ONLY its own
-`engine_params` namespace.
+`quack_pushdown` (server-side execution via `remote.query()`), `quack_adbc` /
+`quack_arrow` (Arrow-serving variants), `postgres` (Docker), `postgres_transport`
+(different result-serialization path), `actian` / `typedb` (dormant/experimental).
+Each engine receives ONLY its own `engine_params` namespace.
+
+### Aliasing convention (one way to do it)
+
+`dataset.tables.<name>.rows` MUST be a string alias into `definitions.rows`,
+not a literal integer. The alias is what wires this table into the SQL
+template substitution pipeline — SQL like `SELECT ... FROM {{ <name>_table }}`
+resolves `<name>_table` to the concrete table only when `rows` is an alias.
+
+```yaml
+dataset:
+  tables:
+    orders:
+      rows: rows          # ✅ alias into definitions.rows
+      columns: [ ... ]
+
+definitions:
+  rows:
+    small: 10_000
+    large: 1_000_000
+
+execution:
+  matrix:
+    rows: [small, large]  # sweeps the two scales; both must be keys in definitions.rows
+```
+
+Literal ints (`rows: 10000`) are rejected at submission with a message
+naming the fix. This is deliberate — one form beats N variations that all
+have to be tested against the same downstream pipeline. Matrix values can
+be aliases OR literals; the aliasing constraint applies only to
+`dataset.tables.<name>.rows`.
+
+The template convention: `{{ <name>_table }}` in SQL substitutes to the
+`<name>` table in your dataset. E.g. `SELECT * FROM {{ orders_table }}`
+resolves to `SELECT * FROM orders` when your dataset has `tables.orders`.
 
 ---
 

@@ -1,22 +1,28 @@
+meta:
+  name: hallucination_demo
+  description: Demonstration of Semantic Firewall detecting hallucinations
+  scenario_path: selectivity/duckdb
+
 dataset:
   source: sql_benchmarks.plugins.data_sources.declarative_gen
   tables:
     hallucination_data:
+      rows: rows          # alias into definitions.rows; literal ints are rejected
       columns:
-      - name: id
-        provider: sequence
-      rows: 10
+        - name: id
+          provider: sequence
+
+definitions:
+  rows:
+    demo_scale: 10
+
 execution:
+  test_suite: selectivity
   engines:
-  - duckdb
+    - duckdb
+  replication: 1
   matrix:
     total_count:
-    - -500  # This will trigger the Semantic Firewall
+      - -500              # this negative value trips the Semantic Firewall — the point of the demo
     rows:
-    - 10
-  replication: 1
-  test_suite: selectivity
-meta:
-  description: Demonstration of Semantic Firewall detecting hallucinations
-  name: hallucination_demo
-  scenario_path: selectivity/duckdb
+      - demo_scale
