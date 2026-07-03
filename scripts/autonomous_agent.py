@@ -12,6 +12,7 @@ for the pattern this run was surfacing.
 import argparse
 import json
 import os
+import sys
 import time
 
 import httpx
@@ -19,6 +20,20 @@ from litellm import completion
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
+
+# Load .env from repo root (script sits in scripts/, so go up one) then cwd.
+# Silent no-op if the files don't exist. Explicit key check happens later —
+# a missing .env doesn't crash the script; a missing key for the chosen
+# model does, with a clear error.
+try:
+    from dotenv import load_dotenv
+    _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    load_dotenv(os.path.join(_REPO_ROOT, ".env"))
+    load_dotenv()  # current working dir
+except ImportError:
+    _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    print("[warning] python-dotenv not installed; .env files will NOT be auto-loaded. "
+          "Install with: pip install python-dotenv", file=sys.stderr)
 
 # Default to the local REST API
 API_BASE = os.getenv("SB_API_BASE", "http://localhost:8000")
@@ -90,6 +105,64 @@ TOOLS = [
 # Set of legal tool names, used to reject hallucinated tool calls before we
 # dispatch them into the API.
 KNOWN_TOOLS = {t["function"]["name"] for t in TOOLS}
+
+
+# --- API key + protocol-doc loading -----------------------------------------
+
+# Mapping of model-string prefix to the environment variable litellm expects.
+# `ollama/*` and `local/*` need no key. Anything not matched is left to
+# litellm to sort out (which may still crash with an unhelpful error — but
+# that's outside this script's scope).
+_KEY_BY_PREFIX = {
+    "gpt-": "OPENAI_API_KEY",
+    "openai/": "OPENAI_API_KEY",
+    "chatgpt-": "OPENAI_API_KEY",
+    "o1-": "OPENAI_API_KEY",
+    "o3-": "OPENAI_API_KEY",
+    "gemini/": "GEMINI_API_KEY",  # litellm accepts GOOGLE_API_KEY too; we check both
+    "claude-": "ANTHROPIC_API_KEY",
+    "anthropic/": "ANTHROPIC_API_KEY",
+    "command-": "COHERE_API_KEY",
+    "cohere/": "COHERE_API_KEY",
+    "mistral/": "MISTRAL_API_KEY",  # different from ollama/mistral
+}
+
+
+def check_api_key(model: str) -> None:
+    """Verify the appropriate API key is set for the requested model. Exits
+    with a clear message if not — beats letting litellm produce a cryptic
+    stack trace 30 seconds later.
+
+    Local models (`ollama/*`, `local/*`) need no key; skipped."""
+    if model.startswith(("ollama/", "local/")):
+        return
+    for prefix, env_var in _KEY_BY_PREFIX.items():
+        if model.startswith(prefix):
+            if os.getenv(env_var):
+                return
+            # gemini also accepts GOOGLE_API_KEY
+            if env_var == "GEMINI_API_KEY" and os.getenv("GOOGLE_API_KEY"):
+                return
+            raise SystemExit(
+                f"[error] Model '{model}' requires environment variable {env_var}, "
+                f"which is not set. Set it in your shell or in a .env file at "
+                f"{os.path.join(_REPO_ROOT, '.env')} and try again."
+            )
+    # Unrecognized prefix — warn but don't block; litellm may handle it.
+    print(f"[warning] Model '{model}' has no known key requirement in this script. "
+          f"If litellm errors below, verify the appropriate credential env var is set.",
+          file=sys.stderr)
+
+
+def load_agents_md() -> str:
+    """Read repo-root AGENTS.md if it exists. Returns its contents or None.
+    Standalone Python scripts do NOT auto-load AGENTS.md the way harnesses like
+    Claude Code or Cursor do — this function is the explicit substitute."""
+    path = os.path.join(_REPO_ROOT, "AGENTS.md")
+    if os.path.isfile(path):
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    return None
 
 
 def execute_tool(name: str, args: dict) -> str:
@@ -227,42 +300,78 @@ def parse_tool_result_for_error(result_str: str):
     return None
 
 
+def build_system_prompt() -> str:
+    """Compose the system prompt from AGENTS.md (the authoritative protocol
+    doc) plus this script's tool-specific workflow. If AGENTS.md is missing,
+    fall back to a minimal built-in workflow with a schema example."""
+    agents_md = load_agents_md()
+
+    tool_workflow = (
+        "## This Agent's Tools & Workflow\n\n"
+        "You are an autonomous Data Engineering AI. Answer the user's performance question "
+        "by using ONLY the REST-API-backed tools below.\n\n"
+        f"Registered tools (never invent names outside this set): {sorted(KNOWN_TOOLS)}\n\n"
+        "Loop:\n"
+        "1. `list_suites` — see available test suites and the SQL each one runs. "
+        "The user's goal may name a suite that doesn't exist; if so, pick the closest match "
+        "from what `list_suites` returns and note the substitution in your final answer.\n"
+        "2. `submit_experiment` — submit a YAML config matching the schema in the protocol above. "
+        "If it returns a schema error, read the error, fix the specific field named, and retry. "
+        "Do NOT stop on the first error.\n"
+        "3. `get_experiment_status` — poll until status is `complete`. Pauses are handled automatically.\n"
+        "4. `compare_engines` — get the ranked cross-engine comparison.\n"
+        "5. Produce a final Markdown analysis with `FINAL ANSWER:` at the top, naming the winning "
+        "engine, the numbers that support it, and any caveats.\n\n"
+        "If you have all the data and are ready to conclude, produce the final analysis. "
+        "Do NOT return an empty message.\n"
+    )
+
+    if agents_md:
+        return (
+            "# Protocol Document (loaded from AGENTS.md at repo root)\n\n"
+            + agents_md
+            + "\n\n---\n\n"
+            + tool_workflow
+        )
+
+    # Fallback: minimal built-in when AGENTS.md is missing. Preserves the
+    # concrete YAML example so this script still works standalone.
+    return (
+        tool_workflow
+        + "\n\n## Schema Example (AGENTS.md not found; embedded fallback)\n\n"
+        "```yaml\n"
+        "dataset:\n"
+        "  source: sql_benchmarks.plugins.data_sources.declarative_gen\n"
+        "  tables:\n"
+        "    test_data:\n"
+        "      rows: rows\n"
+        "      columns:\n"
+        "        - name: id\n"
+        "          provider: sequence\n"
+        "definitions:\n"
+        "  rows:\n"
+        "    test_scale: 100000\n"
+        "execution:\n"
+        "  test_suite: analytical_wall\n"
+        "  engines: [duckdb, postgres]\n"
+        "  replication: 1\n"
+        "  matrix:\n"
+        "    rows: [test_scale]\n"
+        "```\n"
+    )
+
+
 def run_agent(goal: str, model: str = "gpt-4o"):
     console.print(Panel(f"[bold cyan]GOAL:[/bold cyan] {goal}", title="🤖 Agent Initialized"))
 
+    system_prompt = build_system_prompt()
+    # Show a one-line signal to the user about which prompt path is active
+    agents_md_loaded = os.path.isfile(os.path.join(_REPO_ROOT, "AGENTS.md"))
+    console.print(f"[dim]System prompt: AGENTS.md {'loaded' if agents_md_loaded else 'not found — using fallback'} "
+                  f"| Model: {model}[/dim]")
+
     messages = [
-        {"role": "system", "content": (
-            "You are an autonomous Data Engineering AI. Your job is to answer performance questions "
-            "by using the sqlbenchdag REST API tools. \n"
-            "Workflow:\n"
-            "1. List suites to see available queries.\n"
-            "2. Write a YAML config and submit it using submit_experiment. \n\n"
-            "CRITICAL SCHEMA REQUIREMENT: Your YAML MUST match this structure exactly:\n"
-            "dataset:\n"
-            "  source: sql_benchmarks.plugins.data_sources.declarative_gen\n"
-            "  tables:\n"
-            "    test_data:\n"
-            "      rows: rows\n"
-            "      columns:\n"
-            "        - name: id\n"
-            "          provider: sequence\n"
-            "definitions:\n"
-            "  rows:\n"
-            "    test_scale: 100000\n"
-            "execution:\n"
-            "  test_suite: analytical_wall\n"
-            "  engines:\n"
-            "    - duckdb\n"
-            "    - postgres\n"
-            "  replication: 1\n"
-            "  matrix:\n"
-            "    rows:\n"
-            "      - test_scale\n\n"
-            "3. If you get an API error (like SCHEMA ERROR), DO NOT STOP. Read the error, fix the YAML, and call submit_experiment again.\n"
-            "4. Poll the status every 5 seconds until 'complete'.\n"
-            "5. Compare engines and output a final Markdown analysis.\n"
-            f"6. Only call these tools: {sorted(KNOWN_TOOLS)}. Never invent tool names."
-        )},
+        {"role": "system", "content": system_prompt},
         {"role": "user", "content": goal}
     ]
 
@@ -418,4 +527,6 @@ if __name__ == "__main__":
         help="The natural-language goal to hand the agent."
     )
     args = parser.parse_args()
+    # Fail fast if the required API key for the chosen model is missing.
+    check_api_key(args.model)
     run_agent(args.goal, model=args.model)

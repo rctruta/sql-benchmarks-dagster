@@ -32,3 +32,10 @@ adbc-driver-manager==1.11.0
 adbc-driver-postgresql==1.11.0
 connectorx==0.4.5
 adbc-driver-quack==0.1.0a8
+# For scripts/autonomous_agent.py — auto-loads .env files with API keys.
+# The script prints a warning and continues if this is missing, but declaring
+# it makes the standard workflow deterministic.
+python-dotenv
+# Also used by autonomous_agent.py; brings LLM tool-calling via a single API.
+litellm
+rich
