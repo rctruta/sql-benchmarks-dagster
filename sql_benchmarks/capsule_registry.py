@@ -19,11 +19,20 @@ collision → refuse.
 The hasher at `utils/hasher.py:51` excludes the `meta` block from the hash
 input, so the comparison must too — otherwise a resubmit with a different
 `meta.name` or `meta.description` would falsely trip as a collision.
+
+Also: the hasher canonicalizes set-like paths (see
+`sql_benchmarks/canonicalization.py`, TODO #5c) before hashing, so a
+resubmit with matrix values reordered hashes to the same exp_id. For the
+equivalence relation implemented here to agree with the hasher's, this
+comparison must canonicalize both sides too — otherwise a permutation
+resubmit would falsely trip as a collision.
 """
 import os
 from typing import Literal
 
 import yaml
+
+from .canonicalization import canonicalize
 
 RegistryStatus = Literal["fresh", "duplicate", "collision"]
 
@@ -42,8 +51,9 @@ def check_registry(
 
     Returns:
       "fresh"     — no archived config with this exp_id. Proceed.
-      "duplicate" — archived config parses to the same dict (minus meta) as
-                    the submitted one. Re-submission of a known experiment.
+      "duplicate" — archived config parses to the same dict (minus meta,
+                    with set-like paths canonicalized) as the submitted one.
+                    Re-submission of a known experiment.
       "collision" — archived config parses to a DIFFERENT dict. A genuine
                     32-bit hash collision. Refuse and surface loudly.
     """
@@ -60,6 +70,11 @@ def check_registry(
         # caller escalates rather than silently overwriting.
         return "collision"
 
-    if _strip_meta(archived_config) == _strip_meta(submitted_config):
+    # Canonicalize both sides so the equivalence relation matches the
+    # hasher's: matrix-value permutations and engine-list permutations
+    # compare equal (they hash equal too — see canonicalization.py).
+    a = _strip_meta(canonicalize(archived_config))
+    b = _strip_meta(canonicalize(submitted_config))
+    if a == b:
         return "duplicate"
     return "collision"

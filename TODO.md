@@ -86,6 +86,30 @@ Not shipped, not needed today. Recording the options so the decision has valid c
 
 If B becomes real: prefer B4. Design the migration script alongside the code change; keep 8-char display everywhere the maker's mark appears.
 
+### 5c. Set-like list canonicalization — SHIPPED (this PR)
+
+Two configs that differ only in the order of a set-like list (`execution.engines: [duckdb, postgres]` vs `[postgres, duckdb]`; `execution.matrix.rows: [medium, large]` vs `[large, medium]`) now hash to the same exp_id and produce the same partition_keys. Author is no longer responsible for remembering to sort these lists.
+
+**Mechanism:** `sql_benchmarks/canonicalization.py` holds a declarative registry `SET_LIKE_PATHS` of dotted paths that are order-independent. `canonicalize(config)` returns a deep copy with those paths sorted. Called from three places:
+- `utils/hasher.py::generate_experiment_hash` — the exp_id becomes canonical.
+- `config_loader.py::ConfigLoader._load_and_validate` — partition_keys generation sees canonical order.
+- `coordinator.py::run` — the `active.yaml` written before execution is the canonical form (author's raw bytes are still preserved via `_source_yaml` → `_archive_source_config`, so the sealed capsule retains provenance).
+
+Extension rule: add a new dotted path to `SET_LIKE_PATHS` when adding a schema field that is genuinely set-like. `*` matches any dict key at that level. The safer default is NOT to declare a field set-like — sequence-ness is the correct assumption when in doubt.
+
+Currently registered:
+- `execution.engines` — the set of engines to test.
+- `execution.matrix.*` — the values for each matrix dimension.
+
+Explicitly NOT registered (order matters):
+- `dataset.tables.<t>.columns` — DDL column order.
+- `dataset.tables.<t>.indexes[N].columns` — composite index prefix.
+- `choice` provider `options` — pairs positionally with `weights` for reproducible RNG.
+
+Engine params (`execution.engine_params.<engine>.<param>`) are DICTS, not lists — already order-invariant via `json.dumps(sort_keys=True)`. Runtime iteration order in the drivers follows Python dict insertion order; harmless for current allowlist (session-level `SET` statements are commutative for the params we allow). If a future engine param needs deterministic SET order, that's a driver concern, not a hashing concern.
+
+**Interaction with 5a:** `check_registry` compares parsed YAML trees. Since ConfigLoader now canonicalizes on load, permutation-resubmits (same experiment, matrix values reordered) hash to the same exp_id and their parsed dicts compare equal → classified `"duplicate"`, not `"collision"`.
+
 ## 6. AGENTS.md loading is opt-in for standalone scripts
 
 **Closed 2026-07-03 as YAGNI (extract when justified, not before).** Standalone Python scripts (`scripts/autonomous_agent.py`) don't automatically read AGENTS.md the way harnesses like Claude Code or Cursor do — that's harness-level behavior. PR #107 added an explicit `load_agents_md()` (~40 lines) to the agent script.
