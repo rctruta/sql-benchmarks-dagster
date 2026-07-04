@@ -55,7 +55,7 @@ same goal against the same lab.
 | Model | Date | Local capsule | Outcome | Turns | Notes / cross-ref |
 |---|---|---|---|---|---|
 | `anthropic/claude-sonnet-5` | 2026-07-04 | `162bbce7` | ✅ clean end-to-end; two-regime scaling diagnosis with checked arithmetic | 11 | SBD-1. Correctly picked `compare_engines_by_partition` + `get_experiment_result` for a scaling question; produced fluent diagnostic prose; caveats named honestly. |
-| `ollama/llama3` (8B, local) | pending | — | not-yet-run | — | SBD-2 planned. Ollama daemon was down at first attempt (2026-07-04) — needs `ollama serve` (or Ollama Desktop) before the run can proceed. |
+| `ollama/llama3` (8B, local) | 2026-07-04 | — (no capsule) | ❌ workflow-capability failure — `MAX_EMPTY_RESPONSES=3` ceiling at turn 23/25 | 23 | SBD-2. Model produced three non-actionable responses in a row; `run_agent()`'s bailout fired as designed. New failure class in the taxonomy — see journal. |
 
 **Follow-up experiments this one could seed.**
 
@@ -86,22 +86,35 @@ it dominates this file. At that point promote to `docs/experiments/<name>.md`
 and leave a one-line stub here linking to it. Small now, plan for growth,
 don't split prematurely.
 
-**Failure classification (as it emerges).** No fixed taxonomy yet — Ramona's
-framing is that categories will emerge from N=5–10 model runs. Provisional
-categories to watch for as the corpus grows:
+**Failure classification (emerging).** No fixed taxonomy — Ramona's framing
+is that categories emerge from N=5–10 model runs. What's been seen so far:
+
+- **Clean success** — SBD-1 (claude-sonnet-5). Tool selection, arithmetic,
+  diagnostic prose, honest caveats all present.
+- **Workflow-capability failure** — SBD-2 (ollama/llama3, 8B). Not a schema
+  error, not a tool-selection error, not a rate limit. The model just
+  stopped producing actionable output — three non-actionable responses in
+  a row, `MAX_EMPTY_RESPONSES` bailout fires. Distinct from turn-budget
+  exhaustion (that's when the model makes progress but runs out of time).
+  This is the model *unable to produce the workflow output at all* despite
+  having the tools available.
+
+Other categories to watch for as the corpus grows:
 
 - **Prereq failure** (daemon down, key missing, etc.) — not really "the
-  model failed"; environmental. SBD-2's first attempt.
+  model failed"; environmental. SBD-2's first attempt (ollama down).
 - **Schema construction failure** (agent can't produce valid YAML from the
   template).
 - **Tool-selection failure** (picked `compare_engines` when the question
-  needed `compare_engines_by_partition`, etc.).
+  needed `compare_engines_by_partition`, etc.). v4 hit this shape.
 - **In-context arithmetic failure** (couldn't compute simple ratios /
   didn't do the scaling analysis).
-- **Turn budget exhausted** (hit MAX_TURNS without converging).
+- **Turn budget exhausted** — hit `MAX_TURNS=25`. Different from workflow-
+  capability failure: turn-budget means the model was making progress but
+  ran out of time; workflow-capability means the model *stopped producing
+  actionable output*.
 - **External rate limit** — v6 pattern; not really the model failing at the
   lab, but worth recording so it's not confused with a model failure.
-- **Clean success** (SBD-1 shape).
 
 Don't force runs into these buckets prematurely. When the data suggests a
 category that's not on this list, name it and add it.
