@@ -224,3 +224,17 @@ Human-and-agent parity: `sqlbench project means <id>` (CLI),
 (Python) all hit the same core function.
 
 **Cross-refs.** PR shipping this decision. Next scope item: skills.
+
+---
+
+## 2026-07-04 — Skills as a tactical playbook, loaded into the system prompt
+
+**Decision.** Add `skills/*.md` at repo root. Two shipped: `build_scaling_experiment.md`, `read_experiment_results.md`. Loader (`autonomous_agent.load_skills`) concatenates all `.md` in the dir into a `# Skills` section appended to the system prompt after AGENTS.md.
+
+**Fork closed.** Skills as agent-callable tools (`list_skills` / `get_skill`). Deferred — upfront loading is fine while the corpus is small, and it removes a turn from the agent's loop.
+
+**Fork opened.** Any new precise procedure gets a new file — no code change needed. Human-readable too (`cat skills/*.md`).
+
+**Why.** SBD-2's llama3 failure was partly workflow-capability, partly no procedural anchor. Skills compress the exploration space: template-adapt pattern, common pitfalls (each has broken a previous run), decision table for which projection to use.
+
+**Cross-refs.** SBD-2, `[[proactive-recording]]`, granular projections entry above.
