@@ -73,6 +73,7 @@ def fake_lab(tmp_path, monkeypatch):
     monkeypatch.setattr(reader_module, "RESULTS_DIR", results_dir)
     monkeypatch.setattr(reader_module, "EXPERIMENTS_DIR", experiments_dir)
     monkeypatch.setattr(reader_module, "CONFIG_ARCHIVE_DIR", config_archive)
+    monkeypatch.setattr(experiments_router, "RESULTS_DIR", results_dir)
     monkeypatch.setattr(experiments_router, "EXPERIMENTS_DIR", experiments_dir)
     monkeypatch.setattr(experiments_router, "CONFIG_ARCHIVE_DIR", config_archive)
     return {"results": results_dir, "experiments": experiments_dir, "configs": config_archive}
@@ -420,7 +421,7 @@ def test_submit_hash_collision_rejected_with_409(client):
     # Submit a YAML that hashes to EXP_ID but parses to a DIFFERENT dict than
     # the fake_lab archived config (which is {execution: {test_suite: selectivity}}).
     colliding_yaml = "meta:\n  name: different experiment\nexecution:\n  test_suite: sort_spill\n"
-    with patch.object(experiments_router.ExperimentValidator, "validate"), \
+    with patch.object(experiments_router, "validate_experiment_config"), \
          patch.object(experiments_router, "generate_experiment_hash", return_value=EXP_ID), \
          patch.object(experiments_router, "_run_experiment") as run_mock:
         resp = client.post("/v1/experiments", json={"config_yaml": colliding_yaml})

@@ -88,4 +88,4 @@ def test_config_fail_matrix(load_config_from_fixture):
         TestConfigLoader()
         
     # Verify the exact error message that enforces the contract
-    assert "CRITICAL: Experiment must define a 'matrix'" in str(excinfo.value)
+    assert "Experiment must define a 'matrix' strictly under 'execution.matrix'." in str(excinfo.value)
