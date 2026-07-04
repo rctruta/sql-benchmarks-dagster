@@ -40,6 +40,10 @@ sql_benchmarks/experiments/results/
 sql_benchmarks/experiments/configs/
 sql_benchmarks/experiments/violations/
 sql_benchmarks/experiments/reports/
+# Agent-run traces (one JSONL per autonomous_agent.py run). Transient local
+# artifacts today; a specific run can be un-ignored below once its analysis
+# is promoted to a sealed analysis-capsule (Fork B, see docs/decisions_log.md).
+sql_benchmarks/experiments/agent_runs/
 # active.yaml is runtime staging — coordinator overwrites it on every run
 # with the experiment_id-injected config (coordinator.py:67-69), and tests
 # save/restore it around a session (sql_benchmarks_tests/conftest.py). It is
