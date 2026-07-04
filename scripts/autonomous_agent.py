@@ -276,6 +276,24 @@ def load_agents_md() -> str:
     return None
 
 
+def load_skills() -> str:
+    """Concatenate every `.md` file in `skills/` into one string. Skills are
+    precise procedures for specific operations (build a scaling experiment,
+    read results with the right tool). AGENTS.md is the high-level protocol;
+    skills are the tactical playbook. Returns "" if the dir is missing or
+    empty."""
+    skills_dir = os.path.join(_REPO_ROOT, "skills")
+    if not os.path.isdir(skills_dir):
+        return ""
+    parts = []
+    for fn in sorted(os.listdir(skills_dir)):
+        if not fn.endswith(".md"):
+            continue
+        with open(os.path.join(skills_dir, fn), encoding="utf-8") as f:
+            parts.append(f.read())
+    return "\n\n---\n\n".join(parts)
+
+
 def execute_tool(name: str, args: dict) -> str:
     """Dispatches the tool call to the REST API."""
     try:
@@ -471,16 +489,26 @@ def build_system_prompt() -> str:
         "does not exist' means your dataset is missing that table). Do NOT stop on the first error.\n"
         "5. `get_experiment_status` — poll until status is `complete` or `failed`. Pauses are handled automatically.\n"
         "6. Read the result. PICK THE RIGHT SHAPE for the question:\n"
-        "   - `compare_engines` — aggregate ranking across all partitions. Good for 'who won overall'. "
-        "Flattens scaling curves and hides per-partition detail.\n"
-        "   - `compare_engines_by_partition` — one ranking PER partition. Use for scaling analysis "
-        "(e.g., 'how does DuckDB scale from 100 to 1M rows?') and any matrix-sweep question.\n"
-        "   - `get_experiment_result` — full raw fragments (mean, median, p95, and per-replication "
-        "durations). Use when the question needs raw measurements — anything beyond 'who won'.\n"
+        "   - `get_experiment_summary` — ALWAYS THE FIRST READ. Compact digest: means + scaling + narrative in a small payload. Safe under tight context budgets.\n"
+        "   - `get_means_by_partition` — mean + sample count per (partition, engine). Cheap when the question is per-partition speed.\n"
+        "   - `get_scaling_factor` — adjacent + overall scaling ratios PER ENGINE. Returns ratios directly; spares in-context arithmetic. Check `partitions_order` if semantic ordering matters.\n"
+        "   - `get_replication_stability` — std, CV, min, max per (partition, engine). Use for 'how noisy is this measurement'.\n"
+        "   - `compare_engines` — aggregate ranking across all partitions. For 'who won overall'; flattens scaling curves.\n"
+        "   - `compare_engines_by_partition` — per-partition rankings + speedups.\n"
+        "   - `get_experiment_result` — full raw fragments. Use only when projections above don't answer.\n"
+        "   See `skills/read_experiment_results.md` for the full decision table.\n"
         "7. Produce a final Markdown analysis with `FINAL ANSWER:` at the top, naming the winning "
         "engine (or per-scale answer), the numbers that support it, and any caveats.\n\n"
         "If you have all the data and are ready to conclude, produce the final analysis. "
         "Do NOT return an empty message.\n"
+    )
+
+    skills = load_skills()
+    skills_block = (
+        "\n\n---\n\n# Skills (precise procedures for specific operations)\n\n"
+        + skills
+        if skills
+        else ""
     )
 
     if agents_md:
@@ -489,6 +517,7 @@ def build_system_prompt() -> str:
             + agents_md
             + "\n\n---\n\n"
             + tool_workflow
+            + skills_block
         )
 
     # Fallback: minimal built-in when AGENTS.md is missing. Preserves the
@@ -515,6 +544,7 @@ def build_system_prompt() -> str:
         "  matrix:\n"
         "    rows: [test_scale]\n"
         "```\n"
+        + skills_block
     )
 
 
