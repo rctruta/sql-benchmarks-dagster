@@ -12,6 +12,7 @@ from .validation import validate_experiment_config
 from .canonicalization import canonicalize
 from .failure_marker import write_failure_marker
 from .capsule_registry import check_registry
+from .running_marker import write_running_marker, clear_running_marker
 from .constants import ROOT_DIR, CONFIG_ARCHIVE_DIR, EXPERIMENTS_DIR, PROCESSED_SUFFIX, RESULTS_DIR, VIOLATIONS_DIR, REPORTS_DIR, AUDIT_LOCK_PATH, ACTIVE_CONFIG_PATH
 
 
@@ -157,7 +158,7 @@ class ExperimentCoordinator:
             # Check Registry: dispatch on three-way collision detection so a
             # 32-bit hash collision (different config, same 8-char exp_id)
             # can never silently return wrong results (TODO #5).
-            registry_status = check_registry(self.exp_id, self.config, CONFIG_ARCHIVE_DIR)
+            registry_status = check_registry(self.exp_id, self.config, CONFIG_ARCHIVE_DIR, results_dir=RESULTS_DIR)
             if registry_status == "duplicate":
                 print(f"[INFO] SKIPPING: Experiment {self.exp_id} already exists in registry.")
                 return True
@@ -198,7 +199,19 @@ class ExperimentCoordinator:
 
         # Phase 3: EXECUTION
         print(f"[INFO] Executing {self.exp_id} in isolated scratchpad...")
-        
+
+        # Write the running marker BEFORE any subprocess spawns, so /status
+        # returns `running` within seconds of the coordinator picking up the
+        # queue entry. Without this the status stayed `queued` for the entire
+        # execution window (results dir is only created at finalize), and
+        # agents polling `queued` for minutes concluded the run had stalled
+        # and re-submitted — opening a race window in check_registry that
+        # spawned duplicate concurrent runs (Gap 1, TODO #2 context).
+        try:
+            write_running_marker(RESULTS_DIR, self.exp_id)
+        except Exception as e:
+            print(f"[WARN] could not write running marker for {self.exp_id}: {e}")
+
         try:
             try:
                 # Prepare environment
@@ -240,7 +253,14 @@ class ExperimentCoordinator:
                     return False
 
                 # Phase 5: FINAL VERIFICATION & REGISTRY
-                return self._finalize_results()
+                result = self._finalize_results()
+                # Clear the running marker on successful finalize — the
+                # config archive now exists, `is_complete` becomes the
+                # authoritative signal, and a stale running marker would
+                # only confuse readers.
+                if result:
+                    clear_running_marker(RESULTS_DIR, self.exp_id)
+                return result
 
             except Exception as e:
                 # Catch-all so unexpected exceptions in the execution/finalize
@@ -255,6 +275,14 @@ class ExperimentCoordinator:
                 raise
         finally:
             harness.cleanup()
+            # Belt-and-suspenders: if we exit via any non-happy path (failure
+            # marker written, drift, coordinator_exception), the running
+            # marker is now misleading — the run is no longer running. Clear
+            # it. `is_complete` and `has_failure` take priority over the
+            # running check in the status endpoint anyway, but keeping the
+            # filesystem tidy avoids a class of subtle debugging distractions.
+            if self.exp_id:
+                clear_running_marker(RESULTS_DIR, self.exp_id)
 
     def _execute_direct(self, local_env: dict) -> Tuple[bool, Optional[str]]:
         """Run the executor subprocess for each partition + a final reporting pass.

@@ -131,3 +131,10 @@ class ResultReader:
     def get_failure(self, exp_id: str) -> Optional[Dict]:
         from ...failure_marker import read_failure_marker
         return read_failure_marker(RESULTS_DIR, exp_id)
+
+    def is_running(self, exp_id: str) -> bool:
+        """True if the coordinator has picked up this exp_id and started
+        execution but not yet finalized/failed. Distinguishes `queued but
+        not started` from `running now` — see running_marker.py."""
+        from ...running_marker import has_running_marker
+        return has_running_marker(RESULTS_DIR, exp_id)

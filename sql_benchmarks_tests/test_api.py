@@ -400,14 +400,26 @@ def test_status_lifecycle(client, fake_lab):
     # not_found
     assert client.get("/v1/experiments/eeee0000/status").json()["status"] == "not_found"
 
-    # queued: yaml in queue dir, no results yet
+    # queued: yaml in queue dir, no running marker yet
     qid = "eeee0001"
     with open(os.path.join(fake_lab["experiments"], "queue", f"{qid}.yaml"), "w") as f:
         f.write("meta: {}\n")
     assert client.get(f"/v1/experiments/{qid}/status").json()["status"] == "queued"
 
-    # running: results dir exists but config not archived
+    # queued vs running: the results dir existing is NOT enough — Gap 1
+    # closed by requiring an explicit running marker. This is the fix that
+    # prevents `queued` from persisting for the entire execution window.
     os.makedirs(os.path.join(fake_lab["results"], qid))
+    assert client.get(f"/v1/experiments/{qid}/status").json()["status"] == "queued", (
+        "results dir alone must NOT flip to running — that was the pre-Gap-1 "
+        "heuristic, and it stayed False for the entire run because the dir "
+        "only appeared at finalize. Now requires running_marker.json."
+    )
+
+    # running: running marker written (coordinator has picked up the run)
+    from sql_benchmarks.running_marker import write_running_marker
+    from sql_benchmarks.api.data import reader as reader_module
+    write_running_marker(reader_module.RESULTS_DIR, qid)
     assert client.get(f"/v1/experiments/{qid}/status").json()["status"] == "running"
 
 
@@ -462,6 +474,61 @@ def test_status_complete_still_wins_over_failed_marker(client, fake_lab):
     )
     body = client.get(f"/v1/experiments/{EXP_ID}/status").json()
     assert body["status"] == "complete"
+
+
+def test_status_running_when_marker_present(client, fake_lab):
+    """The Gap 1 fix: coordinator writes results/<id>/running.json when it
+    picks up the queue entry, so /status returns `running` within seconds
+    instead of staying `queued` for the whole execution window."""
+    from sql_benchmarks.running_marker import write_running_marker
+    from sql_benchmarks.api.data import reader as reader_module
+
+    rid = "eeee0004"
+    write_running_marker(reader_module.RESULTS_DIR, rid)
+    body = client.get(f"/v1/experiments/{rid}/status").json()
+    assert body["status"] == "running"
+
+
+def test_status_failed_beats_running_marker(client, fake_lab):
+    """If a run started (running marker written) then died (failure marker
+    written), `failed` wins — terminal state beats in-flight state."""
+    from sql_benchmarks.running_marker import write_running_marker
+    from sql_benchmarks.failure_marker import write_failure_marker
+    from sql_benchmarks.api.data import reader as reader_module
+
+    fid = "eeee0005"
+    write_running_marker(reader_module.RESULTS_DIR, fid)
+    write_failure_marker(
+        reader_module.RESULTS_DIR, fid,
+        stage="execution", error="boom",
+    )
+    body = client.get(f"/v1/experiments/{fid}/status").json()
+    assert body["status"] == "failed"
+
+
+def test_submit_of_running_experiment_returns_duplicate(client, fake_lab):
+    """The race close: submitting the same config while a first run is still
+    in flight (running marker present, config archive not yet written) now
+    returns `duplicate` with a specific 'already running' message — not
+    `queued` (which would have spawned a second concurrent run before this
+    fix). See Gap 1 in TODO.md."""
+    from sql_benchmarks.running_marker import write_running_marker
+    from sql_benchmarks.api.data import reader as reader_module
+    from unittest.mock import patch
+    from sql_benchmarks.api.routers import experiments as experiments_router
+
+    running_id = "eeee0006"
+    write_running_marker(reader_module.RESULTS_DIR, running_id)
+
+    VALID_YAML = "meta:\n  name: test\nexecution:\n  test_suite: selectivity\n"
+    with patch.object(experiments_router, "validate_experiment_config"), \
+         patch.object(experiments_router, "generate_experiment_hash", return_value=running_id):
+        resp = client.post("/v1/experiments", json={"config_yaml": VALID_YAML})
+
+    assert resp.status_code == 202
+    body = resp.json()
+    assert body["status"] == "duplicate"
+    assert "already running" in body["detail"]
 
 
 def test_health(client):
