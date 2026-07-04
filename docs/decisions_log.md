@@ -254,3 +254,21 @@ Human-and-agent parity: `sqlbench project means <id>` (CLI),
 **How it lands.** `list_categories` returns ~600 B (12 category names + descriptions + counts). `list_suites(category=scaling)` returns ~200 B per matching suite (no SQL). Expected turn-1 payload: from 88 KB down to ~2 KB. If the agent needs the actual SQL for a specific suite, `list_suites(category=X, include_sql=true)` gives it back.
 
 **Cross-refs.** First live-fire run: capsule `803f3c94` trace (`sql_benchmarks/experiments/agent_runs/20260704T212724Z_4610810d.jsonl`). Skill updated: `skills/build_scaling_experiment.md`.
+
+---
+
+## 2026-07-04 — Multi-agent architecture: explicit state machine + specialist sub-agents
+
+**Decision.** Ship a second driver — `scripts/multi_agent.py` — alongside `scripts/autonomous_agent.py`. State machine is `config_builder → poll → analyzer`, each stage a scoped specialist. Poller is deterministic Python (no LLM); config_builder and analyzer are LLM specialists with small tool inventories (5 and 7 tools respectively) and focused system prompts.
+
+**Fork closed.** Single monolithic agent driving the whole lab loop. That version sees all 13 tools + full skills + full AGENTS.md on every turn.
+
+**Fork opened.** Each specialist is now its own measurable object. *"How does config-building capability scale with model size"* is a distinct question from *"how does analysis capability scale"* — currently they collapsed into one "did the agent finish" measurement. JSONL trace tree per orchestrator run: one orchestrator trace + N specialist traces linked by `delegate` events.
+
+**Why.** Ramona: *"agent state machine and subagents are tightly coupled."* They are — each sub-agent IS a state; hand-off between them IS the state transition. Also directly follows from the `scratch/reducing_agent_search_scope.md` methodology: progressive disclosure applied to the agent's structure, not just to the tool interface.
+
+**Implementation.** Kept the monolithic `autonomous_agent.py` for A/B comparison. Tool inventory extracted to shared `sql_benchmarks/agent_tools.py` (single source of truth; both drivers import from it). `agent_specialist.py` has one reusable `Specialist` loop parameterized by role. `agent_orchestrator.py` threads specialists through the state machine. 17 tests, model calls mocked.
+
+**Deliberate scoping.** Poller is pure Python because polling is a fixed-outcome procedure and burning LLM tokens on it strips signal from the capability measurement (every call would look identical). If we later want to measure *"does model X know when to stop polling"*, that's a separate `llm_poller` specialist, not shipped here.
+
+**Cross-refs.** `scratch/reducing_agent_search_scope.md` (methodology). SBD-2 (workflow-capability failure the multi-agent architecture plausibly closes). Live-fire A/B pending.
