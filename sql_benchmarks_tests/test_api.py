@@ -294,6 +294,48 @@ def test_compare_partition_filter(client):
     assert body["rankings"][0]["mean_duration_seconds"] == 0.5
 
 
+def test_compare_by_partition_returns_per_partition_rankings(client):
+    """Gap 3 fix: matrix-sweep experiments need per-partition rankings, not
+    just the aggregate. Each partition gets its own CompareResult."""
+    resp = client.get(f"/v1/results/{EXP_ID}/compare/by-partition")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["experiment_id"] == EXP_ID
+    partitions = body["partitions"]
+    # fake_lab wrote fragments for two partitions: small_ssd and large_ssd
+    assert set(partitions.keys()) == {"small_ssd", "large_ssd"}
+    # Each entry is a full CompareResult with its own rankings
+    small = partitions["small_ssd"]
+    assert small["partition"] == "small_ssd"
+    assert small["winner"] == "duckdb"
+    # duckdb 0.5s vs postgres 2.0s in small_ssd → 4x
+    assert small["speedup_vs_slowest"] == 4.0
+    large = partitions["large_ssd"]
+    assert large["partition"] == "large_ssd"
+    # duckdb 1.0s vs postgres 4.0s in large_ssd → 4x again
+    assert large["speedup_vs_slowest"] == 4.0
+
+
+def test_compare_by_partition_404_when_experiment_missing(client):
+    resp = client.get("/v1/results/deadbeef/compare/by-partition")
+    assert resp.status_code == 404
+
+
+def test_get_result_returns_fragments_with_raw_durations(client):
+    """Gap 4 fix: the raw result endpoint returns per-partition per-engine
+    fragments with durations_raw, so agents can compute anything from
+    measurements — not just mean."""
+    resp = client.get(f"/v1/results/{EXP_ID}")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["experiment_id"] == EXP_ID
+    assert len(body["fragments"]) == 4  # 2 engines × 2 partitions
+    # Every fragment carries per-replication detail (or None if pre-raw-capture)
+    for f in body["fragments"]:
+        assert "duration_seconds" in f["metrics"]
+        assert "durations_raw" in f["metrics"]
+
+
 # ---------------------------------------------------------------------------
 # Recommend endpoint
 # ---------------------------------------------------------------------------

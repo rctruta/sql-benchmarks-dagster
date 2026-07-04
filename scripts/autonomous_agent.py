@@ -115,7 +115,35 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "compare_engines",
-            "description": "Get a ranked cross-engine performance comparison for a completed experiment.",
+            "description": "Get a ranked cross-engine performance comparison for a completed experiment. AGGREGATES across all partitions — good for 'who won overall' questions, but flattens scaling curves. For matrix-sweep or scaling analysis, use `compare_engines_by_partition` instead.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "experiment_id": {"type": "string"}
+                },
+                "required": ["experiment_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "compare_engines_by_partition",
+            "description": "Get per-PARTITION cross-engine rankings for a completed experiment — one ranking per partition key. USE THIS for scaling analysis (e.g., 'how does DuckDB scale from 100 to 1M rows?') and matrix-sweep experiments where the aggregate hides the shape. Returns a dict keyed by partition name.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "experiment_id": {"type": "string"}
+                },
+                "required": ["experiment_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_experiment_result",
+            "description": "Fetch the full raw experiment result: sealed config + summary + all per-partition, per-engine fragments (each with mean, median, p95, and raw per-replication durations). USE THIS when you need to reason from raw measurements — anything beyond 'who won'. Larger response than compare_engines; prefer compare_engines for simple ranking questions.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -219,6 +247,14 @@ def execute_tool(name: str, args: dict) -> str:
 
         elif name == "compare_engines":
             res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}/compare", timeout=30)
+            return json.dumps(res.json(), indent=2)
+
+        elif name == "compare_engines_by_partition":
+            res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}/compare/by-partition", timeout=30)
+            return json.dumps(res.json(), indent=2)
+
+        elif name == "get_experiment_result":
+            res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}", timeout=30)
             return json.dumps(res.json(), indent=2)
 
         else:
@@ -360,9 +396,15 @@ def build_system_prompt() -> str:
         "carries the actual executor error (e.g., a DB message like 'Catalog Error: Table with name c "
         "does not exist' means your dataset is missing that table). Do NOT stop on the first error.\n"
         "5. `get_experiment_status` — poll until status is `complete` or `failed`. Pauses are handled automatically.\n"
-        "6. `compare_engines` — get the ranked cross-engine comparison (once complete).\n"
+        "6. Read the result. PICK THE RIGHT SHAPE for the question:\n"
+        "   - `compare_engines` — aggregate ranking across all partitions. Good for 'who won overall'. "
+        "Flattens scaling curves and hides per-partition detail.\n"
+        "   - `compare_engines_by_partition` — one ranking PER partition. Use for scaling analysis "
+        "(e.g., 'how does DuckDB scale from 100 to 1M rows?') and any matrix-sweep question.\n"
+        "   - `get_experiment_result` — full raw fragments (mean, median, p95, and per-replication "
+        "durations). Use when the question needs raw measurements — anything beyond 'who won'.\n"
         "7. Produce a final Markdown analysis with `FINAL ANSWER:` at the top, naming the winning "
-        "engine, the numbers that support it, and any caveats.\n\n"
+        "engine (or per-scale answer), the numbers that support it, and any caveats.\n\n"
         "If you have all the data and are ready to conclude, produce the final analysis. "
         "Do NOT return an empty message.\n"
     )
