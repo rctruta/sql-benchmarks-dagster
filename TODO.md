@@ -160,7 +160,9 @@ API records it in `metadata.submitted_via` in the sealed capsule. Not cryptograp
 
 ## 10. Agent trace not durably captured (structured logging)
 
-**STATUS: OPEN** — surfaced 2026-07-04. Argument made empirically by SBD-2's failure (see journal specimen SBD-2). Direct blocker on classifying agent failures.
+**STATUS: SHIPPED 2026-07-04** — `sql_benchmarks/agent_trace.py` + wiring in `scripts/autonomous_agent.py`. Per-run JSONL at `sql_benchmarks/experiments/agent_runs/<run_id>.jsonl` where `run_id = <UTC-iso>_<goal-hash>`. Event types: `run_start`, `turn_start`, `model_response` (with `usage`, `empty_content`, normalized `tool_calls`), `tool_call`, `tool_result` (with `error_reason`), `nudge`, `final_answer`, `run_end` (outcome ∈ {`final_answer`, `gave_up`, `max_turns`, `exception`}). Fork-B-compatible: every event carries `run_id + ts + turn`, tool outputs are captured verbatim, so this trace can be sealed alongside the results-capsule when Fork B lands. Traces are gitignored today (transient local artifacts); a specific trace gets un-ignored when its analysis is promoted to a sealed analysis-capsule.
+
+**Original argument for shipping** — surfaced 2026-07-04. Made empirically by SBD-2's failure (see journal specimen SBD-2). Direct blocker on classifying agent failures.
 
 Current agent trace lives in whatever terminal launched `autonomous_agent.py` — ephemeral in both the background-bash-task case (`/tmp/...`) and Ramona's own shell case (scrollback). Not captured at all: per-turn latency, tokens-in, tokens-out, model, timestamp. This is data that the testbed already captures for its own agent runs. Can't be re-engineered — models get deprecated, versions change.
 

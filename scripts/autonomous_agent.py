@@ -21,6 +21,11 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 
+# Add repo root to sys.path so `sql_benchmarks.agent_trace` imports when the
+# script is run without `pip install -e .`
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from sql_benchmarks.agent_trace import AgentTrace
+
 # Load .env from repo root (script sits in scripts/, so go up one) then cwd.
 # Silent no-op if the files don't exist. Explicit key check happens later —
 # a missing .env doesn't crash the script; a missing key for the chosen
@@ -453,6 +458,12 @@ def run_agent(goal: str, model: str = "gpt-4o"):
     console.print(f"[dim]System prompt: AGENTS.md {'loaded' if agents_md_loaded else 'not found — using fallback'} "
                   f"| Model: {model}[/dim]")
 
+    trace = AgentTrace(
+        goal=goal, model=model,
+        agents_md_loaded=agents_md_loaded, max_turns=MAX_TURNS,
+    )
+    console.print(f"[dim]Agent trace: {trace.path}[/dim]")
+
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": goal}
@@ -462,6 +473,7 @@ def run_agent(goal: str, model: str = "gpt-4o"):
 
     for turn in range(1, MAX_TURNS + 1):
         console.print(f"[dim]Thinking... (turn {turn}/{MAX_TURNS})[/dim]")
+        trace.turn_start(turn)
 
         response = completion(
             model=model,
@@ -485,6 +497,11 @@ def run_agent(goal: str, model: str = "gpt-4o"):
             if recovered_call is not None:
                 msg.tool_calls = [recovered_call]
                 console.print(f"[dim italic]Recovered raw-text tool call: {recovered_call.function.name}[/dim italic]")
+
+        trace.model_response(
+            turn=turn, content=content, tool_calls=msg.tool_calls or [],
+            response=response, recovered_call_reason=recovery_reason,
+        )
 
         # Assistant turn goes into history — with tool_calls if we have any,
         # otherwise plain content.
@@ -528,15 +545,24 @@ def run_agent(goal: str, model: str = "gpt-4o"):
             )
             if done_signal:
                 console.print("[bold green]✅ Agent produced final analysis.[/bold green]")
+                trace.final_answer(turn=turn, content=content)
+                trace.run_end(outcome="final_answer", turns_used=turn)
                 break
 
             if empty_responses_in_a_row >= MAX_EMPTY_RESPONSES:
                 console.print(
                     f"[bold red]✗ Agent gave up after {MAX_EMPTY_RESPONSES} non-actionable responses in a row.[/bold red]"
                 )
+                trace.run_end(outcome="gave_up", turns_used=turn)
                 break
 
             console.print(f"[yellow]Nudging model (attempt {empty_responses_in_a_row}/{MAX_EMPTY_RESPONSES})…[/yellow]")
+            trace.nudge(turn=turn,
+                        reason=("recovery" if recovery_reason
+                                else "empty" if not content.strip()
+                                else "no_tool_call_no_final"),
+                        attempt=empty_responses_in_a_row,
+                        max_attempts=MAX_EMPTY_RESPONSES)
             messages.append({"role": "user", "content": nudge})
             continue
 
@@ -554,6 +580,7 @@ def run_agent(goal: str, model: str = "gpt-4o"):
             if name == "submit_experiment" and "config_yaml" in args:
                 console.print(f"[dim]{args['config_yaml']}[/dim]")
 
+            trace.tool_call(turn=turn, tool_call_id=tool_call.id, name=name, arguments=args)
             result_str = execute_tool(name, args)
 
             # If polling status, do the dramatic pause and continue
@@ -572,6 +599,8 @@ def run_agent(goal: str, model: str = "gpt-4o"):
 
             # If the tool returned an error, add explicit coaching after the tool result
             error_reason = parse_tool_result_for_error(result_str)
+            trace.tool_result(turn=turn, tool_call_id=tool_call.id, name=name,
+                              result=result_str, error_reason=error_reason)
 
             messages.append({
                 "role": "tool",
@@ -592,6 +621,7 @@ def run_agent(goal: str, model: str = "gpt-4o"):
     else:
         # for/else: ran to MAX_TURNS without breaking
         console.print(f"[bold red]✗ Reached MAX_TURNS ({MAX_TURNS}) without completing. Stopping.[/bold red]")
+        trace.run_end(outcome="max_turns", turns_used=MAX_TURNS)
 
 
 if __name__ == "__main__":
