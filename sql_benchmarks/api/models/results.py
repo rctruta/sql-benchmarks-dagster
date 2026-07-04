@@ -61,6 +61,20 @@ class CompareResult(BaseModel):
     speedup_vs_slowest: float
 
 
+class CompareByPartitionResult(BaseModel):
+    """One CompareResult per partition — for matrix-sweep experiments where the
+    caller needs the per-scale/per-partition breakdown, not a single aggregate.
+
+    The aggregate form (`CompareResult` from `/compare`) hides the shape of a
+    scaling curve. Two engines with mean durations 0.021s and 5.0s across
+    tiny/small/large partitions look nothing like each other in the
+    per-partition view; the aggregate flattens that.
+    """
+    experiment_id: str
+    suite: Optional[str] = None
+    partitions: Dict[str, CompareResult]
+
+
 class ResultsListResponse(BaseModel):
     experiments: List[ExperimentSummary]
     total: int

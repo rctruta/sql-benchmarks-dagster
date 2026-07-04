@@ -3,8 +3,13 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 
 from ..data.reader import ResultReader
-from ..logic.comparator import compare_experiment
-from ..models.results import CompareResult, ExperimentResult, ResultsListResponse
+from ..logic.comparator import compare_experiment, compare_experiment_by_partition
+from ..models.results import (
+    CompareByPartitionResult,
+    CompareResult,
+    ExperimentResult,
+    ResultsListResponse,
+)
 
 router = APIRouter(prefix="/v1/results", tags=["results"])
 _reader = ResultReader()
@@ -45,7 +50,24 @@ def compare_result(
     exp_id: str,
     partition: Optional[str] = Query(None, description="Filter to a specific partition key"),
 ):
-    """Get a ranked cross-engine performance comparison for an experiment."""
+    """Get a ranked cross-engine performance comparison for an experiment.
+
+    Aggregates across all partitions unless `partition` is set. For a
+    partition-by-partition breakdown (needed for scaling analysis), use
+    `/compare/by-partition` instead — the aggregate view flattens the
+    scaling curve.
+    """
     if not _reader.results_exist(exp_id):
         raise HTTPException(status_code=404, detail=f"Experiment '{exp_id}' not found")
     return compare_experiment(exp_id, _reader, partition=partition)
+
+
+@router.get("/{exp_id}/compare/by-partition", response_model=CompareByPartitionResult)
+def compare_result_by_partition(exp_id: str):
+    """Get per-partition cross-engine rankings — one CompareResult per
+    partition key that has fragments. Use for scaling analysis and
+    matrix-sweep experiments where the aggregate hides the shape.
+    """
+    if not _reader.results_exist(exp_id):
+        raise HTTPException(status_code=404, detail=f"Experiment '{exp_id}' not found")
+    return compare_experiment_by_partition(exp_id, _reader)

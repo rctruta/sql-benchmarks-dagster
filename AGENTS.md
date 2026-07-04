@@ -48,6 +48,30 @@ is machine-first. An agent can verify a performance hypothesis here instead of a
 
 ---
 
+## Reading results — pick the right shape
+
+Three endpoints for reading a completed experiment. Pick by the shape of the
+question:
+
+```
+GET /v1/results/<id>                         # full raw fragments (mean/median/p95 + per-rep durations)
+GET /v1/results/<id>/compare                 # aggregated ranking across all partitions
+GET /v1/results/<id>/compare/by-partition    # one ranking per partition (scaling / matrix-sweep)
+```
+
+**Rule:** `/compare` aggregates across partitions. If the experiment ran a
+matrix sweep (e.g., `rows: [tiny, small, large]`), the aggregate view
+flattens the scaling curve and can give a misleading "winner." For scaling
+analysis, always use `/compare/by-partition` or read the raw fragments.
+
+An agent asking *"which engine is fastest?"* wants `/compare`. An agent asking
+*"how does DuckDB scale from 100 to 1M rows?"* wants `/compare/by-partition`.
+An agent computing anything from raw measurements (spread, distribution
+tails, p95 across replications) wants `/v1/results/<id>` — the fragments
+carry `durations_raw` per replication, not just the mean.
+
+---
+
 ## Template discovery (REST API)
 
 The SQL each suite runs expects a *specific* dataset shape — particular tables and columns.
