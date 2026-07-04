@@ -128,6 +128,57 @@ Decision: not extracting `sql_benchmarks.agent_utils` speculatively. The extract
 
 ---
 
+## 8. No first-class cache-hit path for agents
+
+**STATUS: OPEN** — surfaced 2026-07-04 by Ramona. Design gap, not correctness bug.
+
+Lab's design principle per AGENTS.md: *"identical question ⇒ identical ID; check `results/<ID>/` before running — zero-cost cache lookup."* But the agent-facing API doesn't lean into it. Current flow when a submitted YAML matches an already-sealed capsule:
+
+1. Agent calls `submit_experiment(yaml)`.
+2. API returns `202` with `status="duplicate"` and a *pointer* — *"Retrieve them at /v1/results/{exp_id}"*.
+3. Agent has to call `get_experiment_result(exp_id)` separately.
+
+Two tool calls to consume a cached answer. The *primary happy path* (cache hits should be cheaper than fresh runs) isn't reflected in the agent workflow. There's nothing connecting an agent's request to returning a capsule already sealed *directly*.
+
+**Rough shape of fix (A1, small):** enrich the `duplicate` response body to include the cached `ExperimentResult` inline. `submit_experiment` returns either `status="queued"` (fresh) OR `status="duplicate"` with full result nested. Cache-hit becomes literally *faster* than fresh submit, one tool call. Alternative (A2, larger): add a new `check_cache(config_yaml)` tool. Lean: A1 first.
+
+## 9. No submitter attribution in sealed capsule metadata
+
+**STATUS: OPEN** — surfaced 2026-07-04. Load-bearing for the model-workflow-corpus research subject (see `docs/experiment_registry.md`).
+
+Capsule's `metadata.generator` records *"sqlbenchdag@\<sha\>"* (the tool that made it), but no field for **who invoked the run**. When SBD-1 was produced by `claude-sonnet-5`, the ONLY link between that model attribution and capsule `162bbce7` is the registry doc — manually maintained, unsigned, editable. If someone tampers with the registry, no cryptographic evidence.
+
+**Rough shape of fix (B1, small):** `POST /v1/experiments` accepts an optional `submitter` field:
+
+```json
+{"config_yaml": "...", "submitter": {"type": "agent", "model": "claude-sonnet-5", "run_id": "sbd-1-2026-07-04", "notes": "..."}}
+```
+
+API records it in `metadata.submitted_via` in the sealed capsule. Not cryptographic, but tampering changes the integrity hash. Same trust model as the rest of the metadata.
+
+**Deferred (B2):** cryptographic signature by the agent. Requires keys, key management, verification tooling. Wait until publishing requirements demand it.
+
+## 10. Agent trace not durably captured (structured logging)
+
+**STATUS: OPEN** — surfaced 2026-07-04. Argument made empirically by SBD-2's failure (see journal specimen SBD-2). Direct blocker on classifying agent failures.
+
+Current agent trace lives in whatever terminal launched `autonomous_agent.py` — ephemeral in both the background-bash-task case (`/tmp/...`) and Ramona's own shell case (scrollback). Not captured at all: per-turn latency, tokens-in, tokens-out, model, timestamp. This is data that the testbed already captures for its own agent runs. Can't be re-engineered — models get deprecated, versions change.
+
+**Rough shape of fix (C, medium — Ramona's explicit choice 2026-07-04 over the smaller A=snapshot and B=simple `--log` alternatives):** structured JSONL logging in `autonomous_agent.py`. Per-turn records:
+
+```json
+{"turn": 3, "event": "tool_call", "name": "submit_experiment", "args": {...}, "ts": "..."}
+{"turn": 3, "event": "tool_result", "size_bytes": 812, "ts": "..."}
+{"turn": 4, "event": "llm_call", "model": "claude-sonnet-5", "tokens_in": 4209, "tokens_out": 3822, "latency_ms": 8420, "ts": "..."}
+{"turn": 4, "event": "final_answer", "text": "..."}
+```
+
+Session-start and session-end records with model, goal, outcome. Written to `--log <path>` at invocation. Naturally seals with the capsule if one was produced (copy into `results/<exp_id>/agent_trace.jsonl` at finalize).
+
+**Impact on the corpus.** Turns the registry into a *queryable* corpus rather than hand-curated. Enables cross-experiment analysis: token distributions, tool-choice histograms, per-turn latency variance, correlation between latency and outcome.
+
+---
+
 ## Related (already fixed)
 
 - **Agent silent-exit on empty/hallucinated tool response** — PR #106.

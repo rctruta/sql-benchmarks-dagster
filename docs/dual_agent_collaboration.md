@@ -17,6 +17,30 @@ Newest first.
 
 ---
 
+## SBD-2. Workflow-capability failure — `ollama/llama3` (8B) hits `MAX_EMPTY_RESPONSES=3` at turn 23/25 (2026-07-04, no capsule produced)
+
+**Context.** Same goal as SBD-1 (DuckDB analytical-aggregation scaling), verbatim. First live-fire against a weak local model, testing how far down the capability curve the workflow holds.
+
+**Outcome.** Agent gave up: three non-actionable responses in a row triggered `run_agent()`'s `MAX_EMPTY_RESPONSES=3` bailout. Turn count at bailout: 23/25 (not turn-budget-exhausted — still had turns available). No experiment was submitted; no capsule produced.
+
+**Distinct failure class.** NOT the same as turn-budget-exhaustion (the v4 pattern for weaker frontier models). SBD-2's failure is *the model stopped producing anything the tool-dispatcher or the final-answer-detector could act on* — empty or off-format outputs, three in a row. Called **workflow-capability failure** in the registry taxonomy: model has the tool inventory, has the workflow narrative, has AGENTS.md in-context, and still can't produce actionable text.
+
+**Why this is informative rather than disappointing.** llama3 (8B) is on the low end of the capability curve. The workflow requires: understanding tool schemas, constructing valid YAML from a template, choosing the right shape of result-reading tool for the question, doing in-context arithmetic on multi-scale timings, writing fluent diagnostic prose. That's a lot for 8B. SBD-1 (claude-sonnet-5, frontier) passed all six. SBD-2 failed at whichever of those crossed the model's threshold — the specific step isn't visible from the outside because *the model stopped producing tool calls*, not because it made bad ones.
+
+**What we know because Option-C isn't shipped yet.** The agent trace lives only in Ramona's terminal scrollback (she launched SBD-2 in her own shell after `ollama serve` couldn't start under the sqlbench project cwd — ollama's already running from the testbed project's terminal; that's fine, the daemon is machine-wide). What we HAVE: 23 turns, `MAX_EMPTY_RESPONSES=3` fired, no capsule. What we're MISSING because structured logging isn't in place: which turn was the last with a tool call; what the model was producing during the non-actionable turns; per-turn latency; tokens-in/out over the run.
+
+**SBD-2 IS the argument for shipping Option C.** Without structured JSONL logging, the specimen record for a failed run is *"model gave up at turn 23"* — which is what we've got, and which is not enough to categorize *how*. Next-session priority.
+
+**Follow-up questions this specimen leaves open** (all answerable once Option C ships):
+- Did llama3 make any successful tool calls at all before the non-actionable spiral?
+- Non-empty but non-tool-call text (thinking-aloud without acting) vs fully empty responses?
+- Hit a specific tool call and got confused by the response shape, or failed at earlier YAML construction?
+- Per-turn latency and token cost of a failed 23-turn run vs. SBD-1's successful 11-turn run?
+
+**Cross-references.** Registry: SBD-2 row. TODO.md: #10 (structured JSONL agent logging) is directly motivated by this specimen. — [C]
+
+---
+
 ## SBD-1. First end-to-end agent run against the completed toolbox — clean loop, real scaling analysis (2026-07-04, model: `anthropic/claude-sonnet-5`, capsule: `162bbce7`)
 
 **Context.** Punch list of 7 gaps surfaced by the v4 + v5 live-fires (see TODO.md, PRs #109–#124) all closed. This run was the verification pass: does the agent now use the tools well and produce a real answer to the same class of question that stumped v4?
