@@ -55,9 +55,23 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "list_suites",
-            "description": "List all benchmark test suites with their SQL content per engine. Use this to understand what queries are available to test.",
+            "name": "list_categories",
+            "description": "List the taxonomy of experiment categories (scaling, cross-engine, analytical, join, selectivity, null-handling, transport, memory, columnar, security, recursion, transactional). SMALL payload — CALL THIS FIRST to figure out which slice of the suite space matches the goal, then call `list_suites(category=<name>)` to see only the suites tagged with that category.",
             "parameters": {"type": "object", "properties": {}}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_suites",
+            "description": "List benchmark test suites. Default response is SMALL: name, engines, benchmark_names, categories per suite (no SQL). ALWAYS start with `list_categories` and pass `category` here to narrow — an unfiltered call returns every suite in the catalog. Set `include_sql=true` ONLY if you specifically need the raw SQL text (adds many KB per suite). Prefer `get_template` for adapting a working config.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "category": {"type": "string", "description": "Filter to suites tagged with this category (from list_categories)."},
+                    "include_sql": {"type": "boolean", "description": "Include raw SQL per engine. Default false — expensive."}
+                }
+            }
         }
     },
     {
@@ -297,8 +311,17 @@ def load_skills() -> str:
 def execute_tool(name: str, args: dict) -> str:
     """Dispatches the tool call to the REST API."""
     try:
-        if name == "list_suites":
-            res = httpx.get(f"{API_BASE}/v1/catalog/suites", timeout=30)
+        if name == "list_categories":
+            res = httpx.get(f"{API_BASE}/v1/catalog/categories", timeout=30)
+            return json.dumps(res.json(), indent=2)
+
+        elif name == "list_suites":
+            params = {}
+            if args.get("category"):
+                params["category"] = args["category"]
+            if args.get("include_sql"):
+                params["include_sql"] = "true"
+            res = httpx.get(f"{API_BASE}/v1/catalog/suites", params=params, timeout=30)
             return json.dumps(res.json(), indent=2)
 
         elif name == "list_templates":
@@ -473,9 +496,11 @@ def build_system_prompt() -> str:
         "by using ONLY the REST-API-backed tools below.\n\n"
         f"Registered tools (never invent names outside this set): {sorted(KNOWN_TOOLS)}\n\n"
         "Loop:\n"
-        "1. `list_suites` — see available test suites and the SQL each one runs. "
+        "0. `list_categories` — small taxonomy lookup. START HERE. Match the goal to one or more categories, then narrow.\n"
+        "1. `list_suites(category=<name>)` — see suites tagged with that category (names + engines + benchmark names, NO SQL by default). "
         "The user's goal may name a suite that doesn't exist; if so, pick the closest match "
-        "from what `list_suites` returns and note the substitution in your final answer.\n"
+        "from what `list_suites` returns and note the substitution in your final answer. "
+        "Only pass `include_sql=true` if you truly need to reason about the SQL itself.\n"
         "2. `list_templates` — see human-authored, VALID example configs. Each demonstrates a "
         "working (dataset shape + suite + engines) combination. This is your best defense against "
         "'shooting in the dark': every SQL suite expects specific tables and columns, and the templates "

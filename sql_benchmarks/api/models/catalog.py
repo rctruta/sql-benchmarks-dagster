@@ -11,7 +11,22 @@ class SuiteDetail(BaseModel):
     name: str
     engines: List[str]
     benchmark_names: List[str]
-    sql_content: Dict[str, Dict[str, str]]  # {engine: {benchmark_name: sql_text}}
+    # Categories from taxonomy.yaml (may be empty for uncategorized suites).
+    categories: List[str] = []
+    # `sql_content` is now OPTIONAL. Default response omits it (default
+    # per-suite payload dropped from ~5 KB to ~200 B). Callers pass
+    # `?include_sql=true` when they specifically need the raw SQL.
+    sql_content: Dict[str, Dict[str, str]] = {}
+
+
+class CategoryInfo(BaseModel):
+    name: str
+    description: str
+    suite_count: int
+
+
+class CatalogCategoriesResponse(BaseModel):
+    categories: List[CategoryInfo]
 
 
 class CatalogEnginesResponse(BaseModel):

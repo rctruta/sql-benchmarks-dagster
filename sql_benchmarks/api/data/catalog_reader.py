@@ -3,6 +3,7 @@ from typing import Dict, List
 
 from ...constants import ENGINE_SQL_DIALECTS, KNOWN_ENGINES, SQL_DIR
 from ..models.catalog import CatalogEnginesResponse, CatalogSuitesResponse, EngineInfo, SuiteDetail
+from . import taxonomy
 
 
 def _dialect_of(engine: str) -> str:
@@ -50,7 +51,7 @@ class CatalogReader:
                     dialect_sql[dialect][name] = f.read()
         return dialect_sql
 
-    def _suite_detail(self, suite_name: str) -> SuiteDetail:
+    def _suite_detail(self, suite_name: str, include_sql: bool = False) -> SuiteDetail:
         dialect_sql = self._dialect_sql(suite_name)
 
         # Expand dialect-keyed SQL back to engine-keyed SQL. Any engine
@@ -76,11 +77,20 @@ class CatalogReader:
             name=suite_name,
             engines=sorted(engines_present),
             benchmark_names=benchmark_names,
-            sql_content=sql_content,
+            categories=taxonomy.suite_categories(suite_name),
+            # Drop the SQL from the default payload — that's the 88 KB
+            # bloat that made turn 1 of an agent run expensive. Callers
+            # who need the SQL pass `include_sql=True`.
+            sql_content=sql_content if include_sql else {},
         )
 
-    def get_suites_response(self) -> CatalogSuitesResponse:
-        suites = [self._suite_detail(s) for s in self._suite_names()]
+    def get_suites_response(self, include_sql: bool = False,
+                            category: str | None = None) -> CatalogSuitesResponse:
+        names = self._suite_names()
+        if category:
+            allowed = set(taxonomy.suites_in_category(category))
+            names = [n for n in names if n in allowed]
+        suites = [self._suite_detail(s, include_sql=include_sql) for s in names]
         return CatalogSuitesResponse(suites=suites)
 
     def get_engines_response(self) -> CatalogEnginesResponse:

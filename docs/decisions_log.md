@@ -238,3 +238,19 @@ Human-and-agent parity: `sqlbench project means <id>` (CLI),
 **Why.** SBD-2's llama3 failure was partly workflow-capability, partly no procedural anchor. Skills compress the exploration space: template-adapt pattern, common pitfalls (each has broken a previous run), decision table for which projection to use.
 
 **Cross-refs.** SBD-2, `[[proactive-recording]]`, granular projections entry above.
+
+---
+
+## 2026-07-04 — Category taxonomy for suites (and capsules by inheritance)
+
+**Decision.** Add `sql_benchmarks/experiments/taxonomy.yaml` — vocabulary of categories + per-suite tags + per-capsule explicit overrides. Capsules inherit categories from the suite their config named. New `GET /v1/catalog/categories`. `GET /v1/catalog/suites` now supports `?category=` and defaults to omitting SQL content (add `?include_sql=true` if needed). New agent tool `list_categories`; existing `list_suites` gains `category` and `include_sql` params.
+
+**Fork closed.** Every experiment starting with an 88-KB `list_suites` dump. The first live-fire against the new capabilities (2026-07-04, capsule `803f3c94`) burned ~88 KB on turn 1 for content the agent didn't need — the SQL of every suite the agent won't touch.
+
+**Fork opened.** Capsule tagging is now first-class. `taxonomy.yaml` has a `capsules:` section for explicit overrides on top of suite inheritance — the substrate for "list capsules in category X" (endpoint deferred one iteration).
+
+**Why.** Ramona: *"need to do a better job helping the agent decide on an experiment. each time listing all suites is very inefficient and costly. we need the proper registry with categories. need a taxonomy for categories and each capsule be listed in a category (or more)."*
+
+**How it lands.** `list_categories` returns ~600 B (12 category names + descriptions + counts). `list_suites(category=scaling)` returns ~200 B per matching suite (no SQL). Expected turn-1 payload: from 88 KB down to ~2 KB. If the agent needs the actual SQL for a specific suite, `list_suites(category=X, include_sql=true)` gives it back.
+
+**Cross-refs.** First live-fire run: capsule `803f3c94` trace (`sql_benchmarks/experiments/agent_runs/20260704T212724Z_4610810d.jsonl`). Skill updated: `skills/build_scaling_experiment.md`.
