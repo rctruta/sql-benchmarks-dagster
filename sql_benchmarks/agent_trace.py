@@ -154,3 +154,20 @@ class AgentTrace:
             "turns_used": turns_used,
             "error": error,
         })
+
+    def delegate(self, stage: str, sub_run_id: str | None,
+                 input_summary: str, outcome: str,
+                 output_summary: str | None = None) -> None:
+        """Orchestrator-only event: 'the orchestrator delegated `stage` to a
+        specialist, which produced sub_run_id (if it involved an LLM),
+        with the given outcome'. Ties the multi-agent tree together —
+        readers walk from an orchestrator trace to each specialist's
+        trace by run_id. Pure-Python stages (no LLM) leave sub_run_id
+        as None."""
+        self._emit("delegate", {
+            "stage": stage,
+            "sub_run_id": sub_run_id,
+            "input_summary": input_summary,
+            "outcome": outcome,
+            "output_summary": output_summary,
+        })
