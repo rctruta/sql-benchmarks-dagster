@@ -187,3 +187,40 @@ applies to measurements applies to the meta-work: distill, seal (via
 git commit), keep.
 
 **Cross-refs.** Saved as feedback memory `[[proactive-recording]]`.
+
+---
+
+## 2026-07-04 — Granular projections shipped (all four, three surfaces each)
+
+**Decision.** Ship all four granular projections in one iteration —
+`get_means_by_partition`, `get_scaling_factor`,
+`get_replication_stability`, `get_experiment_summary` — each exposed on
+three surfaces (Python function, REST endpoint, CLI subcommand), each
+returning a `provenance` block naming the fragments consumed.
+
+**Fork closed.** Ship-one-at-a-time. There was no reason to sequence
+the four; they share a core (fragment reading + statistical primitives)
+and shipping together makes the parity constraint enforceable in one
+test suite. Every projection is tested three times: as Python function,
+as REST endpoint (matching the Python function's output), and as CLI
+subcommand (matching the Python function's output). If any surface
+drifts, one of those tests fails.
+
+**Fork opened.** Skills work (next scope item) can point at these
+tools by name. Sealed-analysis work (Fork B) has the provenance
+receipts it needs — every projection call is a small sealable object.
+
+**Why.** The context-budget problem this scope was named to solve.
+Raw `get_experiment_result` can be many KB of JSON per experiment;
+`get_experiment_summary` collapses that to a small dict + a prose
+narrative. Weaker-context models can drive the lab if they know to
+ask for the summary; *whether they know to ask* is itself a
+capability signal worth measuring — the [[proactive-recording]]
+JSONL logger captures which projection each turn used.
+
+Human-and-agent parity: `sqlbench project means <id>` (CLI),
+`GET /v1/results/<id>/projections/means` (REST), and
+`from sql_benchmarks.api.logic.projections import get_means_by_partition`
+(Python) all hit the same core function.
+
+**Cross-refs.** PR shipping this decision. Next scope item: skills.

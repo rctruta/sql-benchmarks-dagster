@@ -157,6 +157,59 @@ TOOLS = [
                 "required": ["experiment_id"]
             }
         }
+    },
+    # --- Granular projections (small returns) -------------------------------
+    # Prefer these over `get_experiment_result` when the question is
+    # specific and the context budget is tight. Each returns a small,
+    # focused payload with a `provenance` block naming the fragments
+    # consumed. See sql_benchmarks/api/logic/projections.py.
+    {
+        "type": "function",
+        "function": {
+            "name": "get_experiment_summary",
+            "description": "PREFER THIS as the FIRST read of a completed experiment: a compact digest with config identity, means per (partition, engine), scaling ratios per engine, and a prose `narrative`. Machine-readable AND readable. Small payload — safe under tight context budgets. Use `get_experiment_result` only if you need the raw fragments.",
+            "parameters": {
+                "type": "object",
+                "properties": {"experiment_id": {"type": "string"}},
+                "required": ["experiment_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_means_by_partition",
+            "description": "Mean duration per (partition, engine). Cheap, focused projection when the question is 'who was faster on partition X'. Smaller than `compare_engines_by_partition` — no rankings, no speedups, just means + sample counts.",
+            "parameters": {
+                "type": "object",
+                "properties": {"experiment_id": {"type": "string"}},
+                "required": ["experiment_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_scaling_factor",
+            "description": "Per-engine adjacent + overall scaling ratios across partitions. Use for 'how does X scale from small to large?' questions — this returns the RATIOS directly (mean_last/mean_first, adjacent ratios), sparing you the in-context arithmetic. Partitions ordered alphabetically; check `partitions_order` in the response — if the semantic order differs (small→medium→large vs alpha's 'large,medium,small'), reinterpret.",
+            "parameters": {
+                "type": "object",
+                "properties": {"experiment_id": {"type": "string"}},
+                "required": ["experiment_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_replication_stability",
+            "description": "Per (partition, engine): std, coefficient of variation, min, max across the raw per-replication durations. Use when the question is 'how noisy is this measurement' or 'can I trust these numbers'. If sample_count=1 and std=0, that fragment predates raw-durations capture — stability not measurable from what was stored.",
+            "parameters": {
+                "type": "object",
+                "properties": {"experiment_id": {"type": "string"}},
+                "required": ["experiment_id"]
+            }
+        }
     }
 ]
 
@@ -260,6 +313,22 @@ def execute_tool(name: str, args: dict) -> str:
 
         elif name == "get_experiment_result":
             res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}", timeout=30)
+            return json.dumps(res.json(), indent=2)
+
+        elif name == "get_experiment_summary":
+            res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}/projections/summary", timeout=30)
+            return json.dumps(res.json(), indent=2)
+
+        elif name == "get_means_by_partition":
+            res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}/projections/means", timeout=30)
+            return json.dumps(res.json(), indent=2)
+
+        elif name == "get_scaling_factor":
+            res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}/projections/scaling", timeout=30)
+            return json.dumps(res.json(), indent=2)
+
+        elif name == "get_replication_stability":
+            res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}/projections/stability", timeout=30)
             return json.dumps(res.json(), indent=2)
 
         else:
