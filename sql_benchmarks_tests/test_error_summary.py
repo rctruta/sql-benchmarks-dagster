@@ -4,8 +4,14 @@ Load-bearing contract these tests defend:
   - the agent's `/status` `detail` becomes actionable (carries the real
     executor error) instead of the useless generic "subprocess returned
     non-zero exit code" it produced before this change.
+  - in multi-engine runs, the failing engine is named — `[duckdb] Parser
+    Error ...` — so the agent can attribute the failure without guessing.
 """
-from sql_benchmarks.coordinator import _extract_error_summary, _tail_lines
+from sql_benchmarks.coordinator import (
+    _extract_error_summary,
+    _extract_failing_engine,
+    _tail_lines,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -95,3 +101,67 @@ def test_tail_returns_all_when_shorter_than_n():
 def test_tail_of_empty_string():
     assert _tail_lines("", n=50) == ""
     assert _tail_lines(None, n=50) == ""
+
+
+# ---------------------------------------------------------------------------
+# _extract_failing_engine  (Gap 5)
+# ---------------------------------------------------------------------------
+
+def test_engine_extracted_from_duckdb_op_name():
+    """The exact pattern the 2026-07-03 v5 live-fire produced: DuckDB was
+    the failing engine but the bare 'Parser Error' didn't name it. The op
+    name in Dagster's error wrapper is where the engine lives."""
+    log = """
+    dagster._core.errors.DagsterExecutionStepExecutionError: Error occurred
+    while executing op "e_155eddf8__duckdb_benchmark_analytical_wall":
+    _duckdb.ParserException: Parser Error: syntax error at or near "GROUP"
+    """
+    assert _extract_failing_engine(log) == "duckdb"
+
+
+def test_engine_extracted_from_postgres_asset_prefix():
+    """Postgres uses the asymmetric asset prefix `pg_` (per
+    utils/common.py::get_engine_asset_prefix). The extractor must invert
+    that so agents see the engine name, not the prefix."""
+    log = 'Error occurred while executing op "e_abcd1234__pg_benchmark_selectivity"'
+    assert _extract_failing_engine(log) == "postgres"
+
+
+def test_engine_extracted_from_quack_pushdown_prefix():
+    """Multi-underscore engine names (like quack_pushdown) must round-trip
+    correctly through the non-greedy regex."""
+    log = 'Error occurred while executing op "e_deadbeef__quack_pushdown_benchmark_tpch"'
+    assert _extract_failing_engine(log) == "quack_pushdown"
+
+
+def test_last_failing_engine_wins_when_multiple():
+    """A multi-engine run may log several op errors as Dagster tears the
+    step down. The engine we care about is the one that actually killed
+    the run — walk from the end."""
+    log = """
+    Error occurred while executing op "e_abcd1234__duckdb_benchmark_selectivity"
+    ...more output between failures...
+    Error occurred while executing op "e_abcd1234__pg_benchmark_selectivity"
+    """
+    assert _extract_failing_engine(log) == "postgres"
+
+
+def test_no_engine_when_no_op_pattern():
+    """If the traceback doesn't contain a Dagster op-name (e.g., a purely
+    Python-level exception before any op ran), return None so the caller
+    can fall back to the raw error line without a bogus prefix."""
+    log = "ValueError: matrix missing\nTraceback (most recent call last):\n..."
+    assert _extract_failing_engine(log) is None
+
+
+def test_no_engine_on_empty_input():
+    assert _extract_failing_engine("") is None
+    assert _extract_failing_engine(None) is None
+
+
+def test_engine_extraction_ignores_op_names_without_benchmark_segment():
+    """Only benchmark ops carry the engine prefix. Non-benchmark ops (e.g.,
+    the `performance_dashboard` reporting step) don't match the pattern
+    and shouldn't produce a false positive."""
+    log = 'Error occurred while executing op "e_abcd1234__performance_dashboard"'
+    assert _extract_failing_engine(log) is None
