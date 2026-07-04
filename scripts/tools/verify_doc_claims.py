@@ -44,6 +44,7 @@ IGNORE = {
 LIVE_FIRE_JOURNALS = {
     "docs/dual_agent_collaboration.md",
     "docs/experiment_registry.md",
+    "docs/decisions_log.md",
 }
 
 

@@ -163,7 +163,9 @@ def test_list_engines(client):
     }
 
 
-def test_list_suites_includes_sql_content(client):
+def test_list_suites_default_drops_sql(client):
+    """Default response omits sql_content — the 88 KB bloat that made
+    turn 1 of an agent run expensive. Only name/engines/benchmarks/categories."""
     resp = client.get("/v1/catalog/suites")
     assert resp.status_code == 200
     suites = resp.json()["suites"]
@@ -171,17 +173,22 @@ def test_list_suites_includes_sql_content(client):
     suite = suites[0]
     assert suite["name"] == "selectivity"
     assert suite["benchmark_names"] == ["q_scan"]
-    # sql_content is keyed by engine name (agent-friendly). Engines sharing
-    # a dialect get the same SQL back — an agent asking for `quack` SQL
-    # gets the same text as one asking for `duckdb` SQL.
-    assert suite["sql_content"]["duckdb"]["q_scan"] == "SELECT 1;"
-    assert suite["sql_content"]["quack"]["q_scan"] == "SELECT 1;"
-    assert suite["sql_content"]["quack_pushdown"]["q_scan"] == "SELECT 1;"
+    assert suite["sql_content"] == {}  # dropped by default
+    assert "categories" in suite  # tagged from taxonomy.yaml (may be empty for uncategorized)
     assert set(suite["engines"]) >= {
         "duckdb", "postgres",
         "quack", "quack_pushdown", "quack_adbc", "quack_arrow",
         "postgres_transport",
     }
+
+
+def test_list_suites_with_include_sql_returns_sql_content(client):
+    resp = client.get("/v1/catalog/suites?include_sql=true")
+    assert resp.status_code == 200
+    suite = resp.json()["suites"][0]
+    assert suite["sql_content"]["duckdb"]["q_scan"] == "SELECT 1;"
+    assert suite["sql_content"]["quack"]["q_scan"] == "SELECT 1;"
+    assert suite["sql_content"]["quack_pushdown"]["q_scan"] == "SELECT 1;"
 
 
 def test_list_templates_endpoint(client, tmp_path, monkeypatch):

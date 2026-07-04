@@ -1,17 +1,35 @@
-from fastapi import APIRouter, HTTPException
+from typing import Optional
+
+from fastapi import APIRouter, HTTPException, Query
 
 from ..data.catalog_reader import CatalogReader
 from ..data.templates_reader import TemplatesReader
+from ..data import taxonomy
 from ..models.catalog import (
+    CatalogCategoriesResponse,
     CatalogEnginesResponse,
     CatalogSuitesResponse,
     CatalogTemplatesResponse,
+    CategoryInfo,
     TemplateContent,
 )
 
 router = APIRouter(prefix="/v1/catalog", tags=["catalog"])
 _reader = CatalogReader()
 _templates = TemplatesReader()
+
+
+@router.get("/categories", response_model=CatalogCategoriesResponse)
+def list_categories():
+    """List the category taxonomy. Small payload — call this FIRST to
+    narrow the suite search before calling `list_suites`. See
+    `sql_benchmarks/experiments/taxonomy.yaml` for the vocabulary."""
+    cats = taxonomy.list_categories()
+    counts = taxonomy.category_counts()
+    return CatalogCategoriesResponse(categories=[
+        CategoryInfo(name=name, description=desc, suite_count=counts.get(name, 0))
+        for name, desc in cats.items()
+    ])
 
 
 @router.get("/engines", response_model=CatalogEnginesResponse)
@@ -21,9 +39,18 @@ def list_engines():
 
 
 @router.get("/suites", response_model=CatalogSuitesResponse)
-def list_suites():
-    """List all benchmark test suites with their SQL content per engine."""
-    return _reader.get_suites_response()
+def list_suites(
+    category: Optional[str] = Query(None, description="Filter to suites tagged with this category"),
+    include_sql: bool = Query(False, description="Include raw SQL per engine (large payload; default off)"),
+):
+    """List benchmark test suites.
+
+    Default response is small: name, engines, benchmark_names, categories.
+    Pass `?category=X` to filter to a slice of the vocabulary (see
+    `/v1/catalog/categories`). Pass `?include_sql=true` to also return
+    the raw SQL keyed by engine (a KB per suite — only ask if you need
+    to reason about the SQL itself)."""
+    return _reader.get_suites_response(include_sql=include_sql, category=category)
 
 
 @router.get("/templates", response_model=CatalogTemplatesResponse)

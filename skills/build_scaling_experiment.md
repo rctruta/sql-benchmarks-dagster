@@ -6,11 +6,12 @@
 
 ## Recipe
 
-1. `list_suites` → pick the suite whose SQL matches the *shape* of the question. For "analytical aggregation scaling", use `analytical_wall`. For "selectivity/index scaling", use `selectivity`.
-2. `list_templates` → `get_template quickstart` (DuckDB-only, no Docker) OR `get_template scaling_depth` (multi-engine, needs Docker). Use `quickstart` unless the question requires Postgres.
-3. Adapt the fetched YAML: keep `dataset.tables.*.rows` as the string alias `rows` (not a literal integer); add the scale points you want to `definitions.rows`; list them in `execution.matrix.rows`.
-4. `submit_experiment` with the adapted YAML.
-5. `get_experiment_status` until `complete` or `failed`.
+1. `list_categories` → the vocabulary is small. For scaling questions, `scaling` is the tag. For cross-engine investigations, also `cross-engine`. For selectivity/index behavior, `selectivity`.
+2. `list_suites` **with `category=<name>`** → returns only the suites tagged with that category, without SQL bloat. For "analytical aggregation scaling", `list_suites(category="scaling")` narrows to `analytical_wall` and any other scaling-tagged suite. NEVER call `list_suites` without a category unless you have no idea what you're looking for — an unfiltered call is expensive.
+3. `list_templates` → `get_template quickstart` (DuckDB-only, no Docker) OR `get_template scaling_depth` (multi-engine, needs Docker). Use `quickstart` unless the question requires Postgres.
+4. Adapt the fetched YAML: keep `dataset.tables.*.rows` as the string alias `rows` (not a literal integer); add the scale points you want to `definitions.rows`; list them in `execution.matrix.rows`.
+5. `submit_experiment` with the adapted YAML.
+6. `get_experiment_status` until `complete` or `failed`.
 
 ## Adapt-template pattern
 

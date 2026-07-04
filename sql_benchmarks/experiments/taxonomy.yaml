@@ -1,0 +1,51 @@
+# Category taxonomy for suites (and, by inheritance, capsules).
+#
+# `categories` — the vocabulary. Names are the canonical identifier the
+# API and CLI use; descriptions are what the agent sees when it calls
+# `list_categories`.
+#
+# `suites` — maps every on-disk suite (under sql_benchmarks/scripts/sql/)
+# to one or more categories. A suite without an entry falls under the
+# implicit `uncategorized` bucket at query time.
+#
+# `capsules` — optional per-capsule OVERRIDES. When a capsule (result)
+# needs extra tags beyond what its suite provides, list them here. By
+# default a capsule inherits categories from its suite.
+
+categories:
+  scaling:        Matrix-varying row counts; growth curves; how does X scale.
+  cross-engine:   Comparing two or more engines head-to-head.
+  analytical:     GROUP BY, aggregates, columnar-friendly workloads.
+  join:           Inner joins, outer joins, foreign-key patterns.
+  selectivity:    Predicate filtering, index behavior, tipping points.
+  null-handling:  Two-valued vs three-valued logic; IS NOT DISTINCT FROM; sentinels.
+  transport:      ADBC / Arrow / native protocol round-trip.
+  memory:         Sort spill, OOM, buffer pool, memory-bound regimes.
+  columnar:       Columnar engines (DuckDB, Quack) as the primary object of study.
+  security:       SQL injection, privilege boundaries, DoS via query shape.
+  recursion:      CTE recursion, graph traversal, hypergraph patterns.
+  transactional:  ACID, isolation levels, concurrent-write behavior.
+
+suites:
+  acid_test:        [cross-engine, transactional]
+  analytical_wall:  [analytical, scaling]
+  group_by:         [analytical]
+  hypergraph:       [recursion, join]
+  joins:            [join, cross-engine]
+  null_logic:       [null-handling]
+  null_sentinel:    [null-handling]
+  outer_join:       [join]
+  quack_transport:  [transport, columnar]
+  recursion:        [recursion]
+  recursive_graph:  [recursion, join]
+  security:         [security]
+  selectivity:      [selectivity, join]
+  sort_spill:       [memory]
+  tpch:             [analytical, cross-engine, join]
+  transport:        [transport]
+
+capsules:
+  # Explicit overrides / extra tags for specific committed capsules.
+  # Capsules NOT listed here inherit from their config's `test_suite`.
+  461beee8: [selectivity, cross-engine]   # Postgres tipping-point selectivity study
+  28f7aa1c: [selectivity, cross-engine]
