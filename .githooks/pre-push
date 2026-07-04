@@ -1,0 +1,57 @@
+#!/bin/bash
+# Refuse to push if the local test suite is red.
+#
+# Why this hook exists: three merges to main (PRs #123, #124, and the ones
+# preceding this hook) shipped with a broken test suite because the agent
+# used `gh pr merge --admin` to bypass the failing CI check instead of
+# fixing the root cause. See docs/dual_agent_collaboration.md SBD-3.
+#
+# CI on GitHub is the alarm bell. It is NOT the gate — main is unprotected,
+# `--admin` bypasses even a protected main, and CI on this private repo
+# has silently dropped runs before (see memory: ci-actions-billing-blocked).
+# The gate has to run on the pusher's machine.
+#
+# Enable once per checkout:  git config core.hooksPath .githooks
+#
+# Emergency bypass (do so with intent, not as a habit; note WHY in the commit):
+#   git push --no-verify
+set -e
+
+ROOT="$(git rev-parse --show-toplevel)"
+
+# Pick python: prefer the checkout's venv, then uv, then system python3.
+PY="$ROOT/.venv/bin/python"
+[ -x "$PY" ] || PY="$ROOT/venv/bin/python"
+[ -x "$PY" ] || PY="$(command -v python3 || true)"
+if [ -z "$PY" ] || [ ! -x "$PY" ]; then
+    echo "[pre-push] no python found to run pytest — refusing push" >&2
+    echo "  install deps first:  uv sync --extra dev" >&2
+    exit 1
+fi
+
+if ! "$PY" -c "import pytest" 2>/dev/null; then
+    echo "[pre-push] pytest not importable from $PY — refusing push" >&2
+    echo "  install dev deps:  uv sync --extra dev" >&2
+    exit 1
+fi
+
+# Prepend the venv's bin dir so subprocesses spawned by tests (e.g.
+# test_golden_capsule invokes ./run.sh, which calls `python`) resolve
+# `python` to the venv's interpreter, matching what `uv run pytest` sets
+# up. Without this the hook is stricter than CI (which uses raw python
+# on ubuntu-latest where `python` is on PATH by default).
+VENV_BIN="$(dirname "$PY")"
+export PATH="$VENV_BIN:$PATH"
+
+echo "[pre-push] running full test suite (this is the gate main relies on)…"
+if ! "$PY" -m pytest sql_benchmarks_tests/ \
+        --ignore=sql_benchmarks_tests/test_actian_integration.py \
+        -q --no-header; then
+    echo "" >&2
+    echo "[pre-push] REFUSING PUSH: test suite is red." >&2
+    echo "  Fix the failing tests before pushing. If you truly must push a" >&2
+    echo "  broken branch (never main), bypass with:  git push --no-verify" >&2
+    exit 1
+fi
+
+exit 0
