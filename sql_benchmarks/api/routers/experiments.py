@@ -4,7 +4,7 @@ import yaml
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from ...capsule_registry import check_registry
-from ...constants import CONFIG_ARCHIVE_DIR, EXPERIMENTS_DIR, ROOT_DIR
+from ...constants import CONFIG_ARCHIVE_DIR, EXPERIMENTS_DIR, RESULTS_DIR, ROOT_DIR
 from ...coordinator import ExperimentCoordinator
 from ...utils.hasher import generate_experiment_hash
 from ...validation import validate_experiment_config
@@ -56,12 +56,23 @@ def submit_experiment(body: ExperimentSubmitRequest, background_tasks: Backgroun
 
     exp_id = generate_experiment_hash(config, ROOT_DIR)
 
-    registry_status = check_registry(exp_id, config, CONFIG_ARCHIVE_DIR)
+    registry_status = check_registry(exp_id, config, CONFIG_ARCHIVE_DIR, results_dir=RESULTS_DIR)
     if registry_status == "duplicate":
+        # Two shapes of duplicate: already-completed (config archived) or
+        # currently-running (running marker present). The agent needs to know
+        # which — a currently-running experiment shouldn't be re-submitted;
+        # a completed one has retrievable results.
+        if _reader.is_running(exp_id):
+            detail = (
+                f"Experiment {exp_id} is already running. Poll "
+                f"/v1/experiments/{exp_id}/status instead of re-submitting."
+            )
+        else:
+            detail = f"Results already exist for this experiment. Retrieve them at /v1/results/{exp_id}"
         return ExperimentSubmitResponse(
             experiment_id=exp_id,
             status="duplicate",
-            detail=f"Results already exist for this experiment. Retrieve them at /v1/results/{exp_id}",
+            detail=detail,
         )
     if registry_status == "collision":
         raise HTTPException(
@@ -94,9 +105,13 @@ def get_status(exp_id: str):
 
     detail = None
     # Priority: complete > failed > running > queued > not_found.
-    # "failed" comes before "running" because a run that produced partial
-    # fragments and then died would satisfy both results_exist() and has_failure();
-    # the failure marker is the authoritative terminal state.
+    # `failed` comes before `running` because a run that produced partial
+    # fragments and then died would satisfy both is_running() and
+    # has_failure() — the failure marker is the authoritative terminal state.
+    # `running` uses the explicit running marker (running_marker.py), NOT the
+    # results-dir-exists heuristic — the results dir only appears at finalize,
+    # which is too late for the agent (it would still see `queued` for the
+    # entire execution window). See Gap 1 in TODO.md.
     if _reader.is_complete(exp_id):
         status = "complete"
     elif _reader.has_failure(exp_id):
@@ -104,7 +119,7 @@ def get_status(exp_id: str):
         failure = _reader.get_failure(exp_id)
         if failure:
             detail = f"[{failure.get('stage', 'unknown')}] {failure.get('error', '')}".strip()
-    elif _reader.results_exist(exp_id):
+    elif _reader.is_running(exp_id):
         status = "running"
     elif _reader.is_queued(exp_id):
         status = "queued"
