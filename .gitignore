@@ -40,9 +40,10 @@ sql_benchmarks/experiments/results/
 sql_benchmarks/experiments/configs/
 sql_benchmarks/experiments/violations/
 sql_benchmarks/experiments/reports/
-# Agent-run traces (one JSONL per autonomous_agent.py run). Transient local
-# artifacts today; a specific run can be un-ignored below once its analysis
-# is promoted to a sealed analysis-capsule (Fork B, see docs/decisions_log.md).
+# Agent-run traces: transient by default, but SPECIFIC runs that back
+# published claims are committed with `git add -f`. See
+# scratch/reducing_agent_search_scope.md — the runs it cites are the
+# empirical evidence for the article's numbers and must be durable.
 sql_benchmarks/experiments/agent_runs/
 # active.yaml is runtime staging — coordinator overwrites it on every run
 # with the experiment_id-injected config (coordinator.py:67-69), and tests
@@ -73,6 +74,9 @@ dagster_home/
 # new docs (it once dropped FAQ.md).
 scratch/*
 !scratch/README.md
+# Publication-track drafts that need to be durable (committed) even while
+# still living in scratch/. Promote to docs/ when polished.
+!scratch/reducing_agent_search_scope.md
 ARTICLE_DRAFT.md                                   # article scaffold (local)
 architecture/                                      # unpublished red-team/AI-security WIP
 sql_benchmarks/experiments/reports/                # runtime-generated report output
