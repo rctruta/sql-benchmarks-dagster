@@ -43,6 +43,7 @@ IGNORE = {
 # Paths are relative to REPO_ROOT.
 LIVE_FIRE_JOURNALS = {
     "docs/dual_agent_collaboration.md",
+    "docs/experiment_registry.md",
 }
 
 
