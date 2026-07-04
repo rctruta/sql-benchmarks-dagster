@@ -1,4 +1,5 @@
 import os
+import re
 import yaml
 import shutil
 import time
@@ -59,6 +60,40 @@ def _tail_lines(text: str, n: int = 50) -> str:
     if not text:
         return ""
     return "\n".join(text.splitlines()[-n:])
+
+
+# Dagster op names follow: e_<8hex>__<engine_prefix>_benchmark_<suite>
+# Engine prefix comes from utils/common.py::get_engine_asset_prefix: `pg_` for
+# postgres, `<engine>_` for everything else. So the string between `__` and
+# `_benchmark` in the op name is the engine's asset prefix.
+_OP_NAME_RE = re.compile(r'executing op "e_[0-9a-f]{8}__(.+?)_benchmark')
+
+# Inverse of get_engine_asset_prefix. Only `pg` is asymmetric; every other
+# engine prefix is its own name.
+_ASSET_PREFIX_TO_ENGINE = {"pg": "postgres"}
+
+
+def _extract_failing_engine(captured: str) -> Optional[str]:
+    """Return the engine name of the failing op if the traceback names one.
+
+    Dagster wraps every step's exception in an outer message of the form
+    `Error occurred while executing op "e_<id>__<engine>_benchmark_..."`.
+    In a multi-engine run, a bare error line like `Parser Error at or near
+    "GROUP"` is ambiguous (DuckDB and Postgres both use `Parser Error:`);
+    without the op name the agent has to guess which engine failed and
+    burns turns doing so — the failure mode observed in the 2026-07-03
+    v5 live-fire (specimen equivalents on the sqlbenchdag side).
+
+    Returns None if no op-name pattern matches. Walks from the END of the
+    captured output so we get the LAST failing op — the one that
+    ultimately killed the subprocess."""
+    if not captured:
+        return None
+    matches = _OP_NAME_RE.findall(captured)
+    if not matches:
+        return None
+    prefix = matches[-1]
+    return _ASSET_PREFIX_TO_ENGINE.get(prefix, prefix)
 from .utils.hasher import generate_experiment_hash, generate_integrity_seal
 from .utils.common import copy_suite_queries
 from .utils.semantic_auditor import SemanticAuditor
@@ -171,15 +206,19 @@ class ExperimentCoordinator:
                 success, captured = self._execute_direct(local_env)
 
                 if not success:
-                    # Extract the load-bearing error line for the marker's
-                    # `error` field, and the tail of the full output for
-                    # `traceback`. The agent's /status `detail` becomes
-                    # actionable (e.g., "Catalog Error: Table with name c
-                    # does not exist") instead of a useless "subprocess
-                    # returned non-zero exit code".
+                    # Build the marker's `error` field: engine name (if the
+                    # Dagster op-name pattern is present in the traceback) +
+                    # the load-bearing error line. `[duckdb] Parser Error at
+                    # or near "GROUP"` disambiguates which engine failed in a
+                    # multi-engine run — without it, the agent can't tell
+                    # DuckDB errors from Postgres ones (both use `Parser
+                    # Error:`) and burns turns guessing.
+                    engine = _extract_failing_engine(captured or "")
+                    summary = _extract_error_summary(captured or "")
+                    error_field = f"[{engine}] {summary}" if engine else summary
                     self._write_failure(
                         "execution",
-                        _extract_error_summary(captured or ""),
+                        error_field,
                         _tail_lines(captured or "", 50),
                     )
                     print(f"[FAILURE] Technical execution failed.")

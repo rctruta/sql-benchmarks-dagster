@@ -61,7 +61,7 @@ def submit_experiment(body: ExperimentSubmitRequest, background_tasks: Backgroun
         return ExperimentSubmitResponse(
             experiment_id=exp_id,
             status="duplicate",
-            detail="Results already exist for this experiment. Retrieve them at /v1/results/{exp_id}",
+            detail=f"Results already exist for this experiment. Retrieve them at /v1/results/{exp_id}",
         )
     if registry_status == "collision":
         raise HTTPException(
