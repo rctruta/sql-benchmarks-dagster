@@ -1,0 +1,29 @@
+# Edge case 1: NOVEL goal — no existing capsule answers it, so
+# config_builder must produce a fresh config and the lab must actually
+# execute. Tests whether the multi-agent equalization (Finding 12)
+# survives when config-building is genuinely hard (the prior corpus was
+# mostly duplicate-served).
+#
+# Model ladder weak->strong in ONE contract (schema v2: models list).
+
+meta:
+  name: "Edge 1 — novel goal, fresh execution, model ladder"
+  description: >
+    Selectivity question never asked before in the corpus. Grader
+    (grade_analyses.py) verifies published numbers against whatever
+    capsule each run produces.
+
+driver: multi_agent
+models: [gemini/gemini-2.5-flash, gemini/gemini-2.5-pro, anthropic/claude-sonnet-5, gemini/gemini-3.5-flash, anthropic/claude-fable-5]
+replications: 2
+
+goal: >
+  Using DuckDB only, investigate how predicate selectivity affects query
+  time: compare a very selective filter (returning roughly 0.1% of rows)
+  against a broad one (roughly 10% of rows) on a table of about one
+  million rows. Report the timings and whether more selective means
+  meaningfully faster.
+
+cells:
+  orchestrated:
+    flags: {}

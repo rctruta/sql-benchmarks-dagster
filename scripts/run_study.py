@@ -45,9 +45,18 @@ def load_contract(path: str) -> tuple:
         raw = f.read()
     study_id = hashlib.sha256(raw).hexdigest()[:8]
     contract = yaml.safe_load(raw)
-    for key in ("driver", "model", "replications", "goal", "cells"):
+    for key in ("driver", "replications", "goal", "cells"):
         if key not in contract:
             raise ValueError(f"study contract missing required key: '{key}'")
+    # Single `model:` or a `models:` list (weak→strong sweeps in ONE
+    # contract). Normalized to a list either way.
+    if "models" in contract:
+        if not isinstance(contract["models"], list) or not contract["models"]:
+            raise ValueError("'models' must be a non-empty list")
+    elif "model" in contract:
+        contract["models"] = [contract["model"]]
+    else:
+        raise ValueError("study contract missing required key: 'model' (or 'models')")
     if contract["driver"] not in ("monolith", "multi_agent"):
         raise ValueError(f"unknown driver '{contract['driver']}' (monolith | multi_agent)")
     for cell_name, cell in contract["cells"].items():
@@ -56,23 +65,25 @@ def load_contract(path: str) -> tuple:
     return study_id, contract
 
 
-def run_cell_rep(contract: dict, study_id: str, cell_name: str, rep: int) -> str:
-    """Run one (cell, rep). Returns the outcome string."""
+def run_cell_rep(contract: dict, study_id: str, cell_name: str, rep: int,
+                 model: str) -> str:
+    """Run one (cell, rep, model). Returns the outcome string."""
     flags = dict(contract["cells"][cell_name]["flags"])
-    study_stamp = {"study_id": study_id, "cell": cell_name, "rep": rep}
+    study_stamp = {"study_id": study_id, "cell": cell_name, "rep": rep,
+                   "study_model": model}
 
     if contract["driver"] == "monolith":
         # Import inside so --dry-run works without litellm installed.
         sys.path.insert(0, os.path.join(_REPO_ROOT, "scripts"))
         import autonomous_agent
         autonomous_agent.run_agent(
-            contract["goal"], model=contract["model"],
+            contract["goal"], model=model,
             study_stamp=study_stamp, **flags,
         )
         return "ran"  # run_agent prints its own outcome; trace has run_end
     else:  # multi_agent
         from sql_benchmarks.agent_orchestrator import Orchestrator
-        orch = Orchestrator(goal=contract["goal"], model=contract["model"])
+        orch = Orchestrator(goal=contract["goal"], model=model)
         orch.trace.prompt_provenance(components={}, ablation_flags={
             "architecture": "orchestrator", **study_stamp})
         result = orch.run()
@@ -83,6 +94,7 @@ def main():
     parser = argparse.ArgumentParser(description="Contract-driven study runner")
     parser.add_argument("contract", help="Path to the study YAML")
     parser.add_argument("--cell", help="Run only this cell")
+    parser.add_argument("--model", help="Run only this model (from the contract's list)")
     parser.add_argument("--dry-run", action="store_true", help="Print the matrix and exit")
     args = parser.parse_args()
 
@@ -92,27 +104,34 @@ def main():
         if args.cell not in cells:
             raise SystemExit(f"unknown cell '{args.cell}' (have: {cells})")
         cells = [args.cell]
+    models = contract["models"]
+    if args.model:
+        if args.model not in models:
+            raise SystemExit(f"unknown model '{args.model}' (have: {models})")
+        models = [args.model]
     reps = int(contract["replications"])
 
-    print(f"study_id={study_id}  driver={contract['driver']}  model={contract['model']}")
-    print(f"matrix: {len(cells)} cell(s) x {reps} rep(s) = {len(cells) * reps} runs")
+    print(f"study_id={study_id}  driver={contract['driver']}  models={models}")
+    print(f"matrix: {len(models)} model(s) x {len(cells)} cell(s) x {reps} rep(s) "
+          f"= {len(models) * len(cells) * reps} runs")
     for c in cells:
         print(f"  {c}: {contract['cells'][c]['flags']}")
     if args.dry_run:
         return
 
     outcomes = {}
-    for cell in cells:
-        for rep in range(1, reps + 1):
-            print(f"\n=== study={study_id} cell={cell} rep={rep} ===")
-            # Per-run isolation: a transient API error in one run must not
-            # kill the rest of the matrix (it did, on the first execution
-            # of guidance_floor_2x2 — floor reps 2-3 never ran).
-            try:
-                outcomes[(cell, rep)] = run_cell_rep(contract, study_id, cell, rep)
-            except Exception as e:
-                print(f"    EXCEPTION: {type(e).__name__}: {e}")
-                outcomes[(cell, rep)] = f"exception: {e}"
+    for model in models:
+        for cell in cells:
+            for rep in range(1, reps + 1):
+                print(f"\n=== study={study_id} model={model} cell={cell} rep={rep} ===")
+                # Per-run isolation: a transient API error in one run must
+                # not kill the rest of the matrix.
+                try:
+                    outcomes[(model, cell, rep)] = run_cell_rep(
+                        contract, study_id, cell, rep, model)
+                except Exception as e:
+                    print(f"    EXCEPTION: {type(e).__name__}: {e}")
+                    outcomes[(model, cell, rep)] = f"exception: {e}"
 
     print(f"\nstudy {study_id} complete: {len(outcomes)} runs")
     print("analyze:  python scripts/tools/analyze_agent_traces.py")

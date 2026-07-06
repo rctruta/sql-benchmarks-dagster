@@ -1,0 +1,22 @@
+# Edge case 4: AMBIGUOUS goal — vague phrasing that requires judgment:
+# the right move is the sort_spill suite (memory category), DuckDB-only,
+# and an honest note about what "doesn't fit in memory" was mapped to.
+# Measures suite-selection judgment, not workflow mechanics.
+
+meta:
+  name: "Edge 4 — ambiguous goal (memory-pressure sorting), model ladder"
+  description: >
+    No suite is named; the agent must map "sorting data that doesn't
+    fit in memory" to the sort_spill suite (or argue an alternative).
+
+driver: multi_agent
+models: [gemini/gemini-2.5-flash, gemini/gemini-2.5-pro, anthropic/claude-sonnet-5, gemini/gemini-3.5-flash, anthropic/claude-fable-5]
+replications: 2
+
+goal: >
+  I have a feeling DuckDB gets much slower when it has to sort data that
+  doesn't fit in memory. Can you check whether that's true?
+
+cells:
+  orchestrated:
+    flags: {}

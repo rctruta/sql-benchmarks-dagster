@@ -318,3 +318,21 @@ Human-and-agent parity: `sqlbench project means <id>` (CLI),
 **Side note (Ramona).** The shared goal's "no Docker" clause is redundant — DuckDB is in-process. Kept verbatim anyway in running studies: the goal string is part of the cross-study anchor (same goal-hash across all 9+ studies); changing it breaks comparability. New-goal studies should drop it.
 
 **Cross-refs.** Findings 2, 3, 9 in `scratch/reducing_agent_search_scope.md`. TODO #11 (agent_runs reorg, deferred).
+
+---
+
+## 2026-07-06 — Harness engineering tenets: mapping + the own-repo question
+
+**Context.** Ramona surveyed the emerging harness-engineering literature; the core tenets converge with what the lab built independently. Mapping (her table → lab implementation):
+
+| Tenet | Lab status |
+|---|---|
+| Sentinel-driven state machines | PARTIAL — orchestrator stages + `tool_preconditions` gates (PR #137); "passing" is grader-controlled (PR #145), not agent-claimed. No immutable gate markers yet. |
+| Compaction interceptors | MISSING — no context management; runs are short enough so far. Becomes real at longer-horizon tasks. |
+| Capability gating / restricted tool subsets | IMPLEMENTED — specialist tool subsets (PR #135), strict-subset tests. |
+| Fail-closed safety layers | PARTIAL — repo level: pre-push + branch protection (PR #129); agent level: precondition gates. No OS-level sandboxing (agents only reach the lab through the REST API, which bounds the blast radius, but the monolith/specialist processes themselves are unsandboxed). |
+| Deterministic mocking | IMPLEMENTED — 24+ state-transition tests with mocked model outputs. |
+
+**Decision (own repo?).** The harness (`agent_tools/specialist/orchestrator/trace`, `run_study`, analyzer, grader) stays IN this repo until a second consumer exists. Extraction trigger: ai-security-testbed importing it, or the article requiring a citable standalone artifact. Extracting now would freeze the API exactly while the edge-case studies are telling us which states/tools are missing (e.g., the refusal state that edge-3 is expected to surface).
+
+**Cross-refs.** Edge-case contracts `edge1_novel_goal`, `edge3_adversarial_goal`, `edge4_ambiguous_goal`; run_study schema v2 (`models:` list — weak→strong ladder in one contract).
