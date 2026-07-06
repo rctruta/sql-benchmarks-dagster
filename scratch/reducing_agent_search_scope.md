@@ -285,3 +285,25 @@ Follow-up to attribution 2×2 (cd246804). AGENTS.md + skills held OFF everywhere
 **Finding 6 (meta) — ablation studies are harness fuzzers.** The floor condition made sonnet-5 fire 4–5 parallel tool calls per turn (an emergent efficiency behavior under sparse guidance), which exposed a real latent harness bug: error-coaching messages appended mid-batch broke the Anthropic tool_use/tool_result pairing (API 400). Latent since the coaching feature shipped; only this condition triggered it. Fixed (coaching now buffered until after the batch) in both loops. The first floor rep also crashed the whole study — the runner now isolates per-run exceptions.
 
 **Combined picture across both studies (sonnet-5, this task):** guidance layers ranked by measured value — tool schema (necessary and sufficient) > description steering (variance reduction, ~free) > prose workflow (redundant, mildly costly) > skills (marginal turn reduction) > AGENTS.md (pure cost, ~50K/run). The design implication sharpens: for capable models, spend your token budget on schema quality, not prose.
+
+---
+
+## Cross-model replication — Gemini 2.5 Pro (628eee67) + Flash (b28b7956), n=3/cell (2026-07-06)
+
+Three cells replicated from the sonnet-5 studies: full (everything on), anchor (no AGENTS.md/skills), floor (schema only). 18/18 success, zero exceptions.
+
+| Model | full | anchor | floor | floor markers |
+|---|---|---|---|---|
+| sonnet-5 (b7a79622) | 101,571* | 54,359 | 99,441 | all ideal |
+| gemini-2.5-pro | 83,355 | 61,183 | 50,454 | template-first held; **taxonomy-first dropped** (first=list_suites 3/3, catfilter 1/3) |
+| gemini-2.5-flash | 93,545 | 64,841 | **21,404** | template-first held; taxonomy-first dropped (2/3) |
+
+*sonnet full from study cd246804.
+
+**Finding 7 — the floor generalizes, with a model-specific signature.** All three frontier models complete the task correctly from the bare schema. But at the floor, the Gemini models abandon the taxonomy-first discovery pattern (they open with `list_suites`/`list_templates` and skip the category filter), while sonnet-5 keeps it without being told. The steering language is what buys taxonomy use on Gemini; on sonnet-5 it's free. First **behavioral difference between models** the instrument has detected — attribution now discriminates not just guidance layers but model-specific defaults under sparse guidance.
+
+**Finding 8 — the load-bearing behaviors survive everywhere.** Template-before-submit and projections-not-raw held in every run of every model at every guidance level (30+ runs). The behaviors that protect correctness are schema-derivable for all three models; the behaviors that optimize cost (taxonomy-first) are steering-dependent for two of three.
+
+**Finding 9 — cost gradients replicate cross-model.** full > anchor > floor for both Gemini models; the AGENTS.md tax (+22–29K/run) replicates. gemini-2.5-flash at the floor is the cheapest successful configuration measured in the entire corpus: 21,404 tokens/run, ~29× cheaper than the original SBD-1 baseline.
+
+**Corpus status:** 4 contract-addressed studies (cd246804, b7a79622, 628eee67, b28b7956), 3 models, ~48 committed traces. Every row derived mechanically from traces by analyze_agent_traces.py.
