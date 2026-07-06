@@ -204,3 +204,14 @@ Fix (single choke point — `running_marker.has_running_marker`, inherited by `c
 Guard shipped at the single validation choke point (`_check_memory_limits_fit_host`): any engine memory-limit (matrix lane or engine_params) above 50% of physical RAM is rejected at submission, with `meta.allow_high_memory: true` as the explicit, loud override. 6 tests incl. the exact freeze config. The agent coaching loop turns the 422 into a smaller re-submission automatically.
 
 Still open (harness-tenets gap, deliberate): OS-level enforcement (sandbox/cgroup/ulimit) for defense-in-depth below the validation layer — validation can't stop a workload that grows past its declared limit.
+
+## 14. Partial fragments die with the scratchpad — atomic commit nullifies incremental collection on crash
+
+**STATUS: OPEN — design fork is Ramona's.** Confirmed 2026-07-06 while investigating the OOM freeze: fragments ARE written incrementally per benchmark (the original design intent — survive partial failure), but into an isolated scratchpad (`harness.py: tempfile.mkdtemp` under system `/tmp`), and only committed to canonical `results/<id>/` atomically at successful finalization (`coordinator.py` verify-then-commit). Consequence: any crash/OOM/kill mid-run orphans the scratchpad — and a freeze+reboot erases `/tmp` entirely. 47 minutes of the killed `209fc5df` run produced zero durable fragments. The incremental-collection design is intact; its crash-durability benefit is nullified by WHERE it collects and WHEN it commits.
+
+Options (fork, not decided):
+- (a) Commit fragments incrementally to canonical — breaks scratchpad isolation and the verify-then-commit integrity discipline (drift gate exists for a reason).
+- (b) Keep atomic commit; add a salvage path — on failure detection, copy scratchpad fragments to `results/<id>/partial_fragments/`, loudly labeled non-canonical. Partial data becomes recoverable but can never masquerade as a sealed capsule.
+- (c) Move the scratchpad off `/tmp` to a repo-local gitignored dir — survives reboot; orphans become findable/salvageable after any crash.
+
+Recommendation: (b) + (c) together — preserves every integrity property, adds crash durability. (a) is the only one that compromises the seal semantics.

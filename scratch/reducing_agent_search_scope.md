@@ -403,3 +403,26 @@ Nobody silently faked a MongoDB result. Both runs that produced final answers fl
 **Finding 18 —** impossible goals produce honest-but-expensive chaos, not deception; a refusal state converts the honesty from accidental to structural.
 
 **Finding 19 —** uniform cross-model failure is a harness diagnostic: model-independent failure = harness defect. The model ladder in one contract makes this signature visible by construction.
+
+---
+
+## Finding 19 follow-through, Finding 20, and the fractal crossover (2026-07-06)
+
+**Finding 19 status: partially verified, and it paid out sideways.** The edge-4 rerun with the raised poll budget confirmed the diagnosis (the uniform failure WAS a harness artifact — fable-5's config executed legitimately for 47+ minutes under the new budget) but never completed: the run had to be killed because its `16GB memory_limit` lane would have frozen the 16GB host — which is how **Finding 20** surfaced: *agents build well-designed configs whose danger is host-relative, and nothing fail-closed existed below them.* Guard shipped (TODO #13, PR #148): memory limits above 50% of host RAM rejected at the single validation choke point, `meta.allow_high_memory: true` as the explicit hatch. Full parity by construction — the hatch is a config key, identically available to human YAML authors and agents; nothing about it is agent-scoped.
+
+**The crossover Ramona named:** every agent-driven discovery in this study program has landed in the lab's HUMAN-facing core — the memory guard protects the human running `./run.sh` exactly as it protects the orchestrator. The agent experiments are turning out to be a fuzzer for the lab itself. Her axiom, demonstrated: **"context is fractal"** — the same integrity questions recur at every level (SQL measurement → capsule seal → agent trace → study contract → harness state machine), and an instrument built at any level ends up strengthening the others.
+
+**Fragment-durability gap confirmed (TODO #14).** Fragments collect incrementally (designed for exactly the OOM case) but into a `/tmp` scratchpad, committed atomically only on success — crash+reboot loses everything. The design intent was right; the commit boundary defeats it. Fork recorded; recommendation (salvage-labeled partials + durable scratchpad location) preserves seal semantics.
+
+**New research question (edge-case 6 candidate): does the agent use published knowledge?** The repo carries sealed quack capsules + measurement docs. The agent's tool surface exposes NONE of it — it would re-run (and re-pay for) experiments the corpus already answers. "Should it?" is a real fork: a `search_published_capsules` tool / `librarian` state vs. keeping the agent execution-only. Same shape as everything else in this program: what's available to the agent — words (docs) or state machine (a retrieval stage)? Contract-able when wanted; not run (cost).
+
+## Practitioner skeleton — "what would I tell someone deploying agents?" (numbers, not vibes)
+
+Raw material for Ramona's advice piece; the voice is hers. What this corpus supports, in order of measured leverage:
+
+1. **The industry optimizes the weakest layer.** Skills/rules/prompt-guidance — what everyone talks about — measured as the LEAST effective lever: AGENTS.md was ~50K tokens/run of dead weight with zero behavioral delta; skills showed a weak turns effect only (Findings 1–3, replicated cross-model, Finding 9).
+2. **The strongest levers are infrastructure:** tool-interface scope (5.6× alone), specialist decomposition (further ~3.7×, and it EQUALIZES models — Finding 12: five models from two vendors land in one 18–35K band), schema quality (frontier models derive the whole workflow from tool names — Findings 5–7).
+3. **Gates, not exhortation.** Every prompt instruction eventually gets ignored by some model; every mechanical gate held (template-first gate, memory guard, pre-push hook — same law at every level, SBD-3 through TODO #13).
+4. **States are discovered, not designed.** refused / suspended / resume / the memory cap — none were in the original design; all were forced by cheap probing runs. Budget for the discovery phase; it's where the harness actually gets built.
+5. **Uniform cross-model failure = YOUR bug.** The model ladder in one contract makes harness defects self-identifying (Finding 19).
+6. **Instrument before you scale.** Traces + provenance + deterministic answer-grading turned 105 runs into auditable evidence (0 fabricated means, Finding 16). Without the instrument, all of the above is anecdotes.
