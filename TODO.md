@@ -196,3 +196,11 @@ Session-start and session-end records with model, goal, outcome. Written to `--l
 **STATUS: SHIPPED 2026-07-06** — `has_running_marker` is now liveness-aware. Observed live: a session teardown killed the API mid-execution of `209fc5df`, leaving an orphaned `running.json`; `check_registry` would have answered "already running — poll instead" to every resubmission of that config, permanently, and the marker had to be removed by hand.
 
 Fix (single choke point — `running_marker.has_running_marker`, inherited by `check_registry` and the API's `is_running`): a marker only counts as running if it is readable, younger than `MAX_MARKER_AGE_SECONDS` (6h — also caps the PID-reuse window), and (same-host) its recorded PID is alive. Stale markers are removed on detection (self-heal) with a loud `[WARN]`. Different-host markers within the age window are conservatively treated as alive (can't probe a remote PID). 6 regression tests pin each rule, including the exact 209fc5df scenario (dead PID → not running → marker gone).
+
+## 13. No fail-closed resource cap — a granted 16GB memory_limit froze a 16GB host
+
+**STATUS: SHIPPED 2026-07-06 (validation-level guard); OS-level sandbox still open.** An agent-built sort_spill config swept `duckdb.memory_limit: [512MB, 16GB]` on the 16GB dev machine; DuckDB took what it was granted and the host froze hard (not a clean OOM — full freeze). The config was *well-designed for the question* — the danger was purely host-relative.
+
+Guard shipped at the single validation choke point (`_check_memory_limits_fit_host`): any engine memory-limit (matrix lane or engine_params) above 50% of physical RAM is rejected at submission, with `meta.allow_high_memory: true` as the explicit, loud override. 6 tests incl. the exact freeze config. The agent coaching loop turns the 422 into a smaller re-submission automatically.
+
+Still open (harness-tenets gap, deliberate): OS-level enforcement (sandbox/cgroup/ulimit) for defense-in-depth below the validation layer — validation can't stop a workload that grows past its declared limit.
