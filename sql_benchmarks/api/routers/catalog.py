@@ -89,3 +89,22 @@ def search_published(category: str | None = None):
     hit with the existing result projections."""
     from ..logic.published_library import search_published_capsules
     return {"capsules": search_published_capsules(category=category)}
+
+
+@router.get("/docs")
+def list_docs():
+    """Names + titles of the lab's published documents (README, FAQ,
+    docs/*.md incl. the generated experiment catalog)."""
+    from ..logic.lab_docs import list_lab_docs
+    return {"docs": list_lab_docs()}
+
+
+@router.get("/docs/{name:path}")
+def get_doc(name: str):
+    """One published document's text (size-capped, truncation stated)."""
+    from fastapi import HTTPException
+    from ..logic.lab_docs import get_lab_doc
+    doc = get_lab_doc(name)
+    if doc is None:
+        raise HTTPException(status_code=404, detail=f"No published doc named '{name}'")
+    return doc

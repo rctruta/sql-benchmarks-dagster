@@ -136,6 +136,59 @@ ANALYZER = SpecialistRole(
 )
 
 
+_LIBRARIAN_PROMPT = """\
+You are the reference librarian for this benchmarking lab. Users and
+other agents come to you with questions. Your job: answer from the
+lab's PUBLISHED knowledge whenever it can, and route to experiment-
+building only when it genuinely cannot.
+
+IMPORTANT: "librarian" is your ROLE, not a tool. Only call tools that
+appear in your tool list.
+
+Your reference desk:
+- `search_published_capsules` (optional category filter) — sealed,
+  verified experiment results. Read any hit with
+  `get_experiment_summary`, `get_scaling_factor`, etc. — published
+  results are read directly, nothing needs to run.
+- `list_lab_docs` / `get_lab_doc` — README, FAQ, methodology docs, and
+  the generated experiment catalog.
+
+Decide, then close with EXACTLY one of:
+
+1. The question is answerable from published capsules/docs — produce a
+   final message starting with "FINAL ANSWER:" containing the answer,
+   citing capsule ids and doc names you drew from. Statements like
+   "yes, capsules X and Y cover this; here is what they found" are
+   exactly your job.
+2. The question truly requires a NEW measurement (no published capsule
+   covers it) — produce:
+
+       HANDOFF: build reason=<one line: what is missing from the corpus>
+
+3. The question cannot be satisfied by this lab at all (names an
+   engine/workload the lab does not have) — produce:
+
+       HANDOFF: impossible reason=<one line naming what is missing>
+
+Never route to build for something the corpus already answers — a
+verified published result is strictly better than a re-run.
+"""
+
+
+LIBRARIAN = SpecialistRole(
+    name="librarian",
+    tool_names=[
+        "search_published_capsules", "list_lab_docs", "get_lab_doc",
+        "list_categories",
+        "get_experiment_summary", "get_means_by_partition",
+        "get_scaling_factor", "get_replication_stability",
+    ],
+    system_prompt=_LIBRARIAN_PROMPT,
+    max_turns=12,
+    parse_output=lambda content, tool_calls: _parse_librarian(content),
+)
+
+
 _HANDOFF_RE = re.compile(r"HANDOFF:\s*experiment_id=([0-9a-f]{8})", re.IGNORECASE)
 _REFUSAL_RE = re.compile(r"HANDOFF:\s*impossible\s+reason=(.+)", re.IGNORECASE)
 
@@ -159,6 +212,27 @@ def _parse_analyzer_final(content: str) -> Optional[dict]:
     substantive message. Returns the analysis text."""
     if not content:
         return None
+    if "final answer" in content.lower() and len(content.strip()) > 100:
+        return {"analysis": content}
+    return None
+
+
+_BUILD_RE = re.compile(r"HANDOFF:\s*build\s+reason=(.+)", re.IGNORECASE)
+
+
+def _parse_librarian(content: str) -> Optional[dict]:
+    """Librarian closes one of three ways: an answer from the published
+    corpus (FINAL ANSWER:), a routing handoff to config_builder
+    (HANDOFF: build reason=...), or a structured refusal
+    (HANDOFF: impossible reason=...)."""
+    if not content:
+        return None
+    b = _BUILD_RE.search(content)
+    if b:
+        return {"build": b.group(1).strip()}
+    r = _REFUSAL_RE.search(content)
+    if r:
+        return {"impossible": r.group(1).strip()}
     if "final answer" in content.lower() and len(content.strip()) > 100:
         return {"analysis": content}
     return None
@@ -190,7 +264,7 @@ def poll_until_terminal(experiment_id: str,
 
 @dataclass
 class OrchestratorResult:
-    outcome: str  # "complete" | "refused" | "suspended" | "config_builder_failed" | "poll_failed" | "analyzer_failed"
+    outcome: str  # "complete" | "answered" | "refused" | "needs_experiment" | "suspended" | "config_builder_failed" | "poll_failed" | "analyzer_failed" | "librarian_failed"
     experiment_id: Optional[str]
     analysis: Optional[str]
     orchestrator_run_id: str
@@ -222,8 +296,81 @@ class Orchestrator:
             agents_md_loaded=False, max_turns=0,
         )
 
+    def ask(self) -> OrchestratorResult:
+        """Reference-desk mode: librarian ONLY — answer from published
+        capsules + docs, never execute. The user-delegation use case:
+        'are there published capsules for X?', 'what does the FAQ say
+        about Y?'. A build-worthy question comes back as outcome
+        'needs_experiment' with the librarian's reason — the caller
+        decides whether to spend on a run."""
+        sub_ids: dict = {}
+        lib = run_specialist(LIBRARIAN, brief=self.goal, model=self.model)
+        sub_ids["librarian"] = lib.sub_run_id
+        self.trace.delegate(
+            stage="librarian", sub_run_id=lib.sub_run_id,
+            input_summary=self.goal[:200], outcome=lib.outcome,
+            output_summary=(str(lib.output)[:200] if lib.output else None),
+        )
+        if lib.outcome == "ok" and lib.output and "analysis" in lib.output:
+            self.trace.run_end("answered", turns_used=0)
+            return OrchestratorResult(
+                outcome="answered", experiment_id=None,
+                analysis=lib.output["analysis"],
+                orchestrator_run_id=self.trace.run_id, sub_run_ids=sub_ids,
+            )
+        if lib.outcome == "ok" and lib.output and "impossible" in lib.output:
+            self.trace.run_end("refused", turns_used=0)
+            return OrchestratorResult(
+                outcome="refused", experiment_id=None,
+                analysis=f"REFUSED: {lib.output['impossible']}",
+                orchestrator_run_id=self.trace.run_id, sub_run_ids=sub_ids,
+            )
+        if lib.outcome == "ok" and lib.output and "build" in lib.output:
+            self.trace.run_end("needs_experiment", turns_used=0)
+            return OrchestratorResult(
+                outcome="needs_experiment", experiment_id=None,
+                analysis=f"NEEDS EXPERIMENT: {lib.output['build']}",
+                orchestrator_run_id=self.trace.run_id, sub_run_ids=sub_ids,
+            )
+        self.trace.run_end("librarian_failed", turns_used=0, error=lib.error)
+        return OrchestratorResult(
+            outcome="librarian_failed", experiment_id=None, analysis=None,
+            orchestrator_run_id=self.trace.run_id, sub_run_ids=sub_ids,
+            error=lib.error or "librarian produced no parseable close",
+        )
+
     def run(self) -> OrchestratorResult:
         sub_ids: dict = {}
+
+        # Stage 0: reference librarian — check the lab's own literature
+        # BEFORE building anything. This is the structural fix for
+        # Finding 21 (0/5 unprompted library adoption: schema-only
+        # exposure doesn't bind; a workflow stage does). Three exits:
+        # answered-from-corpus (terminal, cheap), impossible (terminal,
+        # honest), build (continue to config_builder).
+        lib = run_specialist(LIBRARIAN, brief=self.goal, model=self.model)
+        sub_ids["librarian"] = lib.sub_run_id
+        self.trace.delegate(
+            stage="librarian", sub_run_id=lib.sub_run_id,
+            input_summary=self.goal[:200], outcome=lib.outcome,
+            output_summary=(str(lib.output)[:200] if lib.output else None),
+        )
+        if lib.outcome == "ok" and lib.output and "analysis" in lib.output:
+            self.trace.run_end("answered", turns_used=0)
+            return OrchestratorResult(
+                outcome="answered", experiment_id=None,
+                analysis=lib.output["analysis"],
+                orchestrator_run_id=self.trace.run_id, sub_run_ids=sub_ids,
+            )
+        if lib.outcome == "ok" and lib.output and "impossible" in lib.output:
+            self.trace.run_end("refused", turns_used=0)
+            return OrchestratorResult(
+                outcome="refused", experiment_id=None,
+                analysis=f"REFUSED: {lib.output['impossible']}",
+                orchestrator_run_id=self.trace.run_id, sub_run_ids=sub_ids,
+            )
+        # 'build' handoff or librarian failure -> proceed to build either
+        # way (a broken reference desk must not block measurement).
 
         # Stage 1: config_builder
         cb: SpecialistResult = run_specialist(CONFIG_BUILDER, brief=self.goal, model=self.model)
