@@ -69,7 +69,7 @@ def test_no_specialist_sees_the_full_tool_inventory():
     for role in (CONFIG_BUILDER, ANALYZER):
         subset = set(role.tool_names)
         assert subset < full  # strict subset
-        assert len(subset) <= 7  # kept small
+        assert len(subset) <= 9  # kept small (analyzer gained the per-benchmark projection)
 
 
 # ---------------------------------------------------------------------------
