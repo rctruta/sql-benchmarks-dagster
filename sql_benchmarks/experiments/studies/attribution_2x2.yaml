@@ -1,0 +1,43 @@
+# Study contract: prompt-guidance attribution, 2x2 factorial.
+#
+# Same discipline as experiment configs: the study is DEFINED by this
+# file, verbatim-archived, content-addressed (study_id = sha256 of these
+# bytes, first 8 hex). Traces produced by a study run carry the study_id
+# + cell + rep in their prompt_provenance ablation_flags, so any trace
+# is traceable back to the exact study definition that produced it.
+#
+# HISTORICAL NOTE: the first execution of this study (2026-07-06, traces
+# 20260706T00*/01*, PR #139) was driven by an ad-hoc shell script, not
+# this contract — the contract was codified immediately after, from the
+# same parameters. Runs from this file onward are contract-driven.
+
+meta:
+  name: "Prompt-guidance attribution — does the agent behave differently without AGENTS.md / skills?"
+  description: >
+    2x2 factorial over the monolithic driver's guidance layers. Tool
+    descriptions + inline workflow are the constant (present in all
+    cells). Behavioral markers extracted by
+    scripts/tools/analyze_agent_traces.py.
+
+driver: monolith          # monolith | multi_agent
+model: anthropic/claude-sonnet-5
+replications: 3
+
+goal: >
+  Investigate how DuckDB performance scales on analytical aggregation
+  queries. Test at least three data scales — small, medium, and
+  something larger. Report the mean duration per scale, and whether the
+  scaling looks roughly linear (2x rows -> 2x time) or something
+  different. DuckDB only, no Docker.
+
+# Each cell = one condition. Keys under `flags` map directly to
+# run_agent() keyword arguments.
+cells:
+  base:
+    flags: {include_agents_md: true,  include_skills: true}
+  noskills:
+    flags: {include_agents_md: true,  include_skills: false}
+  noagentsmd:
+    flags: {include_agents_md: false, include_skills: true}
+  neither:
+    flags: {include_agents_md: false, include_skills: false}

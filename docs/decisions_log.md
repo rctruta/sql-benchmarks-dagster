@@ -292,3 +292,15 @@ Human-and-agent parity: `sqlbench project means <id>` (CLI),
 **Empirical status.** llama3 still fails config-building even with coaching (capability wall is real: it never reaches for `get_template` unprompted, and gates can redirect but not create competence). The *localization* is the result: monolith said "gave up, opaque"; multi-agent traces say "fails at the adapt-a-template step with invented schema". Failure classes per stage are exactly the instrument working. Local-model sweeps paused by Ramona's call — hardening pays off regardless of model tier.
 
 **Cross-refs.** Traces `20260705T234509Z_*` and `20260705T234955Z_*` (local). SBD-3 (gates-over-exhortation precedent). `[[agent-integrity-incidents]]` META-FINDING.
+
+---
+
+## 2026-07-06 — Studies get contracts: meta-experiments follow the same YAML discipline as experiments
+
+**Decision.** Agent studies (matrices of runs: cells × replications) are defined by verbatim YAML contracts under `sql_benchmarks/experiments/studies/`, content-addressed (`study_id = sha256(bytes)[:8]`), executed by `scripts/run_study.py`. Each run's trace carries `study_id/cell/rep` in its provenance — trace → contract is always resolvable.
+
+**Fork closed.** Ad-hoc shell scripts driving study matrices. The first execution of the attribution 2×2 (PR #139) was driven by a throwaway `/tmp` script with hardcoded conditions — Ramona caught it: *"i thought this run is executed via a contract yaml file."* That was the lab's own founding rule ([[experiment-config-design]]) violated at the meta-level, and structurally close to specimen #9 (study definition living in a script + conversation instead of a durable artifact). The contract `attribution_2x2.yaml` codifies those parameters retroactively, with the historical note stating plainly that run 1 predates the contract.
+
+**Fork opened.** Studies are now first-class, reproducible lab objects: re-run a study by pointing the runner at its YAML; extend the corpus by adding a cell; a future model-capability sweep is one contract file. Fork-B sealing extends naturally: `(study contract, traces, analysis)` is a sealable tuple.
+
+**Cross-refs.** [[experiment-config-design]], PR #139 (the pre-contract execution), `scratch/reducing_agent_search_scope.md`.
