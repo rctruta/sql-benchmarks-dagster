@@ -1,0 +1,46 @@
+# Study contract: guidance floor, 2x2 factorial.
+#
+# Follow-up to attribution_2x2 (study cd246804), which found that
+# AGENTS.md and skills contribute nothing behaviorally on sonnet-5 —
+# the always-present layers (rich tool descriptions + inline prose
+# workflow) fully determined tool selection. This study ablates THOSE
+# two layers, holding agents_md=skills=OFF everywhere:
+#
+#   - include_workflow:            full prose loop  vs  one-line identity
+#   - neutral_tool_descriptions:   rich steering    vs  what-it-does only
+#
+# The floor cell (identity + neutral schema) answers: does sonnet-5
+# derive the correct workflow from tool NAMES and argument shapes alone?
+#
+# Behavioral markers extracted by scripts/tools/analyze_agent_traces.py.
+
+meta:
+  name: "Guidance floor — schema-guidance vs prose-guidance, with AGENTS.md and skills held OFF"
+  description: >
+    2x2 over (workflow prose x tool-description steering). Anchor cell
+    (rich+workflow) replicates attribution_2x2's 'neither' condition.
+
+driver: monolith
+model: anthropic/claude-sonnet-5
+replications: 3
+
+goal: >
+  Investigate how DuckDB performance scales on analytical aggregation
+  queries. Test at least three data scales — small, medium, and
+  something larger. Report the mean duration per scale, and whether the
+  scaling looks roughly linear (2x rows -> 2x time) or something
+  different. DuckDB only, no Docker.
+
+cells:
+  anchor:      # = attribution_2x2 'neither'; replication anchor across studies
+    flags: {include_agents_md: false, include_skills: false,
+            include_workflow: true,  neutral_tool_descriptions: false}
+  neutraldesc:
+    flags: {include_agents_md: false, include_skills: false,
+            include_workflow: true,  neutral_tool_descriptions: true}
+  noworkflow:
+    flags: {include_agents_md: false, include_skills: false,
+            include_workflow: false, neutral_tool_descriptions: false}
+  floor:
+    flags: {include_agents_md: false, include_skills: false,
+            include_workflow: false, neutral_tool_descriptions: true}

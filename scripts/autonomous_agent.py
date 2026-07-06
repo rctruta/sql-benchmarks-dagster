@@ -232,6 +232,40 @@ TOOLS = [
 KNOWN_TOOLS = {t["function"]["name"] for t in TOOLS}
 
 
+# Neutral (steering-free) descriptions for the guidance-floor ablation:
+# factually correct, one sentence, no "CALL THIS FIRST" / "PREFER" / cost
+# hints / workflow ordering. What remains is only what the tool DOES.
+NEUTRAL_DESCRIPTIONS = {
+    "list_categories": "List the experiment category taxonomy.",
+    "list_suites": "List benchmark test suites. Accepts optional category and include_sql arguments.",
+    "list_templates": "List experiment config templates.",
+    "get_template": "Fetch the YAML text of a named template.",
+    "submit_experiment": "Submit an experiment as a YAML string. Returns an experiment_id.",
+    "get_experiment_status": "Get the status of a submitted experiment.",
+    "compare_engines": "Get a cross-engine performance comparison for an experiment.",
+    "compare_engines_by_partition": "Get per-partition cross-engine comparisons for an experiment.",
+    "get_experiment_result": "Get the full result of an experiment.",
+    "get_experiment_summary": "Get a summary of an experiment's results.",
+    "get_means_by_partition": "Get mean durations per partition and engine.",
+    "get_scaling_factor": "Get scaling ratios across partitions per engine.",
+    "get_replication_stability": "Get variability statistics per partition and engine.",
+}
+
+
+def neutralize_tools(tools: list) -> list:
+    """Deep-copy `tools` with every function description replaced by its
+    neutral variant and parameter descriptions stripped. Ablation
+    condition for the guidance-floor study: does behavior survive when
+    the schema stops steering?"""
+    out = json.loads(json.dumps(tools))  # deep copy
+    for t in out:
+        fn = t["function"]
+        fn["description"] = NEUTRAL_DESCRIPTIONS.get(fn["name"], fn["description"])
+        for prop in (fn.get("parameters", {}).get("properties") or {}).values():
+            prop.pop("description", None)
+    return out
+
+
 # --- API key + protocol-doc loading -----------------------------------------
 
 # Mapping of model-string prefix to the environment variable litellm expects.
@@ -485,16 +519,22 @@ def parse_tool_result_for_error(result_str: str):
 
 
 def build_system_prompt(include_agents_md: bool = True,
-                        include_skills: bool = True) -> tuple:
+                        include_skills: bool = True,
+                        include_workflow: bool = True) -> tuple:
     """Compose the system prompt from AGENTS.md (the authoritative protocol
     doc) plus this script's tool-specific workflow. If AGENTS.md is missing,
     fall back to a minimal built-in workflow with a schema example.
 
-    `include_agents_md` / `include_skills` are ABLATION FLAGS for the
-    attribution study (scratch/reducing_agent_search_scope.md): which
-    guidance layer actually drives behavior? Returns `(prompt, components)`
-    where `components` maps each layer's name to its content (or None if
-    absent/ablated) — fed to AgentTrace.prompt_provenance."""
+    `include_agents_md` / `include_skills` / `include_workflow` are
+    ABLATION FLAGS for the attribution studies
+    (scratch/reducing_agent_search_scope.md): which guidance layer
+    actually drives behavior? Returns `(prompt, components)` where
+    `components` maps each layer's name to its content (or None if
+    absent/ablated) — fed to AgentTrace.prompt_provenance.
+
+    With `include_workflow=False` the prose workflow is replaced by a
+    one-line identity — the guidance-floor condition where the model has
+    only the tool schema to go on."""
     agents_md = load_agents_md() if include_agents_md else None
 
     tool_workflow = (
@@ -535,6 +575,15 @@ def build_system_prompt(include_agents_md: bool = True,
         "Do NOT return an empty message.\n"
     )
 
+    if not include_workflow:
+        # Guidance floor: identity only. No loop, no ordering, no tool
+        # commentary — everything the model knows about HOW comes from
+        # the tool schema alone.
+        tool_workflow = (
+            "You are an autonomous Data Engineering AI. Answer the user's "
+            "performance question using the available tools.\n"
+        )
+
     skills = load_skills() if include_skills else ""
     skills_block = (
         "\n\n---\n\n# Skills (precise procedures for specific operations)\n\n"
@@ -545,10 +594,22 @@ def build_system_prompt(include_agents_md: bool = True,
 
     components = {
         "agents_md": agents_md,
-        "tool_workflow": tool_workflow,
+        "tool_workflow": tool_workflow if include_workflow else None,
+        "minimal_identity": None if include_workflow else tool_workflow,
         "skills": skills or None,
         "tools_schema": TOOLS,
     }
+
+    # Guidance floor: identity (+ any non-ablated layers) only, no embedded
+    # YAML example — the example teaches config shape, which is
+    # get_template's job; keeping it would leak workflow guidance back
+    # into the floor condition.
+    if not include_workflow:
+        prefix = (
+            "# Protocol Document (loaded from AGENTS.md at repo root)\n\n"
+            + agents_md + "\n\n---\n\n"
+        ) if agents_md else ""
+        return prefix + tool_workflow + skills_block, components
 
     if agents_md:
         prompt = (
@@ -591,18 +652,28 @@ def build_system_prompt(include_agents_md: bool = True,
 
 def run_agent(goal: str, model: str = "gpt-4o",
               include_agents_md: bool = True, include_skills: bool = True,
+              include_workflow: bool = True, neutral_tool_descriptions: bool = False,
               study_stamp: dict | None = None):
     """`study_stamp` ({study_id, cell, rep}) is set when this run belongs
     to a contract-driven study (scripts/run_study.py) — recorded in the
     trace's provenance so the trace is traceable to the exact study
-    contract that produced it."""
+    contract that produced it.
+
+    `include_workflow=False` strips the prose workflow to a one-line
+    identity; `neutral_tool_descriptions=True` strips steering language
+    from the tool schema. Together they form the guidance-floor 2×2."""
     console.print(Panel(f"[bold cyan]GOAL:[/bold cyan] {goal}", title="🤖 Agent Initialized"))
 
     system_prompt, prompt_components = build_system_prompt(
-        include_agents_md=include_agents_md, include_skills=include_skills)
+        include_agents_md=include_agents_md, include_skills=include_skills,
+        include_workflow=include_workflow)
+    tools = neutralize_tools(TOOLS) if neutral_tool_descriptions else TOOLS
+    prompt_components["tools_schema"] = tools
     agents_md_loaded = prompt_components["agents_md"] is not None
     console.print(f"[dim]System prompt: AGENTS.md {'loaded' if agents_md_loaded else 'ABSENT (missing or ablated)'} "
                   f"| skills {'loaded' if prompt_components['skills'] else 'ABSENT'} "
+                  f"| workflow {'full' if include_workflow else 'MINIMAL'} "
+                  f"| tool descriptions {'NEUTRAL' if neutral_tool_descriptions else 'rich'} "
                   f"| Model: {model}[/dim]")
 
     trace = AgentTrace(
@@ -615,6 +686,8 @@ def run_agent(goal: str, model: str = "gpt-4o",
             "architecture": "monolith",
             "include_agents_md": include_agents_md,
             "include_skills": include_skills,
+            "include_workflow": include_workflow,
+            "neutral_tool_descriptions": neutral_tool_descriptions,
             **(study_stamp or {}),
         },
     )
@@ -634,7 +707,7 @@ def run_agent(goal: str, model: str = "gpt-4o",
         response = completion(
             model=model,
             messages=messages,
-            tools=TOOLS,
+            tools=tools,
             tool_choice="auto"
         )
 
@@ -725,6 +798,13 @@ def run_agent(goal: str, model: str = "gpt-4o",
         # We have tool calls — dispatch them
         empty_responses_in_a_row = 0
 
+        # Coaching messages are BUFFERED and appended only after every tool
+        # result is in: the Anthropic API requires all tool_use ids in an
+        # assistant message to be answered by tool_results in the IMMEDIATELY
+        # following message(s) — a user message mid-batch is a 400. Surfaced
+        # by the guidance-floor study, where neutral tool descriptions made
+        # the model fire 4-5 parallel calls per turn.
+        pending_coaching = []
         for tool_call in msg.tool_calls:
             name = tool_call.function.name
             try:
@@ -766,14 +846,14 @@ def run_agent(goal: str, model: str = "gpt-4o",
             })
 
             if error_reason:
-                messages.append({
-                    "role": "user",
-                    "content": (
-                        f"The `{name}` tool returned an error: {error_reason}\n"
-                        "Read the error carefully. Adjust your call to fix the specific field or condition that failed, "
-                        "then retry. Do not stop or produce a final answer until you have a successful result."
-                    ),
-                })
+                pending_coaching.append(
+                    f"The `{name}` tool returned an error: {error_reason}\n"
+                    "Read the error carefully. Adjust your call to fix the specific field or condition that failed, "
+                    "then retry. Do not stop or produce a final answer until you have a successful result."
+                )
+
+        if pending_coaching:
+            messages.append({"role": "user", "content": "\n\n".join(pending_coaching)})
     else:
         # for/else: ran to MAX_TURNS without breaking
         console.print(f"[bold red]✗ Reached MAX_TURNS ({MAX_TURNS}) without completing. Stopping.[/bold red]")
@@ -803,9 +883,19 @@ if __name__ == "__main__":
         "--no-skills", action="store_true",
         help="ABLATION: omit the skills block from the system prompt (attribution study)."
     )
+    parser.add_argument(
+        "--no-workflow", action="store_true",
+        help="ABLATION: replace the prose workflow with a one-line identity (guidance floor)."
+    )
+    parser.add_argument(
+        "--neutral-tool-descriptions", action="store_true",
+        help="ABLATION: strip steering language from tool descriptions (guidance floor)."
+    )
     args = parser.parse_args()
     # Fail fast if the required API key for the chosen model is missing.
     check_api_key(args.model)
     run_agent(args.goal, model=args.model,
               include_agents_md=not args.no_agents_md,
-              include_skills=not args.no_skills)
+              include_skills=not args.no_skills,
+              include_workflow=not args.no_workflow,
+              neutral_tool_descriptions=args.neutral_tool_descriptions)

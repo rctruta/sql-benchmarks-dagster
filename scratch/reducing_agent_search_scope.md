@@ -264,3 +264,24 @@ Same goal, same model (`anthropic/claude-sonnet-5`), monolith driver; conditions
 **Named limitations.** Single model, single goal, n=3, duplicate-served capsule for most runs (some 12–14-turn runs likely submitted variant configs and executed fresh — stratify by `status=queued` vs `duplicate` in a follow-up). Skills content overlaps tool descriptions, so "skills don't matter" here means *marginal* contribution given rich tool descriptions — the next ablation is neutralized tool descriptions, which separates schema-guidance from prose-guidance.
 
 **Design implication if Finding 1–2 replicate:** move ALL behavioral guidance into tool descriptions (paid once per schema, cached) and keep AGENTS.md out of the per-turn context for capable models; reserve skills/AGENTS.md injection for models whose tool-description-following is weak. Progressive disclosure again — this time of guidance itself.
+
+---
+
+## Guidance-floor study results — study b7a79622, sonnet-5, n=3/cell (2026-07-06)
+
+Follow-up to attribution 2×2 (cd246804). AGENTS.md + skills held OFF everywhere; ablated the two layers that study left as the constant: prose workflow (full loop vs one-line identity) × tool descriptions (rich steering vs what-it-does-only). Contract: `sql_benchmarks/experiments/studies/guidance_floor_2x2.yaml`.
+
+| Cell | workflow | descriptions | mean tokens | success | markers |
+|---|---|---|---|---|---|
+| anchor | full | rich | 54,359 | 3/3 | perfect |
+| neutraldesc | full | neutral | 47,750 | 3/3 | perfect |
+| noworkflow | identity only | rich | **43,165** | 3/3 | perfect |
+| floor | identity only | neutral | 99,441 (31K–160K) | 3/3 | perfect |
+
+**Finding 4 — sonnet-5's behavioral floor is the tool schema itself.** Every marker perfect in every cell *including the floor*: `list_categories` first, category filter, template-before-submit, projections-not-raw — with NO prose guidance and NO steering language anywhere. The model derives the entire correct workflow from tool names + argument shapes alone. For this model/task, all guidance prose (AGENTS.md, skills, workflow, description steering) is behaviorally redundant.
+
+**Finding 5 — less prose is often cheaper, but the floor is high-variance.** Identity-only + rich descriptions is the cheapest condition measured across BOTH studies (43K — vs 101K for the everything-on baseline: a further 2.3× saving). But the floor cell's variance triples (31K–160K): with zero steering the behavior stays correct while the *path* wanders (more projections fetched, longer exploration). Steering doesn't create correctness for a capable model — it narrows variance.
+
+**Finding 6 (meta) — ablation studies are harness fuzzers.** The floor condition made sonnet-5 fire 4–5 parallel tool calls per turn (an emergent efficiency behavior under sparse guidance), which exposed a real latent harness bug: error-coaching messages appended mid-batch broke the Anthropic tool_use/tool_result pairing (API 400). Latent since the coaching feature shipped; only this condition triggered it. Fixed (coaching now buffered until after the batch) in both loops. The first floor rep also crashed the whole study — the runner now isolates per-run exceptions.
+
+**Combined picture across both studies (sonnet-5, this task):** guidance layers ranked by measured value — tool schema (necessary and sufficient) > description steering (variance reduction, ~free) > prose workflow (redundant, mildly costly) > skills (marginal turn reduction) > AGENTS.md (pure cost, ~50K/run). The design implication sharpens: for capable models, spend your token budget on schema quality, not prose.

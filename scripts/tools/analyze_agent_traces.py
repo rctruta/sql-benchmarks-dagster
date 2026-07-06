@@ -96,16 +96,22 @@ def extract_markers(path: str) -> dict:
 
 
 def condition_label(flags: dict) -> str:
-    """Short label from ablation flags for grouping."""
+    """Short label from ablation flags for grouping. Generic over flag
+    names so new ablation axes group correctly without analyzer edits.
+    study_id/cell/rep are per-run identifiers, not conditions — excluded."""
     if not flags:
         return "pre-provenance"
     if flags.get("architecture") == "specialist":
         return f"specialist:{flags.get('role')}"
-    a = flags.get("include_agents_md")
-    s = flags.get("include_skills")
-    if a is None and s is None:
-        return "monolith"
-    return f"monolith(agents_md={'Y' if a else 'N'},skills={'Y' if s else 'N'})"
+    condition_keys = sorted(k for k in flags
+                            if k not in ("architecture", "study_id", "cell", "rep", "role"))
+    if not condition_keys:
+        return flags.get("architecture", "unknown")
+    short = ",".join(
+        f"{k.replace('include_', '').replace('_tool_descriptions', '_desc')}="
+        f"{'Y' if flags[k] else 'N'}"
+        for k in condition_keys)
+    return f"{flags.get('architecture', '?')}({short})"
 
 
 def main():
