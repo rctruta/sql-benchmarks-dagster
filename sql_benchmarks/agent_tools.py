@@ -54,6 +54,26 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "list_lab_docs",
+            "description": "List the lab's published documents (README, FAQ, methodology docs, and the generated experiment catalog) — names, titles, sizes. Small payload.",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_lab_doc",
+            "description": "Fetch one published document's text by name (from list_lab_docs). Size-capped; truncation is stated.",
+            "parameters": {
+                "type": "object",
+                "properties": {"name": {"type": "string"}},
+                "required": ["name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "list_templates",
             "description": "List curated experiment templates. Each is a human-authored, VALID config demonstrating a working (dataset shape + suite + engines) combination.",
             "parameters": {"type": "object", "properties": {}}
@@ -197,7 +217,13 @@ def execute_tool(name: str, args: dict) -> str:
     autonomous_agent.py used to have; extracted here so specialists
     reuse it without importing from a script."""
     try:
-        if name == "search_published_capsules":
+        if name == "list_lab_docs":
+            res = httpx.get(f"{API_BASE}/v1/catalog/docs", timeout=30)
+            return json.dumps(res.json(), indent=2)
+        elif name == "get_lab_doc":
+            res = httpx.get(f"{API_BASE}/v1/catalog/docs/{args['name']}", timeout=30)
+            return json.dumps(res.json(), indent=2)
+        elif name == "search_published_capsules":
             params = {}
             if args.get("category"):
                 params["category"] = args["category"]

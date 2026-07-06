@@ -42,6 +42,10 @@ def main():
                         help="litellm model identifier")
     parser.add_argument("--goal", type=str, required=True,
                         help="Natural-language goal for the orchestrator")
+    parser.add_argument("--ask", action="store_true",
+                        help="Reference-desk mode: the librarian answers from "
+                             "published capsules + docs; nothing executes. For "
+                             "questions like 'are there published capsules for X?'")
     parser.add_argument("--resume", metavar="EXP_ID",
                         help="Resume a SUSPENDED run: skip config_builder, poll "
                              "this experiment_id, then run the analyzer. The "
@@ -59,14 +63,19 @@ def main():
                         poll_budget_seconds=args.poll_budget_seconds)
     console.print(f"[dim]Orchestrator trace: {orch.trace.path}[/dim]\n")
 
-    result = orch.resume(args.resume) if args.resume else orch.run()
+    if args.resume:
+        result = orch.resume(args.resume)
+    elif args.ask:
+        result = orch.ask()
+    else:
+        result = orch.run()
 
     console.print(f"\n[bold]Outcome:[/bold] {result.outcome}")
     console.print(f"[dim]experiment_id: {result.experiment_id}[/dim]")
     for stage, sub_id in result.sub_run_ids.items():
         console.print(f"[dim]  {stage}: {sub_id}[/dim]")
 
-    if result.outcome == "complete" and result.analysis:
+    if result.outcome in ("complete", "answered", "needs_experiment") and result.analysis:
         console.print(Panel(Markdown(result.analysis), title="📊 Analysis",
                             border_style="green"))
     elif result.outcome == "suspended":

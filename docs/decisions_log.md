@@ -350,3 +350,17 @@ Human-and-agent parity: `sqlbench project means <id>` (CLI),
 **Live validation of the recovery story (same day).** A session teardown killed the runner mid-poll and the API mid-execution. Traces survived (append-per-event JSONL); the stale running marker was the only manual surgery — and that class is now self-healing.
 
 **Cross-refs.** TODO #12, edge-3/edge-4 studies, Finding 18/19, `[[work-before-the-work]]` (states uncovered by pre-deployment probing — exactly the deliverable of the role Ramona is naming).
+
+---
+
+## 2026-07-06 — Reference librarian: the knowledge stage + the probe-the-lab use case
+
+**Decision.** New LIBRARIAN specialist (read-only reference desk: published-capsule search, lab-docs discovery incl. the generated experiment catalog, result projections) with three closes: FINAL ANSWER (cited, from corpus), `HANDOFF: build reason=…`, `HANDOFF: impossible reason=…`. Wired twice: (1) **librarian-first in `run()`** — the structural fix for Finding 21 (0/5 unprompted adoption proved schema exposure doesn't bind; a workflow stage does); a corpus-answerable goal terminates as `answered` before config_builder ever spends. (2) **`ask()` mode** (`multi_agent.py --ask`) — Ramona's user-delegation use case: *"as a user, I want to delegate the agent to surface information, not to run the lab beginning-to-end. Are there published capsules for X? Probing the lab is a use case."* ask() never executes; build-worthy questions return `needs_experiment` and the caller decides whether to spend.
+
+**Fork closed.** Prompt-step-only integration (adding "check the library" to config_builder's prompt). The corpus-wide words-vs-structure record (SBD-3, llama3 gates, Finding 21) says stages bind and words drift; and a stage gives the probe-the-lab use case for free, which a prompt line does not.
+
+**Fork opened.** The librarian is the natural consumer for everything the publish-shape answer requires (derived summaries, honest taxonomy, docs catalog) — and the meta-cycle's first hop is now mechanical: publish → librarian reads → workflows reuse. A broken librarian never blocks measurement (failure falls through to build).
+
+**Live validation.** gemini-2.5-flash (cheapest ladder model) in ask() mode answered "are there published capsules measuring Quack?" with four correct capsule ids and the real published overhead numbers (attach-mode 2.7×@100K → 4.9×@1M; pushdown ~1.9×), zero execution.
+
+**Cross-refs.** Finding 21, edge-case 6 (study 9887ce57), `[[work-before-the-work]]`, FAQ.md + docs/experiments.md (the cataloguing feature, now agent-readable).

@@ -179,27 +179,37 @@ def test_specialist_hits_max_turns_if_never_signals_done():
 # Orchestrator state machine — short-circuits on any stage failure
 # ---------------------------------------------------------------------------
 
+
+def _librarian_routes_to_build():
+    """run() now begins with the reference librarian (Finding 21's
+    structural fix); tests of the downstream stages prepend this."""
+    return SpecialistResult(role="librarian", outcome="ok",
+                            output={"build": "not in corpus"},
+                            sub_run_id="lib-run", turns_used=2)
+
 def test_orchestrator_short_circuits_on_config_builder_failure():
     """If config_builder fails, poll + analyzer must not run."""
     with patch.object(agent_orchestrator, "run_specialist") as mock_run_spec, \
          patch.object(agent_orchestrator, "poll_until_terminal") as mock_poll:
         # config_builder gives up
-        mock_run_spec.return_value = SpecialistResult(
-            role="config_builder", outcome="gave_up", output=None,
-            sub_run_id="cb-run", turns_used=15, error="stuck",
-        )
+        mock_run_spec.side_effect = [
+            _librarian_routes_to_build(),
+            SpecialistResult(role="config_builder", outcome="gave_up", output=None,
+                             sub_run_id="cb-run", turns_used=15, error="stuck"),
+        ]
         result = Orchestrator(goal="test", model="test/model").run()
 
     assert result.outcome == "config_builder_failed"
     assert result.experiment_id is None
     assert mock_poll.call_count == 0  # never got to polling
-    assert mock_run_spec.call_count == 1  # analyzer never invoked
+    assert mock_run_spec.call_count == 2  # librarian + config_builder; analyzer never invoked
 
 
 def test_orchestrator_short_circuits_on_poll_failure():
     with patch.object(agent_orchestrator, "run_specialist") as mock_run_spec, \
          patch.object(agent_orchestrator, "poll_until_terminal") as mock_poll:
         mock_run_spec.side_effect = [
+            _librarian_routes_to_build(),
             SpecialistResult(role="config_builder", outcome="ok",
                              output={"experiment_id": "aabb0001"},
                              sub_run_id="cb-run", turns_used=5),
@@ -209,13 +219,14 @@ def test_orchestrator_short_circuits_on_poll_failure():
 
     assert result.outcome == "poll_failed"
     assert result.experiment_id == "aabb0001"
-    assert mock_run_spec.call_count == 1  # analyzer never invoked
+    assert mock_run_spec.call_count == 2  # analyzer never invoked
 
 
 def test_orchestrator_happy_path_returns_analysis_and_ids():
     with patch.object(agent_orchestrator, "run_specialist") as mock_run_spec, \
          patch.object(agent_orchestrator, "poll_until_terminal") as mock_poll:
         mock_run_spec.side_effect = [
+            _librarian_routes_to_build(),
             SpecialistResult(role="config_builder", outcome="ok",
                              output={"experiment_id": "aabb0002"},
                              sub_run_id="cb-run", turns_used=5),
@@ -229,7 +240,8 @@ def test_orchestrator_happy_path_returns_analysis_and_ids():
     assert result.outcome == "complete"
     assert result.experiment_id == "aabb0002"
     assert result.analysis == "FINAL ANSWER: DuckDB wins"
-    assert result.sub_run_ids == {"config_builder": "cb-run", "analyzer": "an-run"}
+    assert result.sub_run_ids == {"librarian": "lib-run",
+                                  "config_builder": "cb-run", "analyzer": "an-run"}
 
 
 def test_orchestrator_trace_records_delegate_events(tmp_path, monkeypatch):
@@ -241,6 +253,7 @@ def test_orchestrator_trace_records_delegate_events(tmp_path, monkeypatch):
     with patch.object(agent_orchestrator, "run_specialist") as mock_run_spec, \
          patch.object(agent_orchestrator, "poll_until_terminal") as mock_poll:
         mock_run_spec.side_effect = [
+            _librarian_routes_to_build(),
             SpecialistResult(role="config_builder", outcome="ok",
                              output={"experiment_id": "aabb0003"},
                              sub_run_id="cb-run", turns_used=1),
@@ -254,10 +267,11 @@ def test_orchestrator_trace_records_delegate_events(tmp_path, monkeypatch):
 
     events = [json.loads(l) for l in open(orch.trace.path)]
     delegates = [e for e in events if e["event"] == "delegate"]
-    assert [d["stage"] for d in delegates] == ["config_builder", "poll", "analyzer"]
-    assert delegates[0]["sub_run_id"] == "cb-run"
-    assert delegates[1]["sub_run_id"] is None  # poll is pure-Python
-    assert delegates[2]["sub_run_id"] == "an-run"
+    assert [d["stage"] for d in delegates] == ["librarian", "config_builder", "poll", "analyzer"]
+    assert delegates[0]["sub_run_id"] == "lib-run"
+    assert delegates[1]["sub_run_id"] == "cb-run"
+    assert delegates[2]["sub_run_id"] is None  # poll is pure-Python
+    assert delegates[3]["sub_run_id"] == "an-run"
 
 
 # ---------------------------------------------------------------------------
@@ -465,6 +479,7 @@ def test_poll_budget_is_contract_declarable():
     with patch.object(agent_orchestrator, "run_specialist") as mock_run_spec, \
          patch.object(agent_orchestrator, "poll_until_terminal") as mock_poll:
         mock_run_spec.side_effect = [
+            _librarian_routes_to_build(),
             SpecialistResult(role="config_builder", outcome="ok",
                              output={"experiment_id": "aabb0007"},
                              sub_run_id="cb", turns_used=1),
@@ -491,17 +506,19 @@ def test_poll_timeout_suspends_not_fails():
     analyzer NOT invoked (its tokens are spent later, on resume)."""
     with patch.object(agent_orchestrator, "run_specialist") as mock_run_spec, \
          patch.object(agent_orchestrator, "poll_until_terminal") as mock_poll:
-        mock_run_spec.return_value = SpecialistResult(
-            role="config_builder", outcome="ok",
-            output={"experiment_id": "aabb0008"},
-            sub_run_id="cb", turns_used=2)
+        mock_run_spec.side_effect = [
+            _librarian_routes_to_build(),
+            SpecialistResult(role="config_builder", outcome="ok",
+                             output={"experiment_id": "aabb0008"},
+                             sub_run_id="cb", turns_used=2),
+        ]
         mock_poll.return_value = {"status": "timeout", "polls": 600}
         result = Orchestrator(goal="g", model="m", poll_budget_seconds=1800).run()
 
     assert result.outcome == "suspended"
     assert result.experiment_id == "aabb0008"
     assert result.error is None                  # suspension is not an error
-    assert mock_run_spec.call_count == 1         # analyzer never ran
+    assert mock_run_spec.call_count == 2         # analyzer never ran
 
 
 def test_resume_completes_when_capsule_ready():
@@ -544,3 +561,119 @@ def test_resume_surfaces_execution_failure():
     assert result.outcome == "poll_failed"
     assert "out of disk" in result.error
     assert mock_run_spec.call_count == 0
+
+
+# ---------------------------------------------------------------------------
+# Reference librarian — ask() mode + librarian-first routing in run().
+# Structural fix for Finding 21: 0/5 unprompted library adoption showed
+# schema-only exposure doesn't bind; a workflow STAGE does.
+# ---------------------------------------------------------------------------
+
+from sql_benchmarks.agent_orchestrator import LIBRARIAN, _parse_librarian
+
+
+def test_librarian_tool_desk_is_read_only():
+    """The reference desk can discover and READ everything, and can
+    execute NOTHING — no submit, no templates, no build tools."""
+    from sql_benchmarks.agent_tools import filter_tools
+    names = {t["function"]["name"] for t in filter_tools(LIBRARIAN.tool_names)}
+    assert "search_published_capsules" in names
+    assert "list_lab_docs" in names and "get_lab_doc" in names
+    assert "get_experiment_summary" in names
+    assert "submit_experiment" not in names
+    assert "get_template" not in names
+
+
+def test_parse_librarian_three_closes():
+    long_answer = "FINAL ANSWER: yes — capsules b8e2bfaf and 25b0e134 cover this. " + "x" * 100
+    assert _parse_librarian(long_answer) == {"analysis": long_answer}
+    assert _parse_librarian("HANDOFF: build reason=no capsule covers 100M-row joins") \
+        == {"build": "no capsule covers 100M-row joins"}
+    assert _parse_librarian("HANDOFF: impossible reason=no MongoDB engine") \
+        == {"impossible": "no MongoDB engine"}
+    assert _parse_librarian("just thinking out loud") is None
+
+
+def test_ask_mode_answers_without_executing():
+    """The user-delegation use case: 'are there published capsules for X?'
+    Librarian answers; config_builder and poll never run."""
+    with patch.object(agent_orchestrator, "run_specialist") as mock_run_spec, \
+         patch.object(agent_orchestrator, "poll_until_terminal") as mock_poll:
+        mock_run_spec.return_value = SpecialistResult(
+            role="librarian", outcome="ok",
+            output={"analysis": "FINAL ANSWER: yes, b8e2bfaf covers quack transport" + "x" * 80},
+            sub_run_id="lib", turns_used=3)
+        result = Orchestrator(goal="are there published capsules for quack?",
+                              model="m").ask()
+    assert result.outcome == "answered"
+    assert "b8e2bfaf" in result.analysis
+    assert mock_run_spec.call_count == 1
+    assert mock_poll.call_count == 0
+
+
+def test_ask_mode_routes_build_worthy_questions_without_building():
+    """ask() never executes — a build-worthy question comes back as
+    needs_experiment and the CALLER decides whether to spend."""
+    with patch.object(agent_orchestrator, "run_specialist") as mock_run_spec:
+        mock_run_spec.return_value = SpecialistResult(
+            role="librarian", outcome="ok",
+            output={"build": "no capsule covers recursive CTEs at scale"},
+            sub_run_id="lib", turns_used=4)
+        result = Orchestrator(goal="how do recursive CTEs scale?", model="m").ask()
+    assert result.outcome == "needs_experiment"
+    assert "recursive CTEs" in result.analysis
+    assert mock_run_spec.call_count == 1
+
+
+def test_run_answers_from_corpus_and_skips_build():
+    """Librarian-first in run(): corpus answer -> terminal, config_builder
+    never invoked. The Finding 21 economics, structurally enforced."""
+    with patch.object(agent_orchestrator, "run_specialist") as mock_run_spec, \
+         patch.object(agent_orchestrator, "poll_until_terminal") as mock_poll:
+        mock_run_spec.return_value = SpecialistResult(
+            role="librarian", outcome="ok",
+            output={"analysis": "FINAL ANSWER: published capsule answers this" + "x" * 80},
+            sub_run_id="lib", turns_used=2)
+        result = Orchestrator(goal="quack overhead?", model="m").run()
+    assert result.outcome == "answered"
+    assert mock_run_spec.call_count == 1  # librarian only — no config_builder
+    assert mock_poll.call_count == 0
+
+
+def test_run_proceeds_to_build_on_librarian_handoff():
+    with patch.object(agent_orchestrator, "run_specialist") as mock_run_spec, \
+         patch.object(agent_orchestrator, "poll_until_terminal") as mock_poll:
+        mock_run_spec.side_effect = [
+            SpecialistResult(role="librarian", outcome="ok",
+                             output={"build": "nothing on sort spill at 100M"},
+                             sub_run_id="lib", turns_used=2),
+            SpecialistResult(role="config_builder", outcome="ok",
+                             output={"experiment_id": "aabb000c"},
+                             sub_run_id="cb", turns_used=5),
+            SpecialistResult(role="analyzer", outcome="ok",
+                             output={"analysis": "FINAL ANSWER: measured"},
+                             sub_run_id="an", turns_used=3),
+        ]
+        mock_poll.return_value = {"status": "complete", "polls": 1}
+        with patch.object(agent_orchestrator.httpx, "get") as mock_get:
+            mock_get.return_value.json.return_value = {"config": {}}
+            result = Orchestrator(goal="sort spill at 100M?", model="m").run()
+    assert result.outcome == "complete"
+    assert result.experiment_id == "aabb000c"
+    assert result.sub_run_ids["librarian"] == "lib"
+
+
+def test_run_proceeds_to_build_when_librarian_fails():
+    """A broken reference desk must not block measurement."""
+    with patch.object(agent_orchestrator, "run_specialist") as mock_run_spec, \
+         patch.object(agent_orchestrator, "poll_until_terminal") as mock_poll:
+        mock_run_spec.side_effect = [
+            SpecialistResult(role="librarian", outcome="gave_up", output=None,
+                             sub_run_id="lib", turns_used=12, error="stuck"),
+            SpecialistResult(role="config_builder", outcome="ok",
+                             output={"impossible": "whatever"},
+                             sub_run_id="cb", turns_used=2),
+        ]
+        result = Orchestrator(goal="g", model="m").run()
+    assert result.outcome == "refused"      # reached config_builder despite librarian failure
+    assert mock_run_spec.call_count == 2
