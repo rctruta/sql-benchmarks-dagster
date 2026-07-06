@@ -83,7 +83,9 @@ def run_cell_rep(contract: dict, study_id: str, cell_name: str, rep: int,
         return "ran"  # run_agent prints its own outcome; trace has run_end
     else:  # multi_agent
         from sql_benchmarks.agent_orchestrator import Orchestrator
-        orch = Orchestrator(goal=contract["goal"], model=model)
+        orch = Orchestrator(goal=contract["goal"], model=model,
+                            poll_budget_seconds=float(
+                                contract.get("poll_budget_seconds", 180)))
         orch.trace.prompt_provenance(components={}, ablation_flags={
             "architecture": "orchestrator", **study_stamp})
         result = orch.run()

@@ -69,8 +69,67 @@ def read_running_marker(results_dir: str, exp_id: str) -> Optional[dict]:
         return None
 
 
-def has_running_marker(results_dir: str, exp_id: str) -> bool:
-    return os.path.exists(marker_path(results_dir, exp_id))
+# A run older than this is presumed dead regardless of PID state — also
+# bounds the PID-reuse false-alive window. Generous: real experiments run
+# minutes to ~an hour.
+MAX_MARKER_AGE_SECONDS = 6 * 3600
+
+
+def _pid_alive(pid) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True  # exists, owned by someone else
+    except (OverflowError, ValueError, TypeError):
+        return False  # garbage pid in the marker
+
+
+def has_running_marker(results_dir: str, exp_id: str,
+                       max_age_seconds: float = MAX_MARKER_AGE_SECONDS) -> bool:
+    """True only if the marker exists AND the run it describes is plausibly
+    alive. A crashed executor (killed API process, torn-down session) leaves
+    an orphaned marker that would otherwise block resubmission of the same
+    config forever — observed live 2026-07-06 (capsule 209fc5df: session
+    teardown killed the API mid-execution; the stale marker had to be
+    removed by hand). See TODO.md #12.
+
+    Staleness rules, in order:
+      - unreadable/corrupt marker            -> stale
+      - older than max_age_seconds           -> stale (any host; also caps
+                                                the PID-reuse window)
+      - same host and recorded PID not alive -> stale
+      - different host, within age           -> assumed alive (can't probe)
+
+    Stale markers are REMOVED (self-heal) with a loud warning, so the
+    status endpoint and check_registry recover without operator surgery."""
+    payload = read_running_marker(results_dir, exp_id)
+    if payload is None:
+        # Missing entirely, or unreadable. If the file exists but can't be
+        # parsed, it can't testify that anything is running — remove it.
+        if os.path.exists(marker_path(results_dir, exp_id)):
+            print(f"[WARN] corrupt running marker for {exp_id} — removing (stale)")
+            clear_running_marker(results_dir, exp_id)
+        return False
+
+    age = time.time() - float(payload.get("started_at") or 0)
+    if age > max_age_seconds:
+        print(f"[WARN] running marker for {exp_id} is {age/3600:.1f}h old "
+              f"(max {max_age_seconds/3600:.1f}h) — presumed dead, removing")
+        clear_running_marker(results_dir, exp_id)
+        return False
+
+    if payload.get("hostname") == socket.gethostname():
+        pid = payload.get("pid")
+        if not _pid_alive(pid):
+            print(f"[WARN] running marker for {exp_id} names dead pid {pid} — "
+                  "executor crashed; removing stale marker")
+            clear_running_marker(results_dir, exp_id)
+            return False
+
+    return True
 
 
 def clear_running_marker(results_dir: str, exp_id: str) -> None:

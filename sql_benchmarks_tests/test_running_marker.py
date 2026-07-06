@@ -89,3 +89,70 @@ def test_write_overwrites_existing(tmp_path):
     write_running_marker(str(tmp_path), "abc12345")
     second = read_running_marker(str(tmp_path), "abc12345")
     assert second["started_at"] >= first["started_at"]
+
+
+# ---------------------------------------------------------------------------
+# Staleness detection (TODO #12) — a crashed executor must not block
+# resubmission forever. Observed live 2026-07-06: session teardown killed
+# the API mid-execution of 209fc5df; the orphaned marker required manual
+# removal.
+# ---------------------------------------------------------------------------
+
+import json
+import time as _time
+
+from sql_benchmarks.running_marker import has_running_marker, marker_path
+
+
+def _write_marker(tmp_path, exp_id, **overrides):
+    import socket
+    exp_dir = os.path.join(str(tmp_path), exp_id)
+    os.makedirs(exp_dir, exist_ok=True)
+    payload = {"experiment_id": exp_id, "started_at": _time.time(),
+               "pid": os.getpid(), "hostname": socket.gethostname()}
+    payload.update(overrides)
+    with open(os.path.join(exp_dir, "running.json"), "w") as f:
+        json.dump(payload, f)
+
+
+def test_live_marker_is_running(tmp_path):
+    """Fresh marker, this process's PID, this host -> running."""
+    _write_marker(tmp_path, "aaaa0001")
+    assert has_running_marker(str(tmp_path), "aaaa0001") is True
+    assert os.path.exists(marker_path(str(tmp_path), "aaaa0001"))  # untouched
+
+
+def test_dead_pid_marker_is_stale_and_self_heals(tmp_path):
+    """The 209fc5df case: executor crashed, PID gone. Marker must read as
+    not-running AND be removed so resubmission proceeds."""
+    _write_marker(tmp_path, "aaaa0002", pid=99999999)  # no such pid
+    assert has_running_marker(str(tmp_path), "aaaa0002") is False
+    assert not os.path.exists(marker_path(str(tmp_path), "aaaa0002"))
+
+
+def test_overage_marker_is_stale_even_with_live_pid(tmp_path):
+    """Age cap bounds the PID-reuse window: a marker older than max age is
+    dead even if its PID happens to be alive."""
+    _write_marker(tmp_path, "aaaa0003", started_at=_time.time() - 7 * 3600)
+    assert has_running_marker(str(tmp_path), "aaaa0003") is False
+    assert not os.path.exists(marker_path(str(tmp_path), "aaaa0003"))
+
+
+def test_other_host_within_age_assumed_alive(tmp_path):
+    """Can't probe a PID on another machine — within the age window we
+    stay conservative and treat it as running."""
+    _write_marker(tmp_path, "aaaa0004", hostname="some-other-box", pid=1)
+    assert has_running_marker(str(tmp_path), "aaaa0004") is True
+
+
+def test_corrupt_marker_is_stale_and_removed(tmp_path):
+    exp_dir = os.path.join(str(tmp_path), "aaaa0005")
+    os.makedirs(exp_dir)
+    with open(os.path.join(exp_dir, "running.json"), "w") as f:
+        f.write("{broken")
+    assert has_running_marker(str(tmp_path), "aaaa0005") is False
+    assert not os.path.exists(marker_path(str(tmp_path), "aaaa0005"))
+
+
+def test_missing_marker_is_not_running(tmp_path):
+    assert has_running_marker(str(tmp_path), "aaaa0006") is False

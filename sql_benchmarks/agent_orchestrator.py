@@ -52,6 +52,16 @@ EXACTLY this format (no extra prose):
 
     HANDOFF: experiment_id=<8-hex>
 
+If the goal CANNOT be satisfied with the engines and suites this lab
+actually has (e.g. it names a database that is not in the catalog, or
+asks for a workload no suite covers), DO NOT substitute something else
+and do not force a submission. Produce instead:
+
+    HANDOFF: impossible reason=<one line naming exactly what is missing>
+
+That is a successful outcome — an honest refusal is worth more than a
+silently substituted experiment.
+
 That signals you're done. Do not analyze results — that's a different
 specialist. Do not produce a narrative — just the HANDOFF line.
 """
@@ -121,13 +131,20 @@ ANALYZER = SpecialistRole(
 
 
 _HANDOFF_RE = re.compile(r"HANDOFF:\s*experiment_id=([0-9a-f]{8})", re.IGNORECASE)
+_REFUSAL_RE = re.compile(r"HANDOFF:\s*impossible\s+reason=(.+)", re.IGNORECASE)
 
 
 def _parse_handoff(content: str) -> Optional[dict]:
-    """The config_builder signals completion with `HANDOFF: experiment_id=<8hex>`."""
+    """config_builder completion signals: `HANDOFF: experiment_id=<8hex>`
+    (built) or `HANDOFF: impossible reason=<text>` (structured refusal —
+    the state edge-3 showed was missing: without it, honest models thrash
+    through mechanical failures to say 'can't')."""
     m = _HANDOFF_RE.search(content or "")
     if m:
         return {"experiment_id": m.group(1)}
+    r = _REFUSAL_RE.search(content or "")
+    if r:
+        return {"impossible": r.group(1).strip()}
     return None
 
 
@@ -167,7 +184,7 @@ def poll_until_terminal(experiment_id: str,
 
 @dataclass
 class OrchestratorResult:
-    outcome: str  # "complete" | "config_builder_failed" | "poll_failed" | "analyzer_failed"
+    outcome: str  # "complete" | "refused" | "suspended" | "config_builder_failed" | "poll_failed" | "analyzer_failed"
     experiment_id: Optional[str]
     analysis: Optional[str]
     orchestrator_run_id: str
@@ -176,16 +193,24 @@ class OrchestratorResult:
 
 
 class Orchestrator:
-    """Runs the state machine: config_builder → poll → analyzer.
+    """Runs the state machine: config_builder → poll → analyzer, with a
+    REFUSED terminal state (config_builder judged the goal unsatisfiable
+    with the lab's actual engines/suites — a first-class honest outcome,
+    not a failure).
 
     Each stage's specialist gets its own JSONL trace. The orchestrator's
     own trace records `delegate` events pointing at each specialist's
     `sub_run_id`, so a reader can walk the multi-agent tree by opening
-    the orchestrator trace and following the sub_run_ids."""
+    the orchestrator trace and following the sub_run_ids.
 
-    def __init__(self, goal: str, model: str):
+    `poll_budget_seconds` is contract-declarable: edge-4 showed the fixed
+    180s default silently kills legitimately slow suites (sort_spill) —
+    uniform cross-model 'failure' that was actually a harness defect."""
+
+    def __init__(self, goal: str, model: str, poll_budget_seconds: float = 180.0):
         self.goal = goal
         self.model = model
+        self.poll_budget_seconds = poll_budget_seconds
         self.trace = AgentTrace(
             goal=f"[orchestrator] {goal}", model=model,
             agents_md_loaded=False, max_turns=0,
@@ -202,6 +227,15 @@ class Orchestrator:
             input_summary=self.goal[:200], outcome=cb.outcome,
             output_summary=(json.dumps(cb.output) if cb.output else None),
         )
+        if cb.outcome == "ok" and cb.output and "impossible" in cb.output:
+            # Structured refusal — terminal, honest, cheap. Not a failure.
+            reason = cb.output["impossible"]
+            self.trace.run_end("refused", turns_used=0, error=None)
+            return OrchestratorResult(
+                outcome="refused", experiment_id=None,
+                analysis=f"REFUSED: {reason}",
+                orchestrator_run_id=self.trace.run_id, sub_run_ids=sub_ids,
+            )
         if cb.outcome != "ok" or not cb.output or "experiment_id" not in cb.output:
             self.trace.run_end("config_builder_failed", turns_used=0, error=cb.error)
             return OrchestratorResult(
@@ -211,14 +245,33 @@ class Orchestrator:
             )
         exp_id = cb.output["experiment_id"]
 
-        # Stage 2: pure-Python poller
-        poll_result = poll_until_terminal(exp_id)
+        # Stage 2: pure-Python poller (budget contract-declarable)
+        interval = 3.0
+        poll_result = poll_until_terminal(
+            exp_id,
+            max_polls=max(1, int(self.poll_budget_seconds / interval)),
+            interval_seconds=interval,
+        )
         self.trace.delegate(
             stage="poll", sub_run_id=None,
             input_summary=f"experiment_id={exp_id}",
             outcome=poll_result["status"],
             output_summary=json.dumps(poll_result),
         )
+        if poll_result["status"] == "timeout":
+            # SUSPENDED, not failed: the experiment is still executing
+            # server-side and will finish regardless of who's watching.
+            # No poll budget is "right" for open-ended workloads (edge-4:
+            # a legitimate 16GB out-of-memory sort outlived a 30-minute
+            # budget). The run is resumable: `Orchestrator.resume(exp_id)`
+            # picks up at the analyzer for a few thousand tokens once the
+            # capsule completes.
+            self.trace.run_end("suspended", turns_used=0, error=None)
+            return OrchestratorResult(
+                outcome="suspended", experiment_id=exp_id, analysis=None,
+                orchestrator_run_id=self.trace.run_id, sub_run_ids=sub_ids,
+                error=None,
+            )
         if poll_result["status"] != "complete":
             self.trace.run_end("poll_failed", turns_used=0, error=str(poll_result))
             return OrchestratorResult(
@@ -227,7 +280,44 @@ class Orchestrator:
                 error=f"poll returned {poll_result['status']}: {poll_result.get('detail') or poll_result.get('error')}",
             )
 
-        # Stage 3: analyzer
+        return self._analyzer_stage(exp_id, sub_ids)
+
+    def resume(self, exp_id: str) -> OrchestratorResult:
+        """Pick up a SUSPENDED run: skip config_builder (the experiment
+        already exists), check/poll the capsule, then run the analyzer.
+        Cheap — the analyzer is a few thousand tokens; polling is free.
+
+        Callable any time after suspension: minutes later, next session,
+        or after a crash — the capsule is the durable hand-off point."""
+        sub_ids: dict = {"config_builder": None}  # skipped on resume
+        interval = 3.0
+        poll_result = poll_until_terminal(
+            exp_id,
+            max_polls=max(1, int(self.poll_budget_seconds / interval)),
+            interval_seconds=interval,
+        )
+        self.trace.delegate(
+            stage="poll", sub_run_id=None,
+            input_summary=f"experiment_id={exp_id} (resume)",
+            outcome=poll_result["status"],
+            output_summary=json.dumps(poll_result),
+        )
+        if poll_result["status"] == "timeout":
+            self.trace.run_end("suspended", turns_used=0, error=None)
+            return OrchestratorResult(
+                outcome="suspended", experiment_id=exp_id, analysis=None,
+                orchestrator_run_id=self.trace.run_id, sub_run_ids=sub_ids,
+            )
+        if poll_result["status"] != "complete":
+            self.trace.run_end("poll_failed", turns_used=0, error=str(poll_result))
+            return OrchestratorResult(
+                outcome="poll_failed", experiment_id=exp_id, analysis=None,
+                orchestrator_run_id=self.trace.run_id, sub_run_ids=sub_ids,
+                error=f"poll returned {poll_result['status']}: {poll_result.get('detail') or poll_result.get('error')}",
+            )
+        return self._analyzer_stage(exp_id, sub_ids)
+
+    def _analyzer_stage(self, exp_id: str, sub_ids: dict) -> OrchestratorResult:
         # Fetch the config's `definitions` block server-side (no LLM tokens)
         # so the analyzer knows what the partition labels MEAN (row counts).
         # Run-4 lesson: without this the analyzer had to assume "large is
