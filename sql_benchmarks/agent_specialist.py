@@ -277,8 +277,13 @@ def run_specialist(role: SpecialistRole, brief: str, model: str) -> SpecialistRe
             messages.append({"role": "user", "content": nudge_msg})
             continue
 
-        # Dispatch tool calls
+        # Dispatch tool calls. Coaching is BUFFERED and appended only after
+        # every tool result is in: the Anthropic API requires all tool_use
+        # ids of an assistant message to be answered by tool_results in the
+        # immediately following message(s) — a user message mid-batch is a
+        # 400. Surfaced by the guidance-floor study (parallel tool calls).
         empty_in_a_row = 0
+        pending_coaching = []
         for tc in tool_calls:
             args = _parse_tool_arguments(tc.function.arguments)
             trace.tool_call(turn=turn, tool_call_id=tc.id, name=tc.function.name, arguments=args)
@@ -295,7 +300,7 @@ def run_specialist(role: SpecialistRole, brief: str, model: str) -> SpecialistRe
                         "role": "tool", "tool_call_id": tc.id,
                         "name": tc.function.name, "content": result_str,
                     })
-                    messages.append({"role": "user", "content": gate_message})
+                    pending_coaching.append(gate_message)
                     continue
 
             result_str = execute_tool(tc.function.name, args)
@@ -339,7 +344,10 @@ def run_specialist(role: SpecialistRole, brief: str, model: str) -> SpecialistRe
                         f"Your available tools are: {sorted(t['function']['name'] for t in tools)}. "
                         "Fix the specific problem named in the error and retry."
                     )
-                messages.append({"role": "user", "content": coaching})
+                pending_coaching.append(coaching)
+
+        if pending_coaching:
+            messages.append({"role": "user", "content": "\n\n".join(pending_coaching)})
 
     # Max turns without a parseable final output
     trace.run_end("max_turns", role.max_turns)

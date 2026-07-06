@@ -105,7 +105,14 @@ def main():
     for cell in cells:
         for rep in range(1, reps + 1):
             print(f"\n=== study={study_id} cell={cell} rep={rep} ===")
-            outcomes[(cell, rep)] = run_cell_rep(contract, study_id, cell, rep)
+            # Per-run isolation: a transient API error in one run must not
+            # kill the rest of the matrix (it did, on the first execution
+            # of guidance_floor_2x2 — floor reps 2-3 never ran).
+            try:
+                outcomes[(cell, rep)] = run_cell_rep(contract, study_id, cell, rep)
+            except Exception as e:
+                print(f"    EXCEPTION: {type(e).__name__}: {e}")
+                outcomes[(cell, rep)] = f"exception: {e}"
 
     print(f"\nstudy {study_id} complete: {len(outcomes)} runs")
     print("analyze:  python scripts/tools/analyze_agent_traces.py")
