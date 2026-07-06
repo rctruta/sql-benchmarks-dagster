@@ -76,7 +76,8 @@ scratch/*
 !scratch/README.md
 # Publication-track drafts that need to be durable (committed) even while
 # still living in scratch/. Promote to docs/ when polished.
-!scratch/reducing_agent_search_scope.md
+# !scratch/reducing_agent_search_scope.md
+TODO.md
 ARTICLE_DRAFT.md                                   # article scaffold (local)
 architecture/                                      # unpublished red-team/AI-security WIP
 sql_benchmarks/experiments/reports/                # runtime-generated report output
