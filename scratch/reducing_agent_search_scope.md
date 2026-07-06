@@ -363,3 +363,17 @@ Lean baseline in effect (AGENTS.md + skills dropped per Findings 2/3; decisions 
 **Finding 15 — the multi-agent band holds at 18–35K across five models** spanning two vendors and three generations. The architecture remains the dominant variable.
 
 Analyzer now folds specialist tokens into orchestrator rows automatically (delegate-walking built in). Multi-agent *discovery* markers live in the config_builder specialist rows, not the orchestrator row — display note, not a finding.
+
+---
+
+## Answer-correctness grading — the truth layer (2026-07-06)
+
+`scripts/tools/grade_analyses.py` grades every final answer against the sealed capsule's fragments, deterministically. Coverage (are all ground-truth means stated?), accuracy (does every duration claim match some derivable statistic within 2%?), ratio check (5%), fabrication candidates listed verbatim. Verdicts: PASS / PARTIAL (all means right + unverifiable extra claims) / FAIL (a ground-truth mean misstated or absent).
+
+**Retroactive grade of the whole corpus (94 gradeable runs): 82 PASS, 12 PARTIAL, 0 FAIL.**
+
+**Finding 16 — no run in the corpus misstated a ground-truth mean.** Zero FAILs across 7 models × all guidance conditions × both architectures. The process markers were not masking numeric fabrication — the #9-style failure mode (confident numbers diverging from the sealed data) did not occur in 94 runs. The PARTIALs are dominated by *extrapolations* (e.g. "projected ~710 ms at 100M rows") — numbers that match nothing derivable because they predict beyond the data. Honest reasoning, correctly flagged as unverifiable; a future refinement could recognize hedged predictions as a separate class.
+
+**Grader lesson (meta):** the first corpus grade produced one FAIL that was a grader false-negative — gemini-3.5-flash writes LaTeX (`$5.83\text{ ms}$`, `$100\times$`) and the extractor missed it. Verify the verifier: every FAIL was manually inspected before trusting the distribution. Extractors now handle LaTeX notation.
+
+**What this closes.** The corpus is now cost + process + accuracy evidence. Every trace carries: what shaped the run (prompt_provenance), what it did (markers), what it consumed (tokens), and whether what it published is true (grade). The Fork-B sealable tuple exists end-to-end.
