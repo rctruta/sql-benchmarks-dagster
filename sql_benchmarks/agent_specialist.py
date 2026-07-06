@@ -178,6 +178,19 @@ def run_specialist(role: SpecialistRole, brief: str, model: str) -> SpecialistRe
         agents_md_loaded=False,
         max_turns=role.max_turns,
     )
+    # Meta-meta-trace: record exactly what shaped this specialist —
+    # specialists carry NO agents_md and NO skills by design (the minimal
+    # guidance condition in attribution studies).
+    trace.prompt_provenance(
+        components={
+            "agents_md": None,
+            "skills": None,
+            "role_prompt": role.system_prompt,
+            "tools_schema": tools,
+            "brief": brief,
+        },
+        ablation_flags={"architecture": "specialist", "role": role.name},
+    )
 
     messages = [
         {"role": "system", "content": role.system_prompt},

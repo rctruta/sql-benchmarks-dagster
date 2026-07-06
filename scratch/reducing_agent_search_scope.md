@@ -207,3 +207,37 @@ This is the fractal claim landing concretely. The lab measures the agent measuri
 - Runs: `sql_benchmarks/experiments/agent_runs/20260704T2306*.jsonl` and `20260704T2307*.jsonl` (multi-agent A/B, capsule `803f3c94`).
 - PR #135 (multi-agent implementation), PR #134 (taxonomy), PR #132 (projections), PR #131 (JSONL trace).
 - Cross-domain: same methodology applies in the testbed — sub-agents scoped by tool inventory would be a natural next move there too.
+
+---
+
+## Harness hardening round — 2026-07-05 (llama3 autopsy → gates)
+
+Two llama3 (8B) multi-agent runs, both `config_builder_failed`, traces localized the failure precisely (PR #137):
+
+- Run A (`20260705T234509Z`): called its own ROLE name as a tool 9×; submitted invented JSON schema 4×; never called `get_template`.
+- Run B (`20260705T234955Z`, after prompt fix + error coaching): role-hallucination gone, repeated-call breaker fired and redirected — but still never fetched a template; decayed to parroting tool results as text.
+
+Fixes (all mechanical): raw-text tool-call recovery (`function_name` key variants), repeated-failing-call breaker with escalating STOP coaching, `tool_preconditions` workflow gate (submit refused until get_template succeeded). Doctrine confirmed again: **exhortation doesn't bind; gates do** — same as SBD-3.
+
+Result: the 8B wall is real and now *named* — "fails at adapt-a-template with invented schema" — vs. the monolith's opaque "gave up at turn 23". Failure localization is the instrument working.
+
+---
+
+## Next study: what actually influences the agent? (attribution + confounds)
+
+**Question.** When the agent behaves well (picks `get_experiment_summary` first, filters by category), WHAT caused it — AGENTS.md? the skills block? tool descriptions? the model's priors? We currently cannot attribute, because all guidance layers ship together.
+
+**Already-known partial deconfound (free, sitting in existing traces):** the multi-agent specialists load NO AGENTS.md and NO skills (`agents_md_loaded=False` in their run_start events) — only role prompts + tool descriptions. Sonnet-5 still made ideal tool choices in Run 4. So for sonnet-5, tool descriptions + role prompt were SUFFICIENT; AGENTS.md/skills were not necessary. That attribution was invisible until now because nobody recorded which prompt components each run carried.
+
+**Confounds to control (name them or the study is theater):**
+1. **Guidance overlap** — skills, tool descriptions, and AGENTS.md all say overlapping things ("summary first"). Attribution requires ablation, not observation.
+2. **Content-addressed dedup** — capsule `803f3c94` exists, so identical configs return instantly as duplicates. First-run vs re-run trajectories differ (poll turns, timing). Either use fresh goals per cell or record duplicate-vs-fresh in the trace and stratify.
+3. **Sampling nondeterminism** — n=1 per cell proves nothing; need n≥3 replications per condition.
+4. **Model version drift** — record exact model identifier per run.
+5. **Ordering effects** — the skills block sits AFTER AGENTS.md in the prompt; position may matter, not just presence.
+
+**Instrument: the meta-meta-trace (`prompt_provenance` event).** Every run's JSONL gains one event recording, per prompt component: name, sha256, byte size — plus model id and ablation flags. Trace level 1 = what the agent did; level 2 = what it consumed and produced (tokens, tool results); level 3 (this) = *what shaped it*. Analysis can then GROUP BY prompt-composition-hash and correlate component presence with behavioral markers (which tool called first; category filter used; template fetched before submit; projections vs raw result).
+
+**Ablation harness.** Flags on both drivers: `--no-agents-md`, `--no-skills` (monolith); specialists are already the minimal condition. 2×2 factorial × n=3 reps × per-model. Behavioral markers extracted from traces mechanically — no human judging.
+
+**Open idea (not shipped):** canary markers in skills — a distinctive, benign instruction unique to the skills file whose execution proves the model attended to it (attention detection vs. mere presence).

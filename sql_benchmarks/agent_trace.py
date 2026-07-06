@@ -155,6 +155,30 @@ class AgentTrace:
             "error": error,
         })
 
+    def prompt_provenance(self, components: dict, ablation_flags: dict | None = None) -> None:
+        """The meta-meta-trace: WHAT SHAPED this run. `components` maps each
+        prompt component name (agents_md, skills, tool_workflow, role_prompt,
+        tools_schema, …) to its content string; hashed here so traces can be
+        grouped/diffed by prompt composition without storing full text.
+        Level 1 of the trace = what the agent did; level 2 = what it
+        consumed/produced; level 3 (this event) = what influenced it.
+        Attribution studies (ablate skills/AGENTS.md, correlate with
+        behavioral markers) GROUP BY these hashes."""
+        hashed = {}
+        for name, content in components.items():
+            if content is None:
+                hashed[name] = None  # component absent this run (ablated or missing)
+            else:
+                data = content if isinstance(content, str) else json.dumps(content, sort_keys=True)
+                hashed[name] = {
+                    "sha256": hashlib.sha256(data.encode("utf-8")).hexdigest(),
+                    "bytes": len(data.encode("utf-8")),
+                }
+        self._emit("prompt_provenance", {
+            "components": hashed,
+            "ablation_flags": ablation_flags or {},
+        })
+
     def delegate(self, stage: str, sub_run_id: str | None,
                  input_summary: str, outcome: str,
                  output_summary: str | None = None) -> None:

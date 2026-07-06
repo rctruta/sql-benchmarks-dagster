@@ -144,3 +144,40 @@ def test_run_end_records_outcome_variants(tmp_path, monkeypatch):
         end = [e for e in _read(t.path) if e["event"] == "run_end"][0]
         assert end["outcome"] == outcome
         assert end["turns_used"] == 7
+
+
+def test_prompt_provenance_hashes_components_and_marks_absent(tmp_path, monkeypatch):
+    """The meta-meta-trace: components are recorded as sha256+bytes (never
+    full text), absent/ablated components as None, ablation flags verbatim.
+    Attribution studies GROUP BY these hashes."""
+    monkeypatch.setattr(agent_trace, "AGENT_RUNS_DIR", str(tmp_path))
+    t = AgentTrace("g", "m", True, 25)
+    t.prompt_provenance(
+        components={
+            "agents_md": "# protocol doc",
+            "skills": None,  # ablated
+            "tools_schema": [{"function": {"name": "x"}}],  # non-string → JSON-canonical
+        },
+        ablation_flags={"architecture": "monolith", "include_skills": False},
+    )
+    events = _read(t.path)
+    pp = [e for e in events if e["event"] == "prompt_provenance"][0]
+    assert pp["components"]["skills"] is None
+    md = pp["components"]["agents_md"]
+    assert len(md["sha256"]) == 64
+    assert md["bytes"] == len("# protocol doc")
+    assert pp["components"]["tools_schema"]["sha256"]  # dict/list hashed via canonical JSON
+    assert pp["ablation_flags"] == {"architecture": "monolith", "include_skills": False}
+
+
+def test_prompt_provenance_same_content_same_hash(tmp_path, monkeypatch):
+    """Two runs with identical components must produce identical hashes —
+    that's what makes cross-run grouping by prompt composition possible."""
+    monkeypatch.setattr(agent_trace, "AGENT_RUNS_DIR", str(tmp_path))
+    a = AgentTrace("g1", "m", True, 25)
+    b = AgentTrace("g2", "m", True, 25)
+    for t in (a, b):
+        t.prompt_provenance(components={"skills": "recipe text"}, ablation_flags={})
+    ha = [e for e in _read(a.path) if e["event"] == "prompt_provenance"][0]
+    hb = [e for e in _read(b.path) if e["event"] == "prompt_provenance"][0]
+    assert ha["components"]["skills"]["sha256"] == hb["components"]["skills"]["sha256"]
