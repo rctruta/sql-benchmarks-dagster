@@ -190,6 +190,18 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "get_means_by_benchmark",
+            "description": "Mean/std per (benchmark, partition, engine) — the DISAGGREGATED view. Use when the benchmarks within a suite are themselves the objects of comparison (e.g. different NULL-handling approaches, different selectivity levels); the pooled projections average across them.",
+            "parameters": {
+                "type": "object",
+                "properties": {"experiment_id": {"type": "string"}},
+                "required": ["experiment_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_replication_stability",
             "description": "Std, CV, min, max per (partition, engine).",
             "parameters": {
@@ -270,6 +282,9 @@ def execute_tool(name: str, args: dict) -> str:
             return json.dumps(res.json(), indent=2)
         elif name == "get_scaling_factor":
             res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}/projections/scaling", timeout=30)
+            return json.dumps(res.json(), indent=2)
+        elif name == "get_means_by_benchmark":
+            res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}/projections/benchmarks", timeout=30)
             return json.dumps(res.json(), indent=2)
         elif name == "get_replication_stability":
             res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}/projections/stability", timeout=30)

@@ -6,6 +6,7 @@ from ..data.reader import ResultReader
 from ..logic.comparator import compare_experiment, compare_experiment_by_partition
 from ..logic.projections import (
     get_experiment_summary,
+    get_means_by_benchmark,
     get_means_by_partition,
     get_replication_stability,
     get_scaling_factor,
@@ -122,3 +123,13 @@ def projection_summary(exp_id: str):
     if not _reader.results_exist(exp_id):
         raise HTTPException(status_code=404, detail=f"Experiment '{exp_id}' not found")
     return get_experiment_summary(exp_id, _reader)
+
+
+@router.get("/{exp_id}/projections/benchmarks")
+def projection_benchmarks(exp_id: str):
+    """Mean/std per (benchmark, partition, engine) — the disaggregated view
+    for suites whose benchmarks ARE the comparison (null_logic approaches,
+    selectivity levels)."""
+    if not _reader.results_exist(exp_id):
+        raise HTTPException(status_code=404, detail=f"Experiment '{exp_id}' not found")
+    return get_means_by_benchmark(exp_id, _reader)

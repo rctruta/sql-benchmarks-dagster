@@ -284,3 +284,16 @@ def test_cli_legacy_positional_invocation_still_dispatches_to_run(monkeypatch):
             cli.main()
     assert exc_info.value.code == 0
     assert calls == [("queue", True)]
+
+
+def test_get_means_by_benchmark_disaggregates(three_scale_lab):
+    """Pooled projections average across benchmarks; this keeps them
+    apart — the view null_logic/selectivity suites need."""
+    from sql_benchmarks.api.logic.projections import get_means_by_benchmark
+    result = get_means_by_benchmark(EXP, ResultReader())
+    assert "duckdb_analytical" in result["benchmarks"]
+    small = result["benchmarks"]["duckdb_analytical"]["small"]["duckdb"]
+    assert small["sample_count"] == 3          # durations_raw, not pooled means
+    assert abs(small["mean_duration_seconds"] - 0.010) < 1e-6
+    assert small["std_duration_seconds"] > 0
+    assert result["provenance"]["fragment_count"] == 6

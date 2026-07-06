@@ -214,3 +214,33 @@ def get_experiment_summary(exp_id: str, reader) -> dict:
         "narrative": "\n".join(lines),
         "provenance": _provenance(fragments),
     }
+
+
+def get_means_by_benchmark(exp_id: str, reader) -> dict:
+    """Mean duration per (benchmark, partition, engine) — the disaggregated
+    view. Suites that encode the OBJECT of comparison as the benchmark
+    (null_logic: 3VL vs hand-decomposed 2VL vs IS NOT DISTINCT FROM;
+    selectivity: q_0_1_percent vs q_10_percent) are invisible to the
+    partition-pooled projections — a reference-librarian run refused a
+    paper-prep question for exactly this reason (2026-07-06). Additive:
+    the pooled projections keep their shape."""
+    fragments = reader.get_fragments(exp_id)
+    grouped: dict = {}
+    for f in fragments:
+        raw = f.metrics.durations_raw or [f.metrics.duration_seconds]
+        key = (f.meta.asset, f.meta.partition, f.meta.engine)
+        grouped.setdefault(key, []).extend(raw)
+    benchmarks: dict = {}
+    for (asset, part, eng), raws in sorted(grouped.items()):
+        m = mean(raws)
+        s = stdev(raws) if len(raws) >= 2 else 0.0
+        benchmarks.setdefault(asset, {}).setdefault(part, {})[eng] = {
+            "mean_duration_seconds": round(m, 6),
+            "std_duration_seconds": round(s, 6),
+            "sample_count": len(raws),
+        }
+    return {
+        "experiment_id": exp_id,
+        "benchmarks": benchmarks,
+        "provenance": _provenance(fragments),
+    }
