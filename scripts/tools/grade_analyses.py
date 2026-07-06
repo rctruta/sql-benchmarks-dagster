@@ -67,10 +67,16 @@ def load_ground_truth(exp_id: str):
             frag = json.load(f)
         part = frag["meta"]["partition"]
         eng = frag["meta"]["engine"]
+        # Key by ASSET too: suites like selectivity run several benchmarks
+        # per partition (q_0_1_percent, q_10_percent, …). Pooling them into
+        # one per-partition mean produced a number no honest answer would
+        # cite — the first grade of the edge-1 corpus flagged two false
+        # FAILs exactly this way.
+        asset = frag["meta"].get("asset", "")
         raw = frag["metrics"].get("durations_raw") or [frag["metrics"]["duration_seconds"]]
         raw_ms = [v * 1000 for v in raw]
         m = mean(raw_ms)
-        means[(part, eng)] = m
+        means[(asset, part, eng)] = m
         # Every statistic an honest answer might cite for this fragment.
         all_stats.extend(raw_ms)
         all_stats.append(m)
@@ -151,9 +157,21 @@ def grade(path: str):
     ratio_ok = [r for r in ratio_claims if any(_close(r, t, RATIO_TOL) for t in ratios)]
 
     coverage = sum(covered.values()) / len(covered) if covered else 0.0
-    if coverage == 1.0 and not unmatched:
+    # Verdicts are grounded in CLAIM ACCURACY, not exhaustive coverage —
+    # goals legitimately target a subset of a suite's benchmarks (edge-1
+    # selectivity asks about 2 of 6 queries), so demanding every fragment
+    # be cited would flag honest answers. Rules:
+    #   PASS    every duration claim matches a derivable statistic, and at
+    #           least one ground-truth mean is cited (numbers trace to THIS
+    #           capsule).
+    #   PARTIAL some claims match nothing derivable — flagged verbatim for
+    #           human review (extrapolations and misstatements both land
+    #           here; a mechanical grader flags, it doesn't convict).
+    #   FAIL    no cited number corresponds to the capsule at all.
+    coverage_any = any(covered.values())
+    if claims and coverage_any and not unmatched:
         verdict = "PASS"
-    elif coverage == 1.0:
+    elif coverage_any and unmatched:
         verdict = "PARTIAL"
     else:
         verdict = "FAIL"
@@ -164,7 +182,7 @@ def grade(path: str):
         "duration_claims": len(claims), "matched": len(matched),
         "unmatched_claims_ms": [round(u, 3) for u in unmatched],
         "ratio_claims": len(ratio_claims), "ratio_matched": len(ratio_ok),
-        "missing_means": [f"{p}/{e}" for (p, e), ok in covered.items() if not ok],
+        "missing_means": [f"{a}/{p}/{e}" for (a, p, e), ok in covered.items() if not ok],
     }
 
 

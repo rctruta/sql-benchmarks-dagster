@@ -101,10 +101,27 @@ def test_run_cell_rep_stamps_study_metadata(tmp_path, monkeypatch):
                           "study_stamp": study_stamp, "flags": flags})
 
     monkeypatch.setitem(sys.modules, "autonomous_agent", FakeAgent)
-    run_study.run_cell_rep(contract, study_id, "a", rep=2)
+    run_study.run_cell_rep(contract, study_id, "a", rep=2, model="test/model")
 
     assert len(calls) == 1
     c = calls[0]
-    assert c["study_stamp"] == {"study_id": study_id, "cell": "a", "rep": 2}
+    assert c["study_stamp"] == {"study_id": study_id, "cell": "a", "rep": 2,
+                                "study_model": "test/model"}
     assert c["flags"] == {"include_agents_md": True, "include_skills": False}
     assert c["model"] == "test/model"
+
+
+def test_models_list_normalization(tmp_path):
+    """`model:` (single) normalizes to a one-item `models` list; a
+    `models:` list passes through; neither is rejected."""
+    _, single = run_study.load_contract(_write(tmp_path, VALID, "single.yaml"))
+    assert single["models"] == ["test/model"]
+
+    multi = VALID.replace("model: test/model",
+                          "models: [weak/a, mid/b, strong/c]")
+    _, c = run_study.load_contract(_write(tmp_path, multi, "multi.yaml"))
+    assert c["models"] == ["weak/a", "mid/b", "strong/c"]
+
+    neither = "\n".join(l for l in VALID.splitlines() if not l.startswith("model"))
+    with pytest.raises(ValueError, match="model"):
+        run_study.load_contract(_write(tmp_path, neither, "none.yaml"))

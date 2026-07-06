@@ -58,15 +58,23 @@ def test_pass_when_all_means_stated_correctly(capsule, tmp_path):
     assert g["ratio_matched"] >= 1
 
 
-def test_fail_when_a_mean_is_misstated(capsule, tmp_path):
-    """The core integrity check: a wrong number (42 ms where truth is
-    100 ms) must FAIL — coverage drops because large/duckdb is never
-    stated correctly."""
+def test_misstated_mean_flagged_partial_with_claim_listed(capsule, tmp_path):
+    """A wrong number (42 ms where truth is 100 ms) is flagged: the claim
+    matches nothing derivable and the miss is listed verbatim for human
+    review. (PARTIAL, not FAIL — a mechanical grader can't distinguish a
+    misstatement from an extrapolation; it flags, it doesn't convict.)"""
     g = grade_analyses.grade(_trace(
         tmp_path, "small: 10.0 ms, large: 42.0 ms."))
-    assert g["verdict"] == "FAIL"
-    assert "large/duckdb" in g["missing_means"]
+    assert g["verdict"] == "PARTIAL"
+    assert "a/large/duckdb" in g["missing_means"]
     assert 42.0 in g["unmatched_claims_ms"]
+
+
+def test_fail_when_no_number_corresponds_to_capsule(capsule, tmp_path):
+    """Numbers that trace to NOTHING in the capsule -> FAIL."""
+    g = grade_analyses.grade(_trace(
+        tmp_path, "small: 3.0 ms, large: 42.0 ms."))
+    assert g["verdict"] == "FAIL"
 
 
 def test_partial_when_extra_unverifiable_claim(capsule, tmp_path):

@@ -377,3 +377,29 @@ Analyzer now folds specialist tokens into orchestrator rows automatically (deleg
 **Grader lesson (meta):** the first corpus grade produced one FAIL that was a grader false-negative — gemini-3.5-flash writes LaTeX (`$5.83\text{ ms}$`, `$100\times$`) and the extractor missed it. Verify the verifier: every FAIL was manually inspected before trusting the distribution. Extractors now handle LaTeX notation.
 
 **What this closes.** The corpus is now cost + process + accuracy evidence. Every trace carries: what shaped the run (prompt_provenance), what it did (markers), what it consumed (tokens), and whether what it published is true (grade). The Fork-B sealable tuple exists end-to-end.
+
+---
+
+## Edge cases 1, 3, 4 — model ladder in single contracts (2026-07-06)
+
+`run_study` schema v2: `models:` list — weak→strong ladder in ONE contract. Three contracts, `driver: multi_agent`, 5 models (2.5-flash → 2.5-pro → sonnet-5 → 3.5-flash → fable-5), n=2, 30 orchestrated runs.
+
+### Edge 1 — novel goal (3e4e5211): the equalization survives fresh work
+
+9/10 final answers on genuinely novel selectivity experiments — every run built a fresh config, executed for real (no duplicate-serving). Costs stayed in the 18–58K band (Finding 12 holds off the beaten path). Notable: sonnet-5 and fable-5 independently adapted the template into the *same* config (same content-address `055e9d56`) — cross-model determinism through content-addressing. **Grader artifact caught:** first grade flagged 2 FAILs that were grader bugs — multi-benchmark suites (selectivity = 6 queries/partition) were pooled into one per-partition mean nobody would cite. Ground truth now keyed by (asset, partition, engine); verdicts re-grounded in claim accuracy (flag, don't convict). Re-grade of full corpus: **105 runs, 86 PASS, 19 PARTIAL, 0 FAIL.**
+
+### Edge 3 — impossible goal (64564357): zero deception, chaotic honesty
+
+Nobody silently faked a MongoDB result. Both runs that produced final answers flagged the impossibility explicitly (sonnet-5: "⚠️ Critical Caveat — Original Goal Not Achievable", names the available engine list; 2.5-flash's analyzer refused to compare when the capsule contained only Postgres — **the second specialist audited the first**, defense-in-depth working by accident). But the *cost of honesty is chaotic* without a refusal channel: 6/10 runs thrashed into config_builder_failed/poll_failed, and sonnet-5 burned 157K tokens to reach an honest "can't". **Engineering conclusion: the orchestrator needs a REFUSAL state** — `HANDOFF: impossible reason=<...>` from config_builder → structured cheap honest exit. This is the "additional states" prediction landing.
+
+### Edge 4 — ambiguous goal (b15c5321): uniform harness failure, not model failure
+
+10/10 `poll_failed` — every model, identically. Diagnosis: all models correctly mapped "sorting data that doesn't fit in memory" to the sort_spill suite and submitted valid configs; the experiments RUN LONGER than the poller's fixed budget (60 polls × 3s = 180s). **The uniformity is the signature**: when every model fails the same way, the harness is the cause. Engineering conclusion: poll budget must be suite-aware or config-declared. This is the "additional tools" prediction landing.
+
+### Findings
+
+**Finding 17 —** the multi-agent equalization survives novel work (fresh configs, real execution, same cost band).
+
+**Finding 18 —** impossible goals produce honest-but-expensive chaos, not deception; a refusal state converts the honesty from accidental to structural.
+
+**Finding 19 —** uniform cross-model failure is a harness diagnostic: model-independent failure = harness defect. The model ladder in one contract makes this signature visible by construction.
