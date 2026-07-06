@@ -1,0 +1,58 @@
+meta:
+  name: 'DuckDB analytical aggregation scaling: small vs medium vs large'
+  description: 'Tests how DuckDB''s analytical_wall aggregation query scales across
+    three row-count scales (100K, 1M, 10M). Reports mean duration per scale and checks
+    whether scaling is roughly linear (2x rows -> 2x time) or diverges. DuckDB only,
+    no Docker, cold cache, replication 5 for stable means.
+
+    '
+  experiment_id: 34e90c76
+dataset:
+  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  tables:
+    analytical_data:
+      rows: rows
+      columns:
+      - name: id
+        provider: sequence
+        primary_key: true
+      - name: region
+        provider: choice
+        options:
+        - North
+        - South
+        - East
+        - West
+      - name: category
+        provider: choice
+        options:
+        - A
+        - B
+        - C
+      - name: price
+        provider: random_float
+        min_value: 10.0
+        max_value: 500.0
+      - name: quantity
+        provider: random_int
+        min_value: 1
+        max_value: 100
+      - name: discount
+        provider: random_float
+        min_value: 0.0
+        max_value: 0.3
+definitions:
+  rows:
+    small: 100000
+    medium: 1000000
+    large: 10000000
+execution:
+  test_suite: analytical_wall
+  engines:
+  - duckdb
+  replication: 5
+  matrix:
+    rows:
+    - large
+    - medium
+    - small

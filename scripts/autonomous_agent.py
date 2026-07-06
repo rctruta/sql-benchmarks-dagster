@@ -590,7 +590,12 @@ def build_system_prompt(include_agents_md: bool = True,
 
 
 def run_agent(goal: str, model: str = "gpt-4o",
-              include_agents_md: bool = True, include_skills: bool = True):
+              include_agents_md: bool = True, include_skills: bool = True,
+              study_stamp: dict | None = None):
+    """`study_stamp` ({study_id, cell, rep}) is set when this run belongs
+    to a contract-driven study (scripts/run_study.py) — recorded in the
+    trace's provenance so the trace is traceable to the exact study
+    contract that produced it."""
     console.print(Panel(f"[bold cyan]GOAL:[/bold cyan] {goal}", title="🤖 Agent Initialized"))
 
     system_prompt, prompt_components = build_system_prompt(
@@ -610,6 +615,7 @@ def run_agent(goal: str, model: str = "gpt-4o",
             "architecture": "monolith",
             "include_agents_md": include_agents_md,
             "include_skills": include_skills,
+            **(study_stamp or {}),
         },
     )
     console.print(f"[dim]Agent trace: {trace.path}[/dim]")
