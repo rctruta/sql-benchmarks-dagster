@@ -1,0 +1,31 @@
+# Study contract: multi-agent (orchestrator + specialists) — anthropic/claude-sonnet-5.
+# Cross-model question: does specialist decomposition (scoped tools,
+# focused prompts, no AGENTS.md/skills by construction) equalize the
+# model-specific floor signatures seen in the monolith studies
+# (Finding 7: Gemini drops taxonomy-first at the floor; sonnet-5
+# keeps it)? Specialists ARE a guidance condition: role prompt + rich
+# scoped schema.
+#
+# The multi_agent driver takes no ablation flags — the single cell
+# exists to satisfy the contract schema and name the condition.
+
+meta:
+  name: "Multi-agent cross-model — anthropic/claude-sonnet-5"
+  description: >
+    Orchestrator (config_builder -> poll -> analyzer), n=3. Specialist
+    traces are linked from the orchestrator trace via delegate events.
+
+driver: multi_agent
+model: anthropic/claude-sonnet-5
+replications: 3
+
+goal: >
+  Investigate how DuckDB performance scales on analytical aggregation
+  queries. Test at least three data scales — small, medium, and
+  something larger. Report the mean duration per scale, and whether the
+  scaling looks roughly linear (2x rows -> 2x time) or something
+  different. DuckDB only, no Docker.
+
+cells:
+  orchestrated:
+    flags: {}
