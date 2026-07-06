@@ -41,6 +41,19 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "search_published_capsules",
+            "description": "Search the lab's PUBLISHED experiment corpus — sealed, git-tracked capsules with verified results. Returns id, suite, engines, categories, and description per capsule; optional category filter. A published capsule's results can be read directly with get_experiment_summary and the other projections, without running anything.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "category": {"type": "string"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "list_templates",
             "description": "List curated experiment templates. Each is a human-authored, VALID config demonstrating a working (dataset shape + suite + engines) combination.",
             "parameters": {"type": "object", "properties": {}}
@@ -184,7 +197,13 @@ def execute_tool(name: str, args: dict) -> str:
     autonomous_agent.py used to have; extracted here so specialists
     reuse it without importing from a script."""
     try:
-        if name == "list_categories":
+        if name == "search_published_capsules":
+            params = {}
+            if args.get("category"):
+                params["category"] = args["category"]
+            res = httpx.get(f"{API_BASE}/v1/catalog/published", params=params, timeout=30)
+            return json.dumps(res.json(), indent=2)
+        elif name == "list_categories":
             res = httpx.get(f"{API_BASE}/v1/catalog/categories", timeout=30)
             return json.dumps(res.json(), indent=2)
         elif name == "list_suites":
