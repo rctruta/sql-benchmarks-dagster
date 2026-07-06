@@ -304,3 +304,17 @@ Human-and-agent parity: `sqlbench project means <id>` (CLI),
 **Fork opened.** Studies are now first-class, reproducible lab objects: re-run a study by pointing the runner at its YAML; extend the corpus by adding a cell; a future model-capability sweep is one contract file. Fork-B sealing extends naturally: `(study contract, traces, analysis)` is a sealable tuple.
 
 **Cross-refs.** [[experiment-config-design]], PR #139 (the pre-contract execution), `scratch/reducing_agent_search_scope.md`.
+
+---
+
+## 2026-07-06 — Lean experimental baseline: AGENTS.md and skills dropped from new studies
+
+**Decision.** New study contracts stop carrying AGENTS.md and skills cells. Baseline conditions are `anchor` (prose workflow + rich schema) and `floor` (schema only). Multi-agent specialists never had either, by construction.
+
+**Fork closed.** Continuing to burn tokens on conditions the corpus has answered: AGENTS.md = ~50K/run overhead with zero behavioral delta (Finding 2, replicated cross-model in Finding 9); skills = no considerable improvement (Finding 3).
+
+**Fork opened.** If a future model shows floor-level marker degradation (as 2.5-era Gemini did for taxonomy-first), re-introduce guidance cells FOR THAT MODEL to measure what it needs — guidance as a per-model prescription, not a default.
+
+**Side note (Ramona).** The shared goal's "no Docker" clause is redundant — DuckDB is in-process. Kept verbatim anyway in running studies: the goal string is part of the cross-study anchor (same goal-hash across all 9+ studies); changing it breaks comparability. New-goal studies should drop it.
+
+**Cross-refs.** Findings 2, 3, 9 in `scratch/reducing_agent_search_scope.md`. TODO #11 (agent_runs reorg, deferred).

@@ -340,3 +340,26 @@ Five more contracts, zero new code. Gen-over-gen (monolith, full/anchor/floor): 
 **Finding 12 — specialist decomposition equalizes models.** 9/9 success; all three models land in an 18–26K band with tiny variance (sonnet-5's three reps span 385 tokens). The model-specific floor signatures (Finding 7) and the generation cost curves (Finding 10) disappear under the multi-agent architecture — scoped tools + focused prompts dominate model-specific defaults. The architecture, not the model, sets the cost envelope. This is the strongest single result in the corpus for the progressive-disclosure thesis.
 
 **Corpus status:** 9 executed study contracts, 5 working models (+1 documented dead model), ~75 committed traces, findings 1–12. Multi-agent trace linking (orchestrator → specialist tokens) currently requires walking delegate events — worth folding into the analyzer if the corpus keeps growing.
+
+---
+
+## Fable-5 + gemini-3.5-flash multi-agent — 2026-07-06 (studies dfbebea3, 4fdadae5, 0bf58e58)
+
+Lean baseline in effect (AGENTS.md + skills dropped per Findings 2/3; decisions log 2026-07-06).
+
+| Model | anchor | floor | orchestrated |
+|---|---|---|---|
+| claude-fable-5 | **42,283** | 46,278 (n=2¹) | **24,295** |
+| claude-sonnet-5 | 54,359 | 99,441 | 26,301 |
+| gemini-3.5-flash | 101,472 | 158,480 | 34,945 |
+| gemini-2.5-flash | 64,841 | 21,404 | 18,508 |
+
+¹ one rep lost to a transient SSL error; runner isolation held.
+
+**Finding 13 — fable-5 has the best sparse-guidance profile of any model tested.** Floor ≈ anchor (46K vs 42K — no floor penalty), taxonomy-first kept at the floor (2/2), cheapest Claude anchor. The newest Anthropic flagship is disciplined *and* cheap without guidance — contrast gemini gen-3 floors exploding to 3–4× their anchors.
+
+**Finding 14 — the reasoning tax survives orchestration, compressed.** 3.5-flash orchestrated (34.9K) is ~2× 2.5-flash orchestrated (18.5K) — thinking tokens don't go to zero under specialists. But orchestration compresses the gen-3 overhead ~4.5× (158K floor → 35K orchestrated). Refined answer to "do reasoning models + strong schema + multi-agent win?": **multi-agent wins for every model; reasoning models keep a residual thinking tax; the cheapest configuration is a non-reasoning flash under orchestration; the most schema-disciplined models are fable-5/sonnet-5.**
+
+**Finding 15 — the multi-agent band holds at 18–35K across five models** spanning two vendors and three generations. The architecture remains the dominant variable.
+
+Analyzer now folds specialist tokens into orchestrator rows automatically (delegate-walking built in). Multi-agent *discovery* markers live in the config_builder specialist rows, not the orchestrator row — display note, not a finding.

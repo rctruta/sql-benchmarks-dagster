@@ -1,0 +1,32 @@
+# Study contract: claude-fable-5 — anchor + floor cells only.
+#
+# Per Ramona (2026-07-06): AGENTS.md adds huge overhead with no
+# behavioral delta (Finding 2) and skills bring no considerable
+# improvement (Finding 3) — both DROPPED from the experimental setup
+# going forward. The lean baseline is: anchor (prose workflow + rich
+# schema) and floor (schema only).
+
+meta:
+  name: "Guidance floor — claude-fable-5 (lean baseline: no AGENTS.md, no skills)"
+  description: >
+    Anchor + floor cells for cross-model comparison with sonnet-5 and
+    the Gemini generations. Markers via analyze_agent_traces.py.
+
+driver: monolith
+model: anthropic/claude-fable-5
+replications: 3
+
+goal: >
+  Investigate how DuckDB performance scales on analytical aggregation
+  queries. Test at least three data scales — small, medium, and
+  something larger. Report the mean duration per scale, and whether the
+  scaling looks roughly linear (2x rows -> 2x time) or something
+  different. DuckDB only, no Docker.
+
+cells:
+  anchor:
+    flags: {include_agents_md: false, include_skills: false,
+            include_workflow: true,  neutral_tool_descriptions: false}
+  floor:
+    flags: {include_agents_md: false, include_skills: false,
+            include_workflow: false, neutral_tool_descriptions: true}
