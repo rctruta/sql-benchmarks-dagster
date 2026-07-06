@@ -190,3 +190,9 @@ Session-start and session-end records with model, goal, outcome. Written to `--l
 ## 11. agent_runs/ is a flat pile — restructure as <run_id>/ directories
 
 **STATUS: OPEN** — surfaced 2026-07-06 (Ramona). All traces live flat in `sql_benchmarks/experiments/agent_runs/*.jsonl`. Target shape: `agent_runs/<id>/` holding everything pertaining to that run (trace, and later: sealed analysis, per-run manifest), mirroring the capsule convention in `results/<id>/`. For multi-agent runs the orchestrator's id is the natural directory; specialist traces live inside it. Deferred by choice — corpus collection takes priority; do the reorg before the corpus gets big enough for the move to be painful (analyzer + committed-trace paths need a migration in the same PR).
+
+## 12. Stale running markers — a crashed executor blocked resubmission forever
+
+**STATUS: SHIPPED 2026-07-06** — `has_running_marker` is now liveness-aware. Observed live: a session teardown killed the API mid-execution of `209fc5df`, leaving an orphaned `running.json`; `check_registry` would have answered "already running — poll instead" to every resubmission of that config, permanently, and the marker had to be removed by hand.
+
+Fix (single choke point — `running_marker.has_running_marker`, inherited by `check_registry` and the API's `is_running`): a marker only counts as running if it is readable, younger than `MAX_MARKER_AGE_SECONDS` (6h — also caps the PID-reuse window), and (same-host) its recorded PID is alive. Stale markers are removed on detection (self-heal) with a loud `[WARN]`. Different-host markers within the age window are conservatively treated as alive (can't probe a remote PID). 6 regression tests pin each rule, including the exact 209fc5df scenario (dead PID → not running → marker gone).
