@@ -484,11 +484,18 @@ def parse_tool_result_for_error(result_str: str):
     return None
 
 
-def build_system_prompt() -> str:
+def build_system_prompt(include_agents_md: bool = True,
+                        include_skills: bool = True) -> tuple:
     """Compose the system prompt from AGENTS.md (the authoritative protocol
     doc) plus this script's tool-specific workflow. If AGENTS.md is missing,
-    fall back to a minimal built-in workflow with a schema example."""
-    agents_md = load_agents_md()
+    fall back to a minimal built-in workflow with a schema example.
+
+    `include_agents_md` / `include_skills` are ABLATION FLAGS for the
+    attribution study (scratch/reducing_agent_search_scope.md): which
+    guidance layer actually drives behavior? Returns `(prompt, components)`
+    where `components` maps each layer's name to its content (or None if
+    absent/ablated) — fed to AgentTrace.prompt_provenance."""
+    agents_md = load_agents_md() if include_agents_md else None
 
     tool_workflow = (
         "## This Agent's Tools & Workflow\n\n"
@@ -528,7 +535,7 @@ def build_system_prompt() -> str:
         "Do NOT return an empty message.\n"
     )
 
-    skills = load_skills()
+    skills = load_skills() if include_skills else ""
     skills_block = (
         "\n\n---\n\n# Skills (precise procedures for specific operations)\n\n"
         + skills
@@ -536,18 +543,26 @@ def build_system_prompt() -> str:
         else ""
     )
 
+    components = {
+        "agents_md": agents_md,
+        "tool_workflow": tool_workflow,
+        "skills": skills or None,
+        "tools_schema": TOOLS,
+    }
+
     if agents_md:
-        return (
+        prompt = (
             "# Protocol Document (loaded from AGENTS.md at repo root)\n\n"
             + agents_md
             + "\n\n---\n\n"
             + tool_workflow
             + skills_block
         )
+        return prompt, components
 
     # Fallback: minimal built-in when AGENTS.md is missing. Preserves the
     # concrete YAML example so this script still works standalone.
-    return (
+    prompt = (
         tool_workflow
         + "\n\n## Schema Example (AGENTS.md not found; embedded fallback)\n\n"
         "```yaml\n"
@@ -571,20 +586,31 @@ def build_system_prompt() -> str:
         "```\n"
         + skills_block
     )
+    return prompt, components
 
 
-def run_agent(goal: str, model: str = "gpt-4o"):
+def run_agent(goal: str, model: str = "gpt-4o",
+              include_agents_md: bool = True, include_skills: bool = True):
     console.print(Panel(f"[bold cyan]GOAL:[/bold cyan] {goal}", title="🤖 Agent Initialized"))
 
-    system_prompt = build_system_prompt()
-    # Show a one-line signal to the user about which prompt path is active
-    agents_md_loaded = os.path.isfile(os.path.join(_REPO_ROOT, "AGENTS.md"))
-    console.print(f"[dim]System prompt: AGENTS.md {'loaded' if agents_md_loaded else 'not found — using fallback'} "
+    system_prompt, prompt_components = build_system_prompt(
+        include_agents_md=include_agents_md, include_skills=include_skills)
+    agents_md_loaded = prompt_components["agents_md"] is not None
+    console.print(f"[dim]System prompt: AGENTS.md {'loaded' if agents_md_loaded else 'ABSENT (missing or ablated)'} "
+                  f"| skills {'loaded' if prompt_components['skills'] else 'ABSENT'} "
                   f"| Model: {model}[/dim]")
 
     trace = AgentTrace(
         goal=goal, model=model,
         agents_md_loaded=agents_md_loaded, max_turns=MAX_TURNS,
+    )
+    trace.prompt_provenance(
+        components=prompt_components,
+        ablation_flags={
+            "architecture": "monolith",
+            "include_agents_md": include_agents_md,
+            "include_skills": include_skills,
+        },
     )
     console.print(f"[dim]Agent trace: {trace.path}[/dim]")
 
@@ -763,7 +789,17 @@ if __name__ == "__main__":
         ),
         help="The natural-language goal to hand the agent."
     )
+    parser.add_argument(
+        "--no-agents-md", action="store_true",
+        help="ABLATION: omit AGENTS.md from the system prompt (attribution study)."
+    )
+    parser.add_argument(
+        "--no-skills", action="store_true",
+        help="ABLATION: omit the skills block from the system prompt (attribution study)."
+    )
     args = parser.parse_args()
     # Fail fast if the required API key for the chosen model is missing.
     check_api_key(args.model)
-    run_agent(args.goal, model=args.model)
+    run_agent(args.goal, model=args.model,
+              include_agents_md=not args.no_agents_md,
+              include_skills=not args.no_skills)
