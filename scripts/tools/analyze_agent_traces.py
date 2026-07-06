@@ -31,6 +31,22 @@ PROJECTIONS = {"get_experiment_summary", "get_means_by_partition",
                "get_scaling_factor", "get_replication_stability"}
 
 
+def _specialist_tokens(run_id: str, runs_dir: str) -> int:
+    """Sum prompt+completion tokens of one specialist's trace (0 if the
+    trace file isn't present alongside the orchestrator's)."""
+    path = os.path.join(runs_dir, f"{run_id}.jsonl")
+    if not os.path.exists(path):
+        return 0
+    total = 0
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            e = json.loads(line)
+            if e.get("event") == "model_response" and e.get("usage"):
+                total += (e["usage"].get("prompt_tokens") or 0) + \
+                         (e["usage"].get("completion_tokens") or 0)
+    return total
+
+
 def extract_markers(path: str) -> dict:
     events = []
     with open(path, encoding="utf-8") as f:
@@ -90,6 +106,13 @@ def extract_markers(path: str) -> dict:
         elif ev == "run_end":
             markers["outcome"] = e.get("outcome")
             markers["turns"] = e.get("turns_used") or 0
+        elif ev == "delegate":
+            # Orchestrator trace: fold each specialist's tokens into this
+            # run's total so multi-agent rows are directly comparable to
+            # monolith rows without hand-walking delegate events.
+            sub = e.get("sub_run_id")
+            if sub:
+                markers["tokens"] += _specialist_tokens(sub, os.path.dirname(path))
 
     markers["projections_used"] = sorted(set(projections))
     return markers

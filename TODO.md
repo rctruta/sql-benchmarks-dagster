@@ -186,3 +186,7 @@ Session-start and session-end records with model, goal, outcome. Written to `--l
 - **Agent silent-exit on empty/hallucinated tool response** — PR #106.
 - **API-key handling + AGENTS.md loading in autonomous_agent.py** — PR #107.
 - **Autonomous agent goal hardcodes the suite name** — the default `--goal` in `__main__` tells the agent to use `analytical_wall` instead of asking it to reason from `list_suites`. Not a bug (`--goal` is overridable), but the default should be intent-level, not suite-level.
+
+## 11. agent_runs/ is a flat pile — restructure as <run_id>/ directories
+
+**STATUS: OPEN** — surfaced 2026-07-06 (Ramona). All traces live flat in `sql_benchmarks/experiments/agent_runs/*.jsonl`. Target shape: `agent_runs/<id>/` holding everything pertaining to that run (trace, and later: sealed analysis, per-run manifest), mirroring the capsule convention in `results/<id>/`. For multi-agent runs the orchestrator's id is the natural directory; specialist traces live inside it. Deferred by choice — corpus collection takes priority; do the reorg before the corpus gets big enough for the move to be painful (analyzer + committed-trace paths need a migration in the same PR).
