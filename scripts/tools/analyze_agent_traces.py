@@ -126,7 +126,7 @@ def main():
         for r in group:
             proj = ",".join(p.replace("get_", "").replace("_by_partition", "")
                             .replace("experiment_", "") for p in r["projections_used"]) or "-"
-            print(f"  {r['run_id']}  outcome={r['outcome']:<13} turns={r['turns']:>2} "
+            print(f"  {r['run_id']}  outcome={r['outcome'] or 'NO-RUN-END':<13} turns={r['turns']:>2} "
                   f"tokens={r['tokens']:>7}  first={r['first_tool'] or '-':<16} "
                   f"catfilter={'Y' if r['category_filtered'] else 'n'} "
                   f"tmpl_first={'Y' if r['template_first'] else ('n' if r['template_first'] is False else '-')} "
