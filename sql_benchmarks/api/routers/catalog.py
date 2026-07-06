@@ -80,3 +80,12 @@ def get_template(name: str):
         if t.name == name:
             return TemplateContent(name=name, content=content, path=t.path)
     raise HTTPException(status_code=404, detail=f"Template '{name}' not found")
+
+
+@router.get("/published")
+def search_published(category: str | None = None):
+    """Discovery over the published (git-tracked + sealed) capsule corpus —
+    the lab's own literature. Optional taxonomy-category filter. Read a
+    hit with the existing result projections."""
+    from ..logic.published_library import search_published_capsules
+    return {"capsules": search_published_capsules(category=category)}

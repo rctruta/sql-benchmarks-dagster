@@ -94,8 +94,14 @@ Workflow:
 CONFIG_BUILDER = SpecialistRole(
     name="config_builder",
     tool_names=[
-        "list_categories", "list_suites", "list_templates",
-        "get_template", "submit_experiment",
+        # search_published_capsules is deliberately in the SCHEMA but not in
+        # the prompt workflow — edge-case 6 measures UNPROMPTED adoption:
+        # does the model check the lab's literature before re-running an
+        # experiment the corpus already answers? (Findings 5–7: frontier
+        # models derive workflow from schema alone; this tests whether that
+        # extends to knowledge reuse.)
+        "list_categories", "list_suites", "search_published_capsules",
+        "list_templates", "get_template", "submit_experiment",
     ],
     system_prompt=_CONFIG_BUILDER_PROMPT,
     max_turns=15,

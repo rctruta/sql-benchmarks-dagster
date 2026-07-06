@@ -49,3 +49,11 @@ capsules:
   # Capsules NOT listed here inherit from their config's `test_suite`.
   461beee8: [selectivity, cross-engine]   # Postgres tipping-point selectivity study
   28f7aa1c: [selectivity, cross-engine]
+  # quack-v1 release: the suite was analytical_wall/tpch but the OBJECT of
+  # study is the Quack protocol (columnar client-server transport) — tag so
+  # library discovery by category finds the lab's quack literature.
+  b8e2bfaf: [columnar, transport]
+  b82b4eae: [columnar, transport]
+  902d1277: [columnar, transport]
+  25b0e134: [columnar, transport]
+  b198363e: [columnar, cross-engine]

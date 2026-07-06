@@ -1,0 +1,41 @@
+# Edge case 6: does the agent use the lab's PUBLISHED knowledge unprompted?
+#
+# The repo carries sealed, git-tracked quack capsules (the quack-v1
+# release) that already answer transport-efficiency questions. A new
+# discovery tool — search_published_capsules — is in the config_builder's
+# SCHEMA only; the workflow prompt does not mention it. The goal does not
+# hint that prior results exist.
+#
+# Measured per model (n=1 — behavior classification, not distribution):
+#   - library tool called at all?           (unprompted adoption)
+#   - published capsule reused via handoff? (no submit -> poll complete
+#     instantly -> analyzer reads sealed results; the state machine
+#     already supported reuse — only discovery was missing)
+#   - or re-ran the experiment?             (paid for what the corpus
+#     already knew)
+# Answers graded against whichever capsule the run used.
+#
+# The meta-cycle (Ramona): capsules + docs added to the lab should feed
+# meta-information back into the workflow — using the lab to test
+# hypotheses AND using lab execution to surface improvements to the lab.
+# This study measures the first hop of that cycle.
+
+meta:
+  name: "Edge 6 — published-knowledge reuse, model ladder, schema-only steering"
+  description: >
+    Quack transport-efficiency goal already answered by the quack-v1
+    published capsules. One replication per model; adoption is a
+    categorical outcome.
+
+driver: multi_agent
+models: [gemini/gemini-2.5-flash, gemini/gemini-2.5-pro, anthropic/claude-sonnet-5, gemini/gemini-3.5-flash, anthropic/claude-fable-5]
+replications: 1
+
+goal: >
+  How much overhead does Quack's transport add compared to running the
+  same workload natively in DuckDB, and which Quack execution mode is
+  most efficient? Quack and DuckDB only, small scale is fine.
+
+cells:
+  orchestrated:
+    flags: {}
