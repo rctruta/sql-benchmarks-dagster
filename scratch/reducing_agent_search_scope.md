@@ -241,3 +241,26 @@ Result: the 8B wall is real and now *named* — "fails at adapt-a-template with 
 **Ablation harness.** Flags on both drivers: `--no-agents-md`, `--no-skills` (monolith); specialists are already the minimal condition. 2×2 factorial × n=3 reps × per-model. Behavioral markers extracted from traces mechanically — no human judging.
 
 **Open idea (not shipped):** canary markers in skills — a distinctive, benign instruction unique to the skills file whose execution proves the model attended to it (attention detection vs. mere presence).
+
+---
+
+## Attribution study results — 2×2 factorial, sonnet-5, n=3/cell (2026-07-06)
+
+Same goal, same model (`anthropic/claude-sonnet-5`), monolith driver; conditions = ±AGENTS.md × ±skills. Tool descriptions + inline tool_workflow present in ALL conditions (they are the constant). All 12 runs succeeded.
+
+| Condition | mean tokens | mean turns | first tool | catfilter | template-first | raw used |
+|---|---|---|---|---|---|---|
+| −AGENTS.md −skills | 99,770 | 10.3 | list_categories 3/3 | 3/3 | 3/3 | 0/3 |
+| −AGENTS.md +skills | 89,713 | 8.3 | list_categories 3/3 | 2/3 | 3/3 | 0/3 |
+| +AGENTS.md −skills | 150,595 | 12.0 | list_categories 3/3 | 3/3 | 3/3 | 0/3 |
+| +AGENTS.md +skills | 101,571 | 7.7 | list_categories 3/3 | 2/3 | 3/3 | 0/3 |
+
+**Finding 1 — behavioral markers are IDENTICAL across all four conditions.** Every run: `list_categories` first, template fetched before submit, projections used, raw result never touched. Neither AGENTS.md nor skills *causes* the good behavior on sonnet-5. The always-present layers (tool descriptions + inline workflow) fully determine tool selection. Guidance redundancy is total for this model/task.
+
+**Finding 2 — AGENTS.md costs tokens without changing behavior.** +AGENTS.md is consistently more expensive (150K vs 100K without skills; 102K vs 90K with) — pure prompt payload, zero behavioral delta. On this task AGENTS.md is, for sonnet-5, *dead weight the model re-reads every turn*. The most expensive condition is AGENTS.md-without-skills (150K, 12 turns).
+
+**Finding 3 (weaker, n=3 noise) — skills correlate with fewer turns.** 7.7–8.3 mean turns with skills vs 10.3–12.0 without. Plausible mechanism: the recipes shorten deliberation even when they don't change which tools get picked. Needs replication before claiming.
+
+**Named limitations.** Single model, single goal, n=3, duplicate-served capsule for most runs (some 12–14-turn runs likely submitted variant configs and executed fresh — stratify by `status=queued` vs `duplicate` in a follow-up). Skills content overlaps tool descriptions, so "skills don't matter" here means *marginal* contribution given rich tool descriptions — the next ablation is neutralized tool descriptions, which separates schema-guidance from prose-guidance.
+
+**Design implication if Finding 1–2 replicate:** move ALL behavioral guidance into tool descriptions (paid once per schema, cached) and keep AGENTS.md out of the per-turn context for capable models; reserve skills/AGENTS.md injection for models whose tool-description-following is weak. Progressive disclosure again — this time of guidance itself.
