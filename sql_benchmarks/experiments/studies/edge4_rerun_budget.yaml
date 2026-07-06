@@ -1,0 +1,28 @@
+# Edge 4 RERUN with the two states shipped after the first execution:
+#   - poll_budget_seconds (contract-declared; first run died at the fixed
+#     180s default while sort_spill was still executing — Finding 19)
+#   - refusal state exists but should NOT trigger here (goal is valid).
+#
+# Cost-conscious design (Ramona, 2026-07-06): n=1 per model, two models
+# only — this verifies a GATE, not a distribution. Replication buys
+# nothing for defect-fix verification.
+
+meta:
+  name: "Edge 4 rerun — suite-aware poll budget verification"
+  description: >
+    Same ambiguous sort_spill goal; poll budget raised to 30 min.
+    Success = poll survives to terminal state and analyzer produces a
+    graded answer.
+
+driver: multi_agent
+models: [anthropic/claude-fable-5, gemini/gemini-2.5-flash]
+replications: 1
+poll_budget_seconds: 1800
+
+goal: >
+  I have a feeling DuckDB gets much slower when it has to sort data that
+  doesn't fit in memory. Can you check whether that's true?
+
+cells:
+  orchestrated:
+    flags: {}

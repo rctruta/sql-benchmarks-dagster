@@ -155,3 +155,68 @@ def test_boolean_rows_not_treated_as_int():
         # If it does raise, it should NOT be with our "literal 'rows: True'"
         # message — the check explicitly filters out booleans.
         assert "literal 'rows: True'" not in str(e)
+
+
+# ---------------------------------------------------------------------------
+# Host-memory guard (fail-closed) — observed live 2026-07-06: a 16GB
+# duckdb.memory_limit lane on a 16GB machine froze the host hard.
+# ---------------------------------------------------------------------------
+
+import pytest as _pytest
+
+from sql_benchmarks import validation as _validation
+from sql_benchmarks.validation import (
+    _check_memory_limits_fit_host, _parse_memory_bytes,
+)
+
+
+def test_parse_memory_bytes_units():
+    assert _parse_memory_bytes("512MB") == 512 * 1024**2
+    assert _parse_memory_bytes("16GB") == 16 * 1024**3
+    assert _parse_memory_bytes("1.5GiB") == int(1.5 * 1024**3)
+    assert _parse_memory_bytes("fast") is None
+    assert _parse_memory_bytes(4) is None
+
+
+def _cfg(matrix_limits=None, engine_params=None, allow=False):
+    cfg = {"execution": {"matrix": {}}, "meta": {}}
+    if matrix_limits:
+        cfg["execution"]["matrix"]["duckdb.memory_limit"] = matrix_limits
+    if engine_params:
+        cfg["engine_params"] = engine_params
+    if allow:
+        cfg["meta"]["allow_high_memory"] = True
+    return cfg
+
+
+def test_memory_limit_above_half_host_ram_rejected(monkeypatch):
+    """The exact freeze config: 16GB lane on a 16GB host."""
+    monkeypatch.setattr(_validation, "_host_memory_bytes", lambda: 16 * 1024**3)
+    with _pytest.raises(ValueError, match="exceeds 50%"):
+        _check_memory_limits_fit_host(_cfg(matrix_limits=["512MB", "16GB"]), "t")
+
+
+def test_memory_limit_within_cap_accepted(monkeypatch):
+    monkeypatch.setattr(_validation, "_host_memory_bytes", lambda: 16 * 1024**3)
+    _check_memory_limits_fit_host(_cfg(matrix_limits=["512MB", "8GB"]), "t")
+
+
+def test_engine_params_memory_limit_also_guarded(monkeypatch):
+    monkeypatch.setattr(_validation, "_host_memory_bytes", lambda: 16 * 1024**3)
+    with _pytest.raises(ValueError, match="engine_params.duckdb.memory_limit"):
+        _check_memory_limits_fit_host(
+            _cfg(engine_params={"duckdb": {"memory_limit": "12GB"}}), "t")
+
+
+def test_explicit_override_allows_high_memory(monkeypatch):
+    """Fail-closed with a loud, explicit opt-in — not a hidden default."""
+    monkeypatch.setattr(_validation, "_host_memory_bytes", lambda: 16 * 1024**3)
+    _check_memory_limits_fit_host(
+        _cfg(matrix_limits=["16GB"], allow=True), "t")
+
+
+def test_non_memory_matrix_dimensions_ignored(monkeypatch):
+    monkeypatch.setattr(_validation, "_host_memory_bytes", lambda: 16 * 1024**3)
+    cfg = {"execution": {"matrix": {"rows": ["small", "large"],
+                                    "duckdb.threads": [1, 8]}}, "meta": {}}
+    _check_memory_limits_fit_host(cfg, "t")  # no raise

@@ -28,6 +28,7 @@ def validate_experiment_config(config: dict, source_label: str = "config") -> No
     _check_matrix_present(config, source_label)
     _check_matrix_aliases_resolvable(config, source_label)
     _check_table_rows_are_aliases(config, source_label)
+    _check_memory_limits_fit_host(config, source_label)
 
 
 def _check_matrix_present(config: dict, source_label: str) -> None:
@@ -92,4 +93,79 @@ def _check_table_rows_are_aliases(config: dict, source_label: str) -> None:
                 f"'rows: my_scale' with 'definitions.rows.my_scale: {rows}'. "
                 f"Literals are rejected because they don't feed the SQL "
                 f"template substitution pipeline correctly."
+            )
+
+
+# --- Host-memory guard (fail-closed) -----------------------------------------
+#
+# Observed live 2026-07-06: an agent-built sort_spill config swept
+# `duckdb.memory_limit: [512MB, 16GB]` on a 16GB machine. DuckDB takes the
+# memory it is granted; the 16GB lane froze the host (hard freeze, not a
+# clean OOM). No OS-level sandbox exists (harness-tenets gap), so the
+# validation surface — the single choke point every submission passes
+# through — is where the lab fails closed.
+#
+# Rule: any engine memory-limit value (matrix lane or engine_params) above
+# MEMORY_CAP_FRACTION of physical RAM is rejected at submission with an
+# explicit override (`meta.allow_high_memory: true`) for machines/operators
+# that know what they're doing.
+
+MEMORY_CAP_FRACTION = 0.5
+
+_MEMORY_UNIT_BYTES = {
+    "kb": 1024, "kib": 1024,
+    "mb": 1024 ** 2, "mib": 1024 ** 2,
+    "gb": 1024 ** 3, "gib": 1024 ** 3,
+    "tb": 1024 ** 4, "tib": 1024 ** 4,
+}
+
+
+def _parse_memory_bytes(value) -> "int | None":
+    """'512MB' / '16GB' / '1.5GiB' -> bytes. None if not a memory string."""
+    import re
+    if not isinstance(value, str):
+        return None
+    m = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*([KMGT]i?B)\s*", value, re.IGNORECASE)
+    if not m:
+        return None
+    return int(float(m.group(1)) * _MEMORY_UNIT_BYTES[m.group(2).lower()])
+
+
+def _host_memory_bytes() -> int:
+    import os
+    return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+
+
+def _iter_memory_limit_values(config: dict):
+    """Yield (path, value) for every engine memory-limit setting: matrix
+    lanes like `execution.matrix.'duckdb.memory_limit'` and static
+    `engine_params.<engine>.memory_limit`."""
+    matrix = (config.get("execution") or {}).get("matrix") or {}
+    for dim, values in matrix.items():
+        if str(dim).endswith(".memory_limit"):
+            for v in values or []:
+                yield f"execution.matrix.{dim}", v
+    engine_params = config.get("engine_params") or {}
+    if isinstance(engine_params, dict):
+        for engine, params in engine_params.items():
+            if isinstance(params, dict) and "memory_limit" in params:
+                yield f"engine_params.{engine}.memory_limit", params["memory_limit"]
+
+
+def _check_memory_limits_fit_host(config: dict, source_label: str) -> None:
+    meta = config.get("meta") or {}
+    if meta.get("allow_high_memory") is True:
+        return  # explicit operator override — on their head, loudly opted in
+    host = _host_memory_bytes()
+    cap = int(host * MEMORY_CAP_FRACTION)
+    for path, value in _iter_memory_limit_values(config):
+        limit = _parse_memory_bytes(value)
+        if limit is not None and limit > cap:
+            raise ValueError(
+                f"SEMANTIC ERROR in {source_label}: {path} = '{value}' exceeds "
+                f"{int(MEMORY_CAP_FRACTION * 100)}% of this host's physical RAM "
+                f"({host / 1024**3:.0f}GB). Granting an engine that much memory "
+                f"can freeze the machine (observed live). Use a value at or "
+                f"below {cap / 1024**3:.0f}GB, or set 'meta.allow_high_memory: "
+                f"true' if this host can genuinely afford it."
             )

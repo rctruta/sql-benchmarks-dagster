@@ -426,3 +426,121 @@ def test_repeated_failing_call_gets_escalating_coaching():
     stop_msgs = [m for m in captured_messages
                  if m.get("role") == "user" and "STOP" in (m.get("content") or "")]
     assert stop_msgs, "expected escalating STOP coaching after repeated identical failures"
+
+
+# ---------------------------------------------------------------------------
+# Refusal state + contract-declared poll budget (from edge-case studies 3+4)
+# ---------------------------------------------------------------------------
+
+def test_parse_handoff_impossible():
+    out = _parse_handoff("HANDOFF: impossible reason=MongoDB is not an available engine")
+    assert out == {"impossible": "MongoDB is not an available engine"}
+    # experiment_id form still wins when present
+    assert _parse_handoff("HANDOFF: experiment_id=abcd1234") == {"experiment_id": "abcd1234"}
+
+
+def test_orchestrator_refusal_is_terminal_honest_and_cheap():
+    """config_builder's structured refusal ends the run: no poll, no
+    analyzer, outcome='refused' (not a failure), reason surfaced."""
+    with patch.object(agent_orchestrator, "run_specialist") as mock_run_spec, \
+         patch.object(agent_orchestrator, "poll_until_terminal") as mock_poll:
+        mock_run_spec.return_value = SpecialistResult(
+            role="config_builder", outcome="ok",
+            output={"impossible": "no MongoDB engine in the catalog"},
+            sub_run_id="cb-run", turns_used=3,
+        )
+        result = Orchestrator(goal="benchmark MongoDB", model="test/model").run()
+
+    assert result.outcome == "refused"
+    assert result.experiment_id is None
+    assert "no MongoDB engine" in result.analysis
+    assert result.error is None            # refusal is not an error
+    assert mock_poll.call_count == 0        # never polled
+    assert mock_run_spec.call_count == 1    # analyzer never invoked
+
+
+def test_poll_budget_is_contract_declarable():
+    """Edge-4 defect: fixed 180s budget killed slow suites. The budget
+    must flow Orchestrator(poll_budget_seconds=...) -> poll max_polls."""
+    with patch.object(agent_orchestrator, "run_specialist") as mock_run_spec, \
+         patch.object(agent_orchestrator, "poll_until_terminal") as mock_poll:
+        mock_run_spec.side_effect = [
+            SpecialistResult(role="config_builder", outcome="ok",
+                             output={"experiment_id": "aabb0007"},
+                             sub_run_id="cb", turns_used=1),
+            SpecialistResult(role="analyzer", outcome="ok",
+                             output={"analysis": "FINAL ANSWER: x" * 20},
+                             sub_run_id="an", turns_used=1),
+        ]
+        mock_poll.return_value = {"status": "complete", "polls": 1}
+        Orchestrator(goal="g", model="m", poll_budget_seconds=1800).run()
+
+    _, kwargs = mock_poll.call_args
+    assert kwargs["max_polls"] == 600  # 1800s / 3s interval
+
+
+# ---------------------------------------------------------------------------
+# Suspended state + resume (edge-4 follow-through: no poll budget is "right"
+# for open-ended workloads — a 16GB out-of-memory sort outlived a 30-min
+# budget while executing legitimately; the capsule is the durable hand-off)
+# ---------------------------------------------------------------------------
+
+def test_poll_timeout_suspends_not_fails():
+    """Timeout while the experiment is still executing -> outcome
+    'suspended' (not an error), experiment_id preserved for resume,
+    analyzer NOT invoked (its tokens are spent later, on resume)."""
+    with patch.object(agent_orchestrator, "run_specialist") as mock_run_spec, \
+         patch.object(agent_orchestrator, "poll_until_terminal") as mock_poll:
+        mock_run_spec.return_value = SpecialistResult(
+            role="config_builder", outcome="ok",
+            output={"experiment_id": "aabb0008"},
+            sub_run_id="cb", turns_used=2)
+        mock_poll.return_value = {"status": "timeout", "polls": 600}
+        result = Orchestrator(goal="g", model="m", poll_budget_seconds=1800).run()
+
+    assert result.outcome == "suspended"
+    assert result.experiment_id == "aabb0008"
+    assert result.error is None                  # suspension is not an error
+    assert mock_run_spec.call_count == 1         # analyzer never ran
+
+
+def test_resume_completes_when_capsule_ready():
+    """resume(exp_id) skips config_builder entirely: poll -> analyzer."""
+    with patch.object(agent_orchestrator, "run_specialist") as mock_run_spec, \
+         patch.object(agent_orchestrator, "poll_until_terminal") as mock_poll:
+        mock_poll.return_value = {"status": "complete", "polls": 1}
+        mock_run_spec.return_value = SpecialistResult(
+            role="analyzer", outcome="ok",
+            output={"analysis": "FINAL ANSWER: spill confirmed"},
+            sub_run_id="an", turns_used=3)
+        with patch.object(agent_orchestrator.httpx, "get") as mock_get:
+            mock_get.return_value.json.return_value = {"config": {}}
+            result = Orchestrator(goal="g", model="m").resume("aabb0009")
+
+    assert result.outcome == "complete"
+    assert result.analysis == "FINAL ANSWER: spill confirmed"
+    assert result.sub_run_ids["config_builder"] is None   # skipped on resume
+    assert mock_run_spec.call_count == 1                  # analyzer only
+
+
+def test_resume_resuspends_if_still_running():
+    with patch.object(agent_orchestrator, "run_specialist") as mock_run_spec, \
+         patch.object(agent_orchestrator, "poll_until_terminal") as mock_poll:
+        mock_poll.return_value = {"status": "timeout", "polls": 60}
+        result = Orchestrator(goal="g", model="m").resume("aabb000a")
+    assert result.outcome == "suspended"
+    assert result.experiment_id == "aabb000a"
+    assert mock_run_spec.call_count == 0
+
+
+def test_resume_surfaces_execution_failure():
+    """A capsule that FAILED while suspended must come back as poll_failed
+    with the failure detail, not as suspended."""
+    with patch.object(agent_orchestrator, "run_specialist") as mock_run_spec, \
+         patch.object(agent_orchestrator, "poll_until_terminal") as mock_poll:
+        mock_poll.return_value = {"status": "failed", "polls": 1,
+                                  "detail": "[execute] out of disk"}
+        result = Orchestrator(goal="g", model="m").resume("aabb000b")
+    assert result.outcome == "poll_failed"
+    assert "out of disk" in result.error
+    assert mock_run_spec.call_count == 0
