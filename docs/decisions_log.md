@@ -336,3 +336,17 @@ Human-and-agent parity: `sqlbench project means <id>` (CLI),
 **Decision (own repo?).** The harness (`agent_tools/specialist/orchestrator/trace`, `run_study`, analyzer, grader) stays IN this repo until a second consumer exists. Extraction trigger: ai-security-testbed importing it, or the article requiring a citable standalone artifact. Extracting now would freeze the API exactly while the edge-case studies are telling us which states/tools are missing (e.g., the refusal state that edge-3 is expected to surface).
 
 **Cross-refs.** Edge-case contracts `edge1_novel_goal`, `edge3_adversarial_goal`, `edge4_ambiguous_goal`; run_study schema v2 (`models:` list — weak→strong ladder in one contract).
+
+---
+
+## 2026-07-06 — SUSPENDED state + resume: the capsule is the durable hand-off
+
+**Decision.** Poll timeout while the experiment is still executing is now `suspended`, not `poll_failed` — a first-class non-error outcome carrying the experiment_id. `Orchestrator.resume(exp_id)` (CLI: `multi_agent.py --resume <id>`) picks up at the analyzer once the capsule completes, for a few thousand tokens. Also this session: structured REFUSAL state (`HANDOFF: impossible reason=…`), contract-declared `poll_budget_seconds`, and liveness-aware running markers (TODO #12 — self-healing on dead PID / over-age / corrupt).
+
+**Fork closed.** Tuning poll budgets per suite. Edge-4's rerun proved no budget is "right": fable-5 correctly chose a 16GB out-of-memory sort that outlived even a 30-minute budget *while executing legitimately*. Synchronous waiting conflates "slow" with "dead".
+
+**Fork opened.** Long-running experiments become first-class: submit → suspend → resume across sessions or crashes. The capsule (content-addressed, server-side, durable) is the hand-off point — the same object that already anchors reproducibility now anchors continuity. Pairs with the liveness-aware markers: "dead" is now detected by evidence (PID, age), never inferred from silence.
+
+**Live validation of the recovery story (same day).** A session teardown killed the runner mid-poll and the API mid-execution. Traces survived (append-per-event JSONL); the stale running marker was the only manual surgery — and that class is now self-healing.
+
+**Cross-refs.** TODO #12, edge-3/edge-4 studies, Finding 18/19, `[[work-before-the-work]]` (states uncovered by pre-deployment probing — exactly the deliverable of the role Ramona is naming).

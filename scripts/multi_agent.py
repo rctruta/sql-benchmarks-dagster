@@ -42,16 +42,24 @@ def main():
                         help="litellm model identifier")
     parser.add_argument("--goal", type=str, required=True,
                         help="Natural-language goal for the orchestrator")
+    parser.add_argument("--resume", metavar="EXP_ID",
+                        help="Resume a SUSPENDED run: skip config_builder, poll "
+                             "this experiment_id, then run the analyzer. The "
+                             "goal is still required (the analyzer needs it).")
+    parser.add_argument("--poll-budget-seconds", type=float, default=180.0,
+                        help="How long the poll stage waits before suspending.")
     args = parser.parse_args()
 
     console.print(Panel(f"[bold cyan]GOAL:[/bold cyan] {args.goal}",
                         title="🤖 Multi-Agent Orchestrator"))
-    console.print(f"[dim]Model: {args.model}[/dim]")
+    console.print(f"[dim]Model: {args.model}"
+                  + (f" | resuming {args.resume}" if args.resume else "") + "[/dim]")
 
-    orch = Orchestrator(goal=args.goal, model=args.model)
+    orch = Orchestrator(goal=args.goal, model=args.model,
+                        poll_budget_seconds=args.poll_budget_seconds)
     console.print(f"[dim]Orchestrator trace: {orch.trace.path}[/dim]\n")
 
-    result = orch.run()
+    result = orch.resume(args.resume) if args.resume else orch.run()
 
     console.print(f"\n[bold]Outcome:[/bold] {result.outcome}")
     console.print(f"[dim]experiment_id: {result.experiment_id}[/dim]")
@@ -61,6 +69,13 @@ def main():
     if result.outcome == "complete" and result.analysis:
         console.print(Panel(Markdown(result.analysis), title="📊 Analysis",
                             border_style="green"))
+    elif result.outcome == "suspended":
+        console.print(
+            f"\n[yellow]SUSPENDED[/yellow] — experiment {result.experiment_id} is still "
+            f"executing server-side. Resume any time with:\n"
+            f"  python scripts/multi_agent.py --resume {result.experiment_id} "
+            f"--goal <original goal> --model {args.model}"
+        )
     elif result.error:
         console.print(f"\n[bold red]Error:[/bold red] {result.error}")
         sys.exit(1)
