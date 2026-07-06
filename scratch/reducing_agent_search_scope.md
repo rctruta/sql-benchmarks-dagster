@@ -426,3 +426,20 @@ Raw material for Ramona's advice piece; the voice is hers. What this corpus supp
 4. **States are discovered, not designed.** refused / suspended / resume / the memory cap — none were in the original design; all were forced by cheap probing runs. Budget for the discovery phase; it's where the harness actually gets built.
 5. **Uniform cross-model failure = YOUR bug.** The model ladder in one contract makes harness defects self-identifying (Finding 19).
 6. **Instrument before you scale.** Traces + provenance + deterministic answer-grading turned 105 runs into auditable evidence (0 fabricated means, Finding 16). Without the instrument, all of the above is anecdotes.
+
+---
+
+## Edge case 6 — published-knowledge reuse (study 9887ce57, 2026-07-06)
+
+Setup: `search_published_capsules` added to config_builder's SCHEMA only (prompt untouched, pinned by test); goal = quack transport efficiency, already answered by the quack-v1 published capsules; 5-model ladder, n=1.
+
+**Finding 21 — schema-only steering does NOT extend to knowledge reuse: 0/5 adoption.** Every model — fable-5 and 3.5-flash included — executed the trained build-workflow flawlessly (categories → suites → template → submit) and never once called the library tool sitting in its schema. And because the quack server isn't running on this host, every re-run FAILED at execution — the published capsules were the *only* available source of the answer. Total waste: 5 × 15–38K tokens to fail at a question the corpus answers for free. (Bonus: sonnet-5 and fable-5 independently derived the identical content-addressed config again — 73ef8238.)
+
+**The boundary this draws.** Findings 5–7 showed frontier models derive *workflow* from schema alone. Finding 21 shows the limit: schema communicates *capability*, but the role prompt communicates *identity* ("you have ONE job: turn the goal into a submitted experiment") — and identity wins. Models don't deviate from a strongly-framed procedure toward an unmentioned capability, no matter how clearly its description advertises verified free answers. **When words and schema conflict, words win.** The floor studies asked "are words necessary?" (no, for workflow); this asks "are words sufficient to override?" (yes — the role framing suppressed a strictly-better path).
+
+**Consequence for the meta-cycle (Ramona's framing: capsules+docs should feed meta-information back into the workflow).** Publishing is necessary but measurably insufficient: sealed capsules + derived summaries + a discovery tool + honest taxonomy = 0% reuse without a workflow hook. The first hop of the cycle requires the state machine, not the shelf: either a prompt step ("check the library before building") or a dedicated librarian stage whose output gates config_builder ("REUSE: <id>" | "BUILD"). Given the corpus-wide words-vs-gates record, the stage is the safer bet; the prompt step is the cheap A/B.
+
+**What to publish, in what shape, to support lab performance (the answer as measured):**
+1. *Machine-discoverable, derived summaries* — id / suite / engines / taxonomy categories / config-derived description (the library format; never hand-typed). Prose articles are for humans; agents never open them.
+2. *Honest taxonomy curation* — the quack capsules were invisible under `transport`/`columnar` until tagged (suite ≠ object of study); a library nobody can find by category is shelfware squared.
+3. *A workflow consumer* — the publication format only pays when a stage reads it. Publish-shape and workflow-hook ship together or the shape doesn't matter.
