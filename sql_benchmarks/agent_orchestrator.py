@@ -32,8 +32,11 @@ from .agent_trace import AgentTrace
 # --- Specialist role definitions --------------------------------------------
 
 _CONFIG_BUILDER_PROMPT = """\
-You are the CONFIG-BUILDER specialist. You have ONE job: turn the user
+You are the config-builder specialist. You have ONE job: turn the user
 goal into a valid submitted experiment.
+
+IMPORTANT: "config-builder" is your ROLE, not a tool. Never call it as
+a tool. Only call tools that appear in your tool list.
 
 Workflow:
 1. `list_categories` — pick 1–2 categories matching the goal.
@@ -55,9 +58,12 @@ specialist. Do not produce a narrative — just the HANDOFF line.
 
 
 _ANALYZER_PROMPT = """\
-You are the ANALYZER specialist. The experiment has already completed
+You are the analyzer specialist. The experiment has already completed
 and you have its `experiment_id`. Your job: read the results and
 produce a final analysis.
+
+IMPORTANT: "analyzer" is your ROLE, not a tool. Never call it as a
+tool. Only call tools that appear in your tool list.
 
 Workflow:
 1. `get_experiment_summary` — ALWAYS start here. Compact digest of the
@@ -84,6 +90,20 @@ CONFIG_BUILDER = SpecialistRole(
     system_prompt=_CONFIG_BUILDER_PROMPT,
     max_turns=15,
     parse_output=lambda content, tool_calls: _parse_handoff(content),
+    # Mechanical gate: no submission until a template has been fetched.
+    # Live-fire (llama3, 2026-07-05): the model invented a config schema
+    # from priors and 422'd four times without ever calling get_template,
+    # despite the prompt saying "adapt a template". Exhortation doesn't
+    # bind; a gate does — same lesson as the pre-push hook (SBD-3).
+    tool_preconditions={
+        "submit_experiment": (
+            "get_template",
+            "REFUSED: you must call `get_template` and adapt a working template "
+            "before submitting. Hand-written configs are rejected by this workflow "
+            "— fetch `quickstart` (DuckDB-only) or another template from "
+            "`list_templates` first.",
+        ),
+    },
 )
 
 
@@ -208,8 +228,26 @@ class Orchestrator:
             )
 
         # Stage 3: analyzer
+        # Fetch the config's `definitions` block server-side (no LLM tokens)
+        # so the analyzer knows what the partition labels MEAN (row counts).
+        # Run-4 lesson: without this the analyzer had to assume "large is
+        # probably 2x medium" and hedged its scaling claims accordingly.
+        definitions_note = ""
+        try:
+            r = httpx.get(f"{API_BASE}/v1/results/{exp_id}", timeout=30)
+            config = (r.json() or {}).get("config") or {}
+            definitions = config.get("definitions")
+            if definitions:
+                definitions_note = (
+                    f"\n\nDataset scale definitions from the sealed config "
+                    f"(partition label -> parameter value): {json.dumps(definitions)}"
+                )
+        except Exception:
+            pass  # analyzer still works without it, just hedges more
+
         analyzer_brief = (
-            f"The experiment {exp_id} has completed. Original user goal: {self.goal}\n\n"
+            f"The experiment {exp_id} has completed. Original user goal: {self.goal}"
+            f"{definitions_note}\n\n"
             "Produce the analysis."
         )
         an: SpecialistResult = run_specialist(ANALYZER, brief=analyzer_brief, model=self.model)
