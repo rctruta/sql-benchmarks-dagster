@@ -1,0 +1,35 @@
+# Study contract: cross-model replication on Gemini 3 pro preview — three
+# discriminating cells from the sonnet-5 studies (cd246804, b7a79622):
+#   full   = everything on          (attribution baseline)
+#   anchor = no AGENTS.md/skills    (cheapest sonnet-5-equivalent w/ prose)
+#   floor  = schema only            (does THIS model's floor hold?)
+# Cross-model question: is "the floor is the tool schema" a sonnet-5
+# property or a frontier-model property?
+
+meta:
+  name: "Guidance floor cross-model — gemini-3.1-pro-preview"
+  description: >
+    Three cells replicated from the sonnet-5 studies for cross-model
+    comparison. Markers extracted by analyze_agent_traces.py.
+
+driver: monolith
+model: gemini/gemini-3.1-pro-preview
+replications: 3
+
+goal: >
+  Investigate how DuckDB performance scales on analytical aggregation
+  queries. Test at least three data scales — small, medium, and
+  something larger. Report the mean duration per scale, and whether the
+  scaling looks roughly linear (2x rows -> 2x time) or something
+  different. DuckDB only, no Docker.
+
+cells:
+  full:
+    flags: {include_agents_md: true,  include_skills: true,
+            include_workflow: true,  neutral_tool_descriptions: false}
+  anchor:
+    flags: {include_agents_md: false, include_skills: false,
+            include_workflow: true,  neutral_tool_descriptions: false}
+  floor:
+    flags: {include_agents_md: false, include_skills: false,
+            include_workflow: false, neutral_tool_descriptions: true}

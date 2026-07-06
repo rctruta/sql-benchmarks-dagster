@@ -307,3 +307,36 @@ Three cells replicated from the sonnet-5 studies: full (everything on), anchor (
 **Finding 9 — cost gradients replicate cross-model.** full > anchor > floor for both Gemini models; the AGENTS.md tax (+22–29K/run) replicates. gemini-2.5-flash at the floor is the cheapest successful configuration measured in the entire corpus: 21,404 tokens/run, ~29× cheaper than the original SBD-1 baseline.
 
 **Corpus status:** 4 contract-addressed studies (cd246804, b7a79622, 628eee67, b28b7956), 3 models, ~48 committed traces. Every row derived mechanically from traces by analyze_agent_traces.py.
+
+---
+
+## Generation-over-generation + multi-agent cross-model — 2026-07-06
+
+Five more contracts, zero new code. Gen-over-gen (monolith, full/anchor/floor): gemini-3-flash-preview (dcbd5860), gemini-3.1-pro-preview (d6471518), gemini-3.5-flash (fbf1ebe3). Note: gemini-3-pro-preview is listed by the models API but rejects generateContent ("no longer available") — study aa806cdc documents the dead model; replaced with 3.1-pro-preview. Multi-agent cross-model (42f5cfd1 sonnet-5, 4543fe1d 2.5-pro, 1e13d068 2.5-flash), n=3 each.
+
+### Gen-over-gen (floor cell, the discriminator)
+
+| Model | floor tokens | taxonomy-first at floor |
+|---|---|---|
+| gemini-2.5-flash | 21,404 | 1/3 |
+| gemini-3-flash-preview | 176,542 | 1/3 |
+| gemini-3.5-flash | 158,480 | **3/3** |
+| gemini-2.5-pro | 50,454 | 0/3 |
+| gemini-3.1-pro-preview | 138,218 | 1/3 |
+| sonnet-5 | 99,441 | 3/3 |
+
+**Finding 10 — newer generations buy discipline with tokens.** Across the Gemini flash line, floor cost rises 2.5→3→3.5 (21K → 177K → 158K) while marker discipline improves (3.5-flash keeps taxonomy-first 3/3 at the floor, matching sonnet-5; 2.5-flash dropped it). Likely mechanism: gen-3+ thinking-by-default — reasoning tokens buy schema-inference quality. The trade is measurable per generation. Load-bearing markers (template-first, projections-not-raw) stayed 3/3 in every run of every generation.
+
+**Finding 11 — 3.1-pro's anchor is the cheapest prose-guided config in the corpus** (41.5K, beating sonnet-5's 54K), while its floor triples that — newer pro models are efficient WITH guidance and expensive without. Guidance still pays, just on a different margin than correctness.
+
+### Multi-agent cross-model
+
+| Model | multi-agent total (specialists) | vs best monolith |
+|---|---|---|
+| sonnet-5 | 26,301 ± 160 | 43K (noworkflow) → **1.6× cheaper** |
+| gemini-2.5-pro | 18,873 ± 1,020 | 50K (floor) → 2.7× cheaper |
+| gemini-2.5-flash | 18,508 ± 270 | 21K (floor) → ~parity, far lower variance |
+
+**Finding 12 — specialist decomposition equalizes models.** 9/9 success; all three models land in an 18–26K band with tiny variance (sonnet-5's three reps span 385 tokens). The model-specific floor signatures (Finding 7) and the generation cost curves (Finding 10) disappear under the multi-agent architecture — scoped tools + focused prompts dominate model-specific defaults. The architecture, not the model, sets the cost envelope. This is the strongest single result in the corpus for the progressive-disclosure thesis.
+
+**Corpus status:** 9 executed study contracts, 5 working models (+1 documented dead model), ~75 committed traces, findings 1–12. Multi-agent trace linking (orchestrator → specialist tokens) currently requires walking delegate events — worth folding into the analyzer if the corpus keeps growing.
