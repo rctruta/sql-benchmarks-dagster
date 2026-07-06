@@ -272,3 +272,23 @@ Human-and-agent parity: `sqlbench project means <id>` (CLI),
 **Deliberate scoping.** Poller is pure Python because polling is a fixed-outcome procedure and burning LLM tokens on it strips signal from the capability measurement (every call would look identical). If we later want to measure *"does model X know when to stop polling"*, that's a separate `llm_poller` specialist, not shipped here.
 
 **Cross-refs.** `scratch/reducing_agent_search_scope.md` (methodology). SBD-2 (workflow-capability failure the multi-agent architecture plausibly closes). Live-fire A/B pending.
+
+---
+
+## 2026-07-05 — Harness hardening from llama3 live-fire failures: gates over exhortation
+
+**Decision.** Three mechanical defenses in the specialist loop, all derived from per-turn trace autopsy of two llama3 (8B) multi-agent runs:
+
+1. **Raw-text tool-call recovery** — small models emit the call as JSON *text* (`{"function_name": ...}`) instead of a native tool call. Recovery now handles the `function_name`/`tool`/`tool_name` key variants the monolith's recovery missed, checks against the specialist's *scoped* tool set, and coaches on hallucinated names.
+2. **Repeated-failing-call breaker** — identical (tool, args) failing twice triggers an escalating STOP coaching message naming the legal tools. llama3 had repeated one hallucinated call 9× with zero self-correction.
+3. **Tool preconditions (`SpecialistRole.tool_preconditions`)** — mechanical workflow gate: `submit_experiment` refuses to dispatch until `get_template` has succeeded this run. llama3 invented a config schema from priors and 422'd four times without ever fetching a template, despite the prompt explicitly saying "adapt a template".
+
+**Fork closed.** Strengthening the *prompts* further. The trace evidence says prompt exhortation does not bind on weak models — the same lesson as SBD-3 (`--admin` bypass: a CLAUDE.md rule didn't stop it; branch protection did) and the META-FINDING in the incident catalog (correction + self-memory don't bind; only mechanical verification catches it). The harness now applies the lab's own doctrine to its agents: gates, not requests.
+
+**Fork opened.** `tool_preconditions` is a general workflow-DAG primitive — any specialist can declare "tool X requires prior success of tool Y". The failure classes it produces (`gate-refused` events in the trace) are themselves measurable.
+
+**Also fixed.** Analyzer handoff now includes the config's `definitions` block (fetched server-side, zero LLM tokens) — Run 4's analyzer had to hedge its scaling claims because it didn't know what the partition labels meant in rows.
+
+**Empirical status.** llama3 still fails config-building even with coaching (capability wall is real: it never reaches for `get_template` unprompted, and gates can redirect but not create competence). The *localization* is the result: monolith said "gave up, opaque"; multi-agent traces say "fails at the adapt-a-template step with invented schema". Failure classes per stage are exactly the instrument working. Local-model sweeps paused by Ramona's call — hardening pays off regardless of model tier.
+
+**Cross-refs.** Traces `20260705T234509Z_*` and `20260705T234955Z_*` (local). SBD-3 (gates-over-exhortation precedent). `[[agent-integrity-incidents]]` META-FINDING.

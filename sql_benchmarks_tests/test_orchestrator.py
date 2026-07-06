@@ -286,3 +286,143 @@ def test_poll_until_terminal_times_out():
         result = poll_until_terminal("aabb0006", max_polls=3, interval_seconds=0)
     assert result["status"] == "timeout"
     assert result["polls"] == 3
+
+
+# ---------------------------------------------------------------------------
+# Harness hardening (from llama3 live-fire failures, 2026-07-05)
+# ---------------------------------------------------------------------------
+
+from sql_benchmarks.agent_specialist import try_recover_tool_call_from_text
+
+
+def test_recover_tool_call_from_function_name_json_text():
+    """llama3 emitted `{"function_name": "submit_experiment", ...}` as raw
+    TEXT instead of a native tool call (turns 5/6/11 of the live-fire).
+    The monolith's recovery only knew the `name` key and missed it."""
+    text = '{"function_name": "submit_experiment", "arguments": {"config_yaml": "meta: {}"}}'
+    call, reason = try_recover_tool_call_from_text(text, {"submit_experiment"})
+    assert reason is None
+    assert call.function.name == "submit_experiment"
+    assert json.loads(call.function.arguments) == {"config_yaml": "meta: {}"}
+
+
+def test_recover_tool_call_from_fenced_json():
+    text = '```json\n{"name": "list_categories", "arguments": {}}\n```'
+    call, reason = try_recover_tool_call_from_text(text, {"list_categories"})
+    assert reason is None
+    assert call.function.name == "list_categories"
+
+
+def test_recover_rejects_unknown_tool_with_reason():
+    """Hallucinated tool names (llama3 called its own ROLE as a tool) are
+    rejected with a coaching reason, not silently dropped."""
+    text = '{"name": "CONFIG-BUILDER", "arguments": {"category": "scaling"}}'
+    call, reason = try_recover_tool_call_from_text(text, {"list_suites"})
+    assert call is None
+    assert "CONFIG-BUILDER" in reason
+    assert "list_suites" in reason
+
+
+def test_recover_ignores_non_call_text():
+    assert try_recover_tool_call_from_text("plain prose", {"x"}) == (None, None)
+    assert try_recover_tool_call_from_text('{"categories": [1,2]}', {"x"}) == (None, None)
+    assert try_recover_tool_call_from_text("", {"x"}) == (None, None)
+
+
+def test_precondition_gate_blocks_submit_before_get_template():
+    """Mechanical workflow gate: submit_experiment refuses to dispatch
+    until get_template has succeeded this run. Live-fire lesson: prompt
+    exhortation doesn't bind on weak models; a procedural gate does."""
+    submit_tc = MagicMock()
+    submit_tc.id = "call_s"
+    submit_tc.function.name = "submit_experiment"
+    submit_tc.function.arguments = '{"config_yaml": "meta: {}"}'
+    submit_tc.model_dump = lambda: {"id": "call_s", "type": "function",
+                                    "function": {"name": "submit_experiment",
+                                                 "arguments": '{"config_yaml": "meta: {}"}'}}
+
+    role = SpecialistRole(
+        name="test", tool_names=["get_template", "submit_experiment"],
+        system_prompt="t", max_turns=2,
+        parse_output=lambda c, tc: None,
+        tool_preconditions={"submit_experiment": ("get_template", "REFUSED: fetch a template first")},
+    )
+    executed = []
+    with patch.object(agent_specialist, "completion") as mock_completion, \
+         patch.object(agent_specialist, "execute_tool",
+                      side_effect=lambda n, a: executed.append(n) or '{"ok": true}') as mock_exec:
+        mock_completion.return_value = _mock_llm_response(content="", tool_calls=[submit_tc])
+        result = run_specialist(role, brief="go", model="test/model")
+
+    # submit_experiment was requested twice (2 turns) but NEVER dispatched
+    assert executed == []
+    assert result.outcome == "max_turns"
+
+
+def test_precondition_gate_opens_after_required_tool_succeeds():
+    get_tc = MagicMock()
+    get_tc.id = "call_g"
+    get_tc.function.name = "get_template"
+    get_tc.function.arguments = '{"name": "quickstart"}'
+    get_tc.model_dump = lambda: {"id": "call_g", "type": "function",
+                                 "function": {"name": "get_template",
+                                              "arguments": '{"name": "quickstart"}'}}
+    submit_tc = MagicMock()
+    submit_tc.id = "call_s"
+    submit_tc.function.name = "submit_experiment"
+    submit_tc.function.arguments = '{"config_yaml": "meta: {}"}'
+    submit_tc.model_dump = lambda: {"id": "call_s", "type": "function",
+                                    "function": {"name": "submit_experiment",
+                                                 "arguments": '{"config_yaml": "meta: {}"}'}}
+
+    role = SpecialistRole(
+        name="test", tool_names=["get_template", "submit_experiment"],
+        system_prompt="t", max_turns=3,
+        parse_output=lambda c, tc: None,
+        tool_preconditions={"submit_experiment": ("get_template", "REFUSED")},
+    )
+    executed = []
+    responses = [
+        _mock_llm_response(content="", tool_calls=[get_tc]),
+        _mock_llm_response(content="", tool_calls=[submit_tc]),
+        _mock_llm_response(content="", tool_calls=[]),
+    ]
+    with patch.object(agent_specialist, "completion", side_effect=responses), \
+         patch.object(agent_specialist, "execute_tool",
+                      side_effect=lambda n, a: executed.append(n) or '{"ok": true}'):
+        run_specialist(role, brief="go", model="test/model")
+
+    assert executed == ["get_template", "submit_experiment"]
+
+
+def test_repeated_failing_call_gets_escalating_coaching():
+    """Same (tool, args) failing twice in a row must inject the STOP
+    coaching message. llama3 repeated an identical failing call 9x."""
+    bad_tc = MagicMock()
+    bad_tc.id = "call_b"
+    bad_tc.function.name = "list_categories"
+    bad_tc.function.arguments = "{}"
+    bad_tc.model_dump = lambda: {"id": "call_b", "type": "function",
+                                 "function": {"name": "list_categories", "arguments": "{}"}}
+
+    role = SpecialistRole(
+        name="test", tool_names=["list_categories"],
+        system_prompt="t", max_turns=3,
+        parse_output=lambda c, tc: None,
+    )
+    captured_messages = []
+
+    def fake_completion(model, messages, tools, tool_choice):
+        captured_messages.clear()
+        captured_messages.extend(messages)
+        return _mock_llm_response(content="", tool_calls=[bad_tc])
+
+    with patch.object(agent_specialist, "completion", side_effect=fake_completion), \
+         patch.object(agent_specialist, "execute_tool",
+                      return_value='{"error": "boom"}'):
+        run_specialist(role, brief="go", model="test/model")
+
+    # By the third turn, history must contain the escalated STOP coaching
+    stop_msgs = [m for m in captured_messages
+                 if m.get("role") == "user" and "STOP" in (m.get("content") or "")]
+    assert stop_msgs, "expected escalating STOP coaching after repeated identical failures"
