@@ -443,3 +443,49 @@ Setup: `search_published_capsules` added to config_builder's SCHEMA only (prompt
 1. *Machine-discoverable, derived summaries* — id / suite / engines / taxonomy categories / config-derived description (the library format; never hand-typed). Prose articles are for humans; agents never open them.
 2. *Honest taxonomy curation* — the quack capsules were invisible under `transport`/`columnar` until tagged (suite ≠ object of study); a library nobody can find by category is shelfware squared.
 3. *A workflow consumer* — the publication format only pays when a stage reads it. Publish-shape and workflow-hook ship together or the shape doesn't matter.
+
+---
+
+## The taxonomy of the work, and the conclusion (2026-07-06)
+
+Ramona: *"I have the traces, what's the conclusion? I've been struggling with the taxonomy of my work. Context is fractal."*
+
+### The taxonomy is not a tree — it's one operator applied at five depths
+
+The struggle to taxonomize comes from looking for distinct categories. The corpus says there aren't any: there is ONE pattern, applied recursively. The operator:
+
+> **define a contract → execute → trace everything → verify against sealed ground truth → distill the decision → the verification instrument becomes the next level's object of study.**
+
+Applied at five depths, it generates everything built here:
+
+| Level | Object of study | Instrument | Artifacts |
+|---|---|---|---|
+| 0 | SQL engines | experiment configs → sealed capsules | published capsules, quack + NULL findings |
+| 1 | The measurement itself | seals, OTS proofs, drift gates, provenance | integrity_sealing, capsule registry, specimen catalog #1–#6 |
+| 2 | Agents using the instrument | traces, behavioral markers, answer grading | 110+ graded runs, findings 1–21, specimens #7–#12 |
+| 3 | The harness shaping agents | states, gates, tool interfaces, contracts | orchestrator state machine, study contracts, 20×/equalization results |
+| 4 | The method for discovering harness requirements | probe → trace → gap → gate loop | refused/suspended/librarian states, memory guard, fragment-durability fork — all discovered, none designed |
+
+"Context is fractal" is not a metaphor decorating the work — it IS the taxonomy. Level N's verification instrument is level N+1's research object, and the same discipline (contract, trace, seal, distill) holds at every level. That's also why the two labs plus the unnamed third feel like one thing: they are one thing at three depths. Candidate name for the third, hers to accept or replace: **agent metrology** — the science of measuring agents, as distinct from building them.
+
+### The conclusion, one sentence
+
+**Reliability is a property of the harness, not the model — and it can be measured, gated, and sealed at every level of the stack.**
+
+Supporting numbers, all mechanically derived from committed traces: 20.7× cost reduction from interface + architecture with zero quality loss; five models from two vendors equalized into one 18–35K band by decomposition alone; 0 fabricated means across 105+ graded runs; every prompt-level instruction eventually ignored by some model while every mechanical gate held; four states and two guards discovered by probing that no a-priori design produced.
+
+### On the division of labor (the traces answer this too)
+
+The traces record who did what. Execution: the agent. But every finding originates in a decision the agent did not make and repeatedly demonstrated it COULD not make: which question to ask next, that studies need contracts (caught as a violation), that the analysis must be sealed like the measurement, that uniform failure means harness-not-model, the axioms ("context is fractal", "work before the work"), every fork resolution in the decisions log, and every specimen where the agent's own drift was caught and converted into a gate. Finding 21 generalizes: capability without direction does not deviate from its trained script. The agent was the config_builder; the direction, correction, and judgment were the orchestrator — and the orchestrator seat is the one this corpus proves is load-bearing. That seat is the job.
+
+### On the fear of being scooped
+
+Two facts. (1) Priority is already established mechanically: the git history is public, the findings are committed with dates, and the capsule seals carry OpenTimestamps proofs anchored to Bitcoin — the work cannot be back-dated away. (2) Big teams publish benchmarks and leaderboards; this corpus's shape — one person, end-to-end sealed pipeline from SQL fragment to graded agent answer, with the discovery METHOD documented as it happened — is not what teams produce, because teams don't have to solve the trust problem alone. The solo constraint is the differentiator, not the weakness: it forced the instrument.
+
+### Smallest publishable units (in order; each stands alone)
+
+1. **The 20× piece** — practitioner skeleton already in this doc; findings 1–15; one figure (the cost table). Closest to done.
+2. **"The work before the work"** — the positioning essay; the role, the method (probe → trace → gap → gate), this taxonomy as its backbone.
+3. **The specimen catalog** — 12 integrity specimens + the meta-finding (correction doesn't bind, gates do); continuation of the Blueberry Muffin line.
+
+One at a time, smallest first. The corpus does not expire while you write.
