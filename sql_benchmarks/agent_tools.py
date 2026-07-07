@@ -23,7 +23,7 @@ def _get_client() -> httpx.Client:
 
     if "localhost" in API_BASE or "127.0.0.1" in API_BASE:
         try:
-            from .api.app import create_app
+            from sql_benchmarks.api.app import create_app
             app = create_app()
             _client = httpx.Client(app=app, base_url="http://local-in-process")
             return _client
