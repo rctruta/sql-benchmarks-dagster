@@ -32,6 +32,19 @@ _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 AGENT_RUNS_DIR = os.path.join(_REPO_ROOT, "sql_benchmarks", "experiments", "agent_runs")
 
 
+def get_trace_dir() -> str:
+    """Return the output directory for agent traces, supporting grouping by
+    study ID and primary run ID subdirectories."""
+    study_id = os.getenv("AGENT_STUDY_ID")
+    run_subdir = os.getenv("AGENT_RUN_SUBDIR")
+    path = AGENT_RUNS_DIR
+    if study_id:
+        path = os.path.join(path, study_id)
+    if run_subdir:
+        path = os.path.join(path, run_subdir)
+    return path
+
+
 def _new_run_id(goal: str) -> str:
     """`<UTC-ISO-compact>_<goal-hash-8>` — sortable + identifiable."""
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -87,9 +100,16 @@ class AgentTrace:
     """One agent run = one JSONL file. Each method emits one event line."""
 
     def __init__(self, goal: str, model: str, agents_md_loaded: bool, max_turns: int):
-        os.makedirs(AGENT_RUNS_DIR, exist_ok=True)
         self.run_id = _new_run_id(goal)
-        self.path = os.path.join(AGENT_RUNS_DIR, f"{self.run_id}.jsonl")
+        
+        # If this is the primary run and AGENT_RUN_SUBDIR is not set,
+        # set it so all subsequent delegated specialist runs group inside this folder:
+        if not os.getenv("AGENT_RUN_SUBDIR"):
+            os.environ["AGENT_RUN_SUBDIR"] = self.run_id
+
+        trace_dir = get_trace_dir()
+        os.makedirs(trace_dir, exist_ok=True)
+        self.path = os.path.join(trace_dir, f"{self.run_id}.jsonl")
         self._emit("run_start", {
             "goal": goal,
             "model": model,

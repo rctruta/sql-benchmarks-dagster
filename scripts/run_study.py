@@ -101,6 +101,7 @@ def main():
     args = parser.parse_args()
 
     study_id, contract = load_contract(args.contract)
+    os.environ["AGENT_STUDY_ID"] = study_id
     cells = list(contract["cells"])
     if args.cell:
         if args.cell not in cells:
@@ -126,6 +127,8 @@ def main():
         for cell in cells:
             for rep in range(1, reps + 1):
                 print(f"\n=== study={study_id} model={model} cell={cell} rep={rep} ===")
+                # Clear sub-run dir from environment so each cell x rep gets a fresh folder
+                os.environ.pop("AGENT_RUN_SUBDIR", None)
                 # Per-run isolation: a transient API error in one run must
                 # not kill the rest of the matrix.
                 try:
