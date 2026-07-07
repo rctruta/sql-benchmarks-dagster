@@ -27,8 +27,16 @@ def _get_client() -> httpx.Client:
             app = create_app()
             _client = httpx.Client(app=app, base_url="http://local-in-process")
             return _client
-        except Exception:
-            pass
+        except Exception as e:
+            try:
+                import traceback
+                log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scratch")
+                os.makedirs(log_dir, exist_ok=True)
+                with open(os.path.join(log_dir, "in_process_import_error.log"), "w") as f:
+                    f.write(f"Exception: {type(e).__name__}: {e}\n\n")
+                    traceback.print_exc(file=f)
+            except Exception:
+                pass
 
     _client = httpx.Client(base_url=API_BASE)
     return _client
