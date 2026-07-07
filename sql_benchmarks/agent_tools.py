@@ -26,15 +26,9 @@ def _get_client() -> httpx.Client:
             from sql_benchmarks.api.app import create_app
             app = create_app()
             
-            # Standard ASGI Transport for modern httpx
-            try:
-                transport = httpx.ASGITransport(app=app)
-                _client = httpx.Client(transport=transport, base_url="http://local-in-process")
-                return _client
-            except AttributeError:
-                # Fallback to direct app parameter for older httpx
-                _client = httpx.Client(app=app, base_url="http://local-in-process")
-                return _client
+            from fastapi.testclient import TestClient
+            _client = TestClient(app)
+            return _client
         except Exception:
             pass
 

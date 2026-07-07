@@ -24,6 +24,7 @@ Not thread-safe. autonomous_agent runs one loop per process.
 import hashlib
 import json
 import os
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -32,17 +33,11 @@ _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 AGENT_RUNS_DIR = os.path.join(_REPO_ROOT, "sql_benchmarks", "experiments", "agent_runs")
 
 
-def get_trace_dir() -> str:
-    """Return the output directory for agent traces, supporting grouping by
-    study ID and primary run ID subdirectories."""
-    study_id = os.getenv("AGENT_STUDY_ID")
-    run_subdir = os.getenv("AGENT_RUN_SUBDIR")
-    path = AGENT_RUNS_DIR
-    if study_id:
-        path = os.path.join(path, study_id)
-    if run_subdir:
-        path = os.path.join(path, run_subdir)
-    return path
+def slugify(text: str) -> str:
+    """Return a file-safe lowercased slug of model names."""
+    text = text.lower()
+    text = re.sub(r"[^a-z0-9]+", "-", text)
+    return text.strip("-")[:30]
 
 
 def _new_run_id(goal: str) -> str:
@@ -99,17 +94,22 @@ def _usage_from_response(response) -> dict | None:
 class AgentTrace:
     """One agent run = one JSONL file. Each method emits one event line."""
 
-    def __init__(self, goal: str, model: str, agents_md_loaded: bool, max_turns: int):
-        self.run_id = _new_run_id(goal)
+    def __init__(self, goal: str, model: str, agents_md_loaded: bool, max_turns: int, role: str | None = None):
+        study_dir = os.getenv("AGENT_STUDY_DIR")
+        trace_prefix = os.getenv("AGENT_TRACE_PREFIX")
         
-        # If this is the primary run and AGENT_RUN_SUBDIR is not set,
-        # set it so all subsequent delegated specialist runs group inside this folder:
-        if not os.getenv("AGENT_RUN_SUBDIR"):
-            os.environ["AGENT_RUN_SUBDIR"] = self.run_id
-
-        trace_dir = get_trace_dir()
-        os.makedirs(trace_dir, exist_ok=True)
-        self.path = os.path.join(trace_dir, f"{self.run_id}.jsonl")
+        if not (study_dir and trace_prefix):
+            # Standalone fallback: group under standalone_<timestamp> and name trace_<model_slug>
+            study_dir = os.path.join(AGENT_RUNS_DIR, f"standalone_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}")
+            trace_prefix = f"trace_{slugify(model)}"
+            os.environ["AGENT_STUDY_DIR"] = study_dir
+            os.environ["AGENT_TRACE_PREFIX"] = trace_prefix
+            
+        role_suffix = f"_{role}" if role else ""
+        self.run_id = f"{trace_prefix}{role_suffix}"
+        
+        os.makedirs(study_dir, exist_ok=True)
+        self.path = os.path.join(study_dir, f"{self.run_id}.jsonl")
         self._emit("run_start", {
             "goal": goal,
             "model": model,
