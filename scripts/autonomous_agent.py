@@ -325,20 +325,30 @@ def load_agents_md() -> str:
 
 
 def load_skills() -> str:
-    """Concatenate every `.md` file in `skills/` into one string. Skills are
-    precise procedures for specific operations (build a scaling experiment,
-    read results with the right tool). AGENTS.md is the high-level protocol;
-    skills are the tactical playbook. Returns "" if the dir is missing or
-    empty."""
+    """Concatenate every SKILL.md file in skills/ subdirectories, and
+    fallback to any legacy .md files in the skills/ root. Returns "" if the
+    dir is missing or empty."""
     skills_dir = os.path.join(_REPO_ROOT, "skills")
     if not os.path.isdir(skills_dir):
         return ""
     parts = []
+    
+    # 1. Look for new spec-compliant SKILL.md files in subdirectories
+    for item in sorted(os.listdir(skills_dir)):
+        item_path = os.path.join(skills_dir, item)
+        if os.path.isdir(item_path):
+            skill_md_path = os.path.join(item_path, "SKILL.md")
+            if os.path.isfile(skill_md_path):
+                with open(skill_md_path, encoding="utf-8") as f:
+                    parts.append(f.read())
+                    
+    # 2. Legacy fallback: check for any .md files directly in skills/ root
     for fn in sorted(os.listdir(skills_dir)):
-        if not fn.endswith(".md"):
-            continue
-        with open(os.path.join(skills_dir, fn), encoding="utf-8") as f:
-            parts.append(f.read())
+        file_path = os.path.join(skills_dir, fn)
+        if fn.endswith(".md") and os.path.isfile(file_path):
+            with open(file_path, encoding="utf-8") as f:
+                parts.append(f.read())
+                
     return "\n\n---\n\n".join(parts)
 
 
