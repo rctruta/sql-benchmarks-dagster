@@ -26,7 +26,7 @@ import sys
 from collections import defaultdict
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DEFAULT_GLOB = os.path.join(REPO_ROOT, "sql_benchmarks", "experiments", "agent_runs", "*.jsonl")
+DEFAULT_GLOB = os.path.join(REPO_ROOT, "sql_benchmarks", "experiments", "agent_runs", "**", "*.jsonl")
 PROJECTIONS = {"get_experiment_summary", "get_means_by_partition",
                "get_scaling_factor", "get_replication_stability"}
 
@@ -139,7 +139,7 @@ def condition_label(flags: dict) -> str:
 
 def main():
     patterns = sys.argv[1:] or [DEFAULT_GLOB]
-    paths = sorted(p for pat in patterns for p in globlib.glob(pat))
+    paths = sorted(p for pat in patterns for p in globlib.glob(pat, recursive=True))
     if not paths:
         print(f"no traces matched: {patterns}")
         sys.exit(1)

@@ -108,7 +108,7 @@ def main():
     
     study_name = os.path.splitext(os.path.basename(args.contract))[0]
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    study_dir = os.path.join(AGENT_RUNS_DIR, f"{study_name}_{timestamp}")
+    study_dir = os.path.join(AGENT_RUNS_DIR, f"{study_name}_{timestamp}_{study_id}")
     os.makedirs(study_dir, exist_ok=True)
     shutil.copy(args.contract, os.path.join(study_dir, "contract.yaml"))
     
