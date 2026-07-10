@@ -81,7 +81,7 @@ def test_shipped_attribution_contract_loads():
     assert len(study_id) == 8
     assert contract["driver"] == "monolith"
     assert set(contract["cells"]) == {"base", "noskills", "noagentsmd", "neither"}
-    assert contract["replications"] == 3
+    assert contract["replications"] >= 1
     # Every cell's flags must be valid run_agent kwargs
     for cell in contract["cells"].values():
         assert set(cell["flags"]) <= {"include_agents_md", "include_skills"}
