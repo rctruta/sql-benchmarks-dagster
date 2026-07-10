@@ -108,3 +108,22 @@ def get_doc(name: str):
     if doc is None:
         raise HTTPException(status_code=404, detail=f"No published doc named '{name}'")
     return doc
+
+
+@router.get("/skills")
+def list_skills_endpoint():
+    """Discovery stage of the Agent Skills spec: name + description per
+    skill — never the bodies."""
+    from ..logic.skills_library import list_skills
+    return {"skills": list_skills()}
+
+
+@router.get("/skills/{name}")
+def get_skill_endpoint(name: str):
+    """Activation stage: one skill's full instructions, on demand."""
+    from fastapi import HTTPException
+    from ..logic.skills_library import get_skill
+    skill = get_skill(name)
+    if skill is None:
+        raise HTTPException(status_code=404, detail=f"No skill named '{name}'")
+    return skill

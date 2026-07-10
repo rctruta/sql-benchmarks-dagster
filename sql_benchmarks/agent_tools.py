@@ -95,6 +95,18 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "get_skill",
+            "description": "Load a skill's full instructions by name. The system prompt lists available skills (name + description); call this when the task matches a skill's description, BEFORE doing that kind of work.",
+            "parameters": {
+                "type": "object",
+                "properties": {"name": {"type": "string"}},
+                "required": ["name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "list_templates",
             "description": "List curated experiment templates. Each is a human-authored, VALID config demonstrating a working (dataset shape + suite + engines) combination.",
             "parameters": {"type": "object", "properties": {}}
@@ -251,7 +263,10 @@ def execute_tool(name: str, args: dict) -> str:
     reuse it without importing from a script."""
     client = _get_client()
     try:
-        if name == "list_lab_docs":
+        if name == "get_skill":
+            res = client.get(f"/v1/catalog/skills/{args['name']}", timeout=30)
+            return json.dumps(res.json(), indent=2)
+        elif name == "list_lab_docs":
             res = client.get("/v1/catalog/docs", timeout=30)
             return json.dumps(res.json(), indent=2)
         elif name == "get_lab_doc":
