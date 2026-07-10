@@ -1,3 +1,4 @@
+import os
 """Tests for the structured JSONL agent trace (sql_benchmarks/agent_trace.py).
 
 The trace is what SBD-2 (llama3 workflow-capability failure) didn't have:
@@ -31,15 +32,19 @@ def test_run_start_written_on_construction(tmp_path, monkeypatch):
     assert "run_id" in e and "ts" in e
 
 
-def test_run_id_stable_and_deterministic_from_goal(tmp_path, monkeypatch):
+def test_run_ids_unique_and_files_distinct(tmp_path, monkeypatch):
+    """Naming contract (post trace-reorg): run_id = trace_<model_slug>
+    [+role][+collision counter]. Two traces in one process must get
+    DISTINCT run_ids and DISTINCT files — the env-leak bug made them
+    collide and append into one JSONL."""
     monkeypatch.setattr(agent_trace, "AGENT_RUNS_DIR", str(tmp_path))
-    # Same goal → same 8-hex suffix; different goal → different suffix.
     a = AgentTrace("goal A", "m", True, 25)
     b = AgentTrace("goal B", "m", True, 25)
-    a_suffix = a.run_id.rsplit("_", 1)[-1]
-    b_suffix = b.run_id.rsplit("_", 1)[-1]
-    assert a_suffix != b_suffix
-    assert len(a_suffix) == 8
+    assert a.run_id != b.run_id
+    assert a.path != b.path
+    assert len(_read(a.path)) == 1 and len(_read(b.path)) == 1  # no cross-append
+    # And both grouped in the same standalone study dir (her design intent)
+    assert os.path.dirname(a.path) == os.path.dirname(b.path)
 
 
 def test_all_event_types_emit_expected_shape(tmp_path, monkeypatch):

@@ -279,7 +279,8 @@ def test_orchestrator_trace_records_delegate_events(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 def test_poll_until_terminal_returns_on_complete():
-    with patch.object(agent_orchestrator.httpx, "get") as mock_get:
+    with patch.object(agent_orchestrator, "_get_client") as mock_client:
+        mock_get = mock_client.return_value.get
         mock_get.return_value.json.return_value = {"status": "complete"}
         result = poll_until_terminal("aabb0004", max_polls=5, interval_seconds=0)
     assert result["status"] == "complete"
@@ -287,7 +288,8 @@ def test_poll_until_terminal_returns_on_complete():
 
 
 def test_poll_until_terminal_returns_on_failed_with_detail():
-    with patch.object(agent_orchestrator.httpx, "get") as mock_get:
+    with patch.object(agent_orchestrator, "_get_client") as mock_client:
+        mock_get = mock_client.return_value.get
         mock_get.return_value.json.return_value = {"status": "failed", "detail": "oops"}
         result = poll_until_terminal("aabb0005", max_polls=5, interval_seconds=0)
     assert result["status"] == "failed"
@@ -295,7 +297,8 @@ def test_poll_until_terminal_returns_on_failed_with_detail():
 
 
 def test_poll_until_terminal_times_out():
-    with patch.object(agent_orchestrator.httpx, "get") as mock_get:
+    with patch.object(agent_orchestrator, "_get_client") as mock_client:
+        mock_get = mock_client.return_value.get
         mock_get.return_value.json.return_value = {"status": "running"}
         result = poll_until_terminal("aabb0006", max_polls=3, interval_seconds=0)
     assert result["status"] == "timeout"
