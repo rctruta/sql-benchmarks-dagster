@@ -1,3 +1,7 @@
+---
+name: build-scaling-experiment
+description: Build and submit a scaling benchmark experiment. Use when the goal names a scale-varying investigation (e.g. how does X scale from N to M rows, is the growth linear, or at what size does Y break).
+---
 # Skill: build a scaling experiment
 
 **Use when:** the goal names a scale-varying investigation ("how does X scale from N to M rows", "is the growth linear", "at what size does Y break").
@@ -44,4 +48,4 @@ execution:
 - **Suite that doesn't exist** — check `list_suites` first; the user's goal may name a suite that isn't in the catalog.
 - **Docker not running** — `postgres` and `quack` engines need Docker. `duckdb` doesn't. If Docker is off, use `duckdb` only.
 
-## After submission — see `skills/read_experiment_results.md`
+## After submission — see `skills/read-experiment-results/SKILL.md`

@@ -1,3 +1,7 @@
+---
+name: read-experiment-results
+description: Read and analyze completed benchmark experiment results. Use when an experiment status is complete and you need to compare engines, speedups, scaling, replication stability, or raw timings.
+---
 # Skill: read experiment results — pick the right tool for the question
 
 **Use when:** an experiment's status has gone `complete` and you need to reason from the results.
