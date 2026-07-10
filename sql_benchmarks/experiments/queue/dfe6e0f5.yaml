@@ -1,0 +1,56 @@
+meta:
+  name: DuckDB Analytical Aggregation Scaling
+  description: 'Investigate DuckDB performance scaling on analytical aggregation queries
+    across small, medium, and large data scales using analytical_wall suite. Test
+    at 10,000, 100,000 and 1,000,000 rows.
+
+    '
+dataset:
+  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  tables:
+    analytical_data:
+      rows: rows
+      columns:
+      - name: id
+        provider: sequence
+        primary_key: true
+      - name: region
+        provider: choice
+        options:
+        - North
+        - South
+        - East
+        - West
+      - name: category
+        provider: choice
+        options:
+        - A
+        - B
+        - C
+      - name: price
+        provider: random_float
+        min_value: 10.0
+        max_value: 500.0
+      - name: quantity
+        provider: random_int
+        min_value: 1
+        max_value: 100
+      - name: discount
+        provider: random_float
+        min_value: 0.0
+        max_value: 0.3
+definitions:
+  rows:
+    xs: 10000
+    small: 100000
+    medium: 1000000
+execution:
+  test_suite: analytical_wall
+  engines:
+  - duckdb
+  replication: 1
+  matrix:
+    rows:
+    - xs
+    - small
+    - medium

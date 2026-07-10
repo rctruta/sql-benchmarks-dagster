@@ -281,8 +281,40 @@ def execute_tool(name: str, args: dict) -> str:
             res = client.get(f"/v1/catalog/templates/{args['name']}", timeout=30)
             return json.dumps(res.json(), indent=2)
         elif name == "submit_experiment":
+            config_yaml = args.get("config_yaml", "")
+            try:
+                import yaml
+                config = yaml.safe_load(config_yaml)
+                exec_conf = config.get("execution", {})
+                suite = exec_conf.get("test_suite")
+                engines = exec_conf.get("engines", [])
+                replication = exec_conf.get("replication", 5)
+                matrix = exec_conf.get("matrix", {})
+                partitions = matrix.get("rows", [])
+                if not isinstance(partitions, list):
+                    partitions = [partitions]
+                
+                # Query published registry to check for semantic duplication
+                res_pub = client.get("/v1/catalog/published", timeout=30)
+                published = res_pub.json().get("capsules", [])
+                for cap in published:
+                    if (cap.get("suite") == suite and
+                        sorted(cap.get("engines", [])) == sorted(engines) and
+                        sorted(cap.get("partitions", [])) == sorted(partitions) and
+                        cap.get("replication") == replication):
+                        
+                        return json.dumps({
+                            "error": (
+                                f"CACHE HIT: An identical experiment was already run and published under ID '{cap['experiment_id']}'. "
+                                f"Do not submit a duplicate run. Call get_experiment_summary(experiment_id=\"{cap['experiment_id']}\") "
+                                f"to read the results."
+                            )
+                        }, indent=2)
+            except Exception:
+                pass
+
             res = client.post("/v1/experiments",
-                              json={"config_yaml": args["config_yaml"]}, timeout=30)
+                              json={"config_yaml": config_yaml}, timeout=30)
             return json.dumps(res.json(), indent=2)
         elif name == "get_experiment_status":
             res = client.get(f"/v1/experiments/{args['experiment_id']}/status", timeout=30)

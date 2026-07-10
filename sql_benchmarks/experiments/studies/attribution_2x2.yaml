@@ -20,8 +20,8 @@ meta:
     scripts/tools/analyze_agent_traces.py.
 
 driver: monolith          # monolith | multi_agent
-model: anthropic/claude-sonnet-5
-replications: 3
+models: [gemini/gemini-2.5-flash, gemini/gemini-2.5-pro, gemini/gemini-3.5-flash]
+replications: 1
 
 goal: >
   Investigate how DuckDB performance scales on analytical aggregation

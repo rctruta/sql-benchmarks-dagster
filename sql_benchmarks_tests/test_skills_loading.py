@@ -20,9 +20,8 @@ def _read(name: str) -> str:
 
 def test_skills_dir_exists_and_has_two_shipped_skills():
     assert os.path.isdir(_SKILLS_DIR)
-    files = sorted(f for f in os.listdir(_SKILLS_DIR) if f.endswith(".md"))
-    assert "build_scaling_experiment.md" in files
-    assert "read_experiment_results.md" in files
+    assert os.path.isfile(os.path.join(_SKILLS_DIR, "build-scaling-experiment", "SKILL.md"))
+    assert os.path.isfile(os.path.join(_SKILLS_DIR, "read-experiment-results", "SKILL.md"))
 
 
 def test_build_scaling_experiment_covers_known_pitfalls():
@@ -30,7 +29,7 @@ def test_build_scaling_experiment_covers_known_pitfalls():
     surface — each one has broken a previous run and is now enforced at
     submission time. If the skill drifts from what validation rejects,
     the agent will re-hit the trap."""
-    text = _read("build_scaling_experiment.md")
+    text = _read("build-scaling-experiment/SKILL.md")
     assert "literal" in text.lower()  # literal rows rejection (PR #121)
     assert "matrix alias" in text.lower()  # alias resolvability
     assert "engines" in text.lower()  # empty engines rejection
@@ -41,7 +40,7 @@ def test_build_scaling_experiment_covers_known_pitfalls():
 def test_read_experiment_results_names_every_projection():
     """The decision table must name every tool the agent can call for
     reading results. Missing one means the agent won't reach for it."""
-    text = _read("read_experiment_results.md")
+    text = _read("read-experiment-results/SKILL.md")
     for tool in [
         "get_experiment_summary",
         "get_means_by_partition",
