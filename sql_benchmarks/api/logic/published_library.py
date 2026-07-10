@@ -37,6 +37,13 @@ def _git_tracked_capsule_ids() -> set:
         parts = line.split("/")
         if len(parts) > 4:  # .../results/<ID>/<file>
             ids.add(parts[3])
+    
+    # ALSO include local sealed capsules in RESULTS_DIR to support immediate cache reuse!
+    if os.path.exists(RESULTS_DIR):
+        for name in os.listdir(RESULTS_DIR):
+            if os.path.isdir(os.path.join(RESULTS_DIR, name)):
+                if os.path.exists(os.path.join(RESULTS_DIR, name, "integrity.seal")):
+                    ids.add(name)
     return ids
 
 
