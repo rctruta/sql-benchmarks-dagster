@@ -177,6 +177,7 @@ def run_specialist(role: SpecialistRole, brief: str, model: str) -> SpecialistRe
         model=model,
         agents_md_loaded=False,
         max_turns=role.max_turns,
+        role=role.name,
     )
     # Meta-meta-trace: record exactly what shaped this specialist —
     # specialists carry NO agents_md and NO skills by design (the minimal

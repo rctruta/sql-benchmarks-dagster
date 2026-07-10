@@ -24,12 +24,20 @@ Not thread-safe. autonomous_agent runs one loop per process.
 import hashlib
 import json
 import os
+import re
 from datetime import datetime, timezone
 from typing import Any
 
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 AGENT_RUNS_DIR = os.path.join(_REPO_ROOT, "sql_benchmarks", "experiments", "agent_runs")
+
+
+def slugify(text: str) -> str:
+    """Return a file-safe lowercased slug of model names."""
+    text = text.lower()
+    text = re.sub(r"[^a-z0-9]+", "-", text)
+    return text.strip("-")[:30]
 
 
 def _new_run_id(goal: str) -> str:
@@ -86,10 +94,45 @@ def _usage_from_response(response) -> dict | None:
 class AgentTrace:
     """One agent run = one JSONL file. Each method emits one event line."""
 
-    def __init__(self, goal: str, model: str, agents_md_loaded: bool, max_turns: int):
-        os.makedirs(AGENT_RUNS_DIR, exist_ok=True)
-        self.run_id = _new_run_id(goal)
-        self.path = os.path.join(AGENT_RUNS_DIR, f"{self.run_id}.jsonl")
+    # Standalone runs in the same process share ONE study dir (an
+    # orchestrator + its specialists must land together), but the share
+    # must not leak through os.environ: env mutation made the first
+    # trace pin dir+prefix for every later trace in the process —
+    # colliding run_ids and appending different runs into one file
+    # (caught by the test suite, 2026-07-14). Keyed on AGENT_RUNS_DIR so
+    # tests (and embedders) that repoint the runs dir get fresh groups.
+    _standalone_dirs: dict = {}
+    _used_run_ids: set = set()
+
+    def __init__(self, goal: str, model: str, agents_md_loaded: bool, max_turns: int, role: str | None = None):
+        study_dir = os.getenv("AGENT_STUDY_DIR")
+        trace_prefix = os.getenv("AGENT_TRACE_PREFIX")
+
+        if not (study_dir and trace_prefix):
+            # Standalone fallback: group under standalone_<timestamp>,
+            # name trace_<model_slug> — process-local, no env mutation.
+            key = AGENT_RUNS_DIR
+            if key not in AgentTrace._standalone_dirs:
+                AgentTrace._standalone_dirs[key] = os.path.join(
+                    AGENT_RUNS_DIR,
+                    f"standalone_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}")
+            study_dir = AgentTrace._standalone_dirs[key]
+            trace_prefix = f"trace_{slugify(model)}"
+
+        role_suffix = f"_{role}" if role else ""
+        run_id = f"{trace_prefix}{role_suffix}"
+        # Uniqueness guard: several runs of the same model/role in one
+        # process (or one study dir) must not share a run_id — delegate
+        # linking and file identity both depend on it.
+        candidate, n = run_id, 1
+        while candidate in AgentTrace._used_run_ids or                 os.path.exists(os.path.join(study_dir, f"{candidate}.jsonl")):
+            n += 1
+            candidate = f"{run_id}_{n}"
+        self.run_id = candidate
+        AgentTrace._used_run_ids.add(self.run_id)
+
+        os.makedirs(study_dir, exist_ok=True)
+        self.path = os.path.join(study_dir, f"{self.run_id}.jsonl")
         self._emit("run_start", {
             "goal": goal,
             "model": model,

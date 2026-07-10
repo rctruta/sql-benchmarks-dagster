@@ -25,7 +25,7 @@ from typing import Optional
 import httpx
 
 from .agent_specialist import SpecialistRole, SpecialistResult, run_specialist
-from .agent_tools import API_BASE
+from .agent_tools import _get_client
 from .agent_trace import AgentTrace
 
 
@@ -248,9 +248,10 @@ def poll_until_terminal(experiment_id: str,
     `max_polls * interval_seconds` seconds have elapsed. No LLM; this
     is a deterministic procedure and using an LLM here would waste
     tokens on a fixed-outcome task."""
+    client = _get_client()
     for i in range(1, max_polls + 1):
         try:
-            r = httpx.get(f"{API_BASE}/v1/experiments/{experiment_id}/status", timeout=30)
+            r = client.get(f"/v1/experiments/{experiment_id}/status", timeout=30)
             body = r.json()
             status = body.get("status", "unknown")
         except Exception as e:
@@ -478,7 +479,8 @@ class Orchestrator:
         # probably 2x medium" and hedged its scaling claims accordingly.
         definitions_note = ""
         try:
-            r = httpx.get(f"{API_BASE}/v1/results/{exp_id}", timeout=30)
+            client = _get_client()
+            r = client.get(f"/v1/results/{exp_id}", timeout=30)
             config = (r.json() or {}).get("config") or {}
             definitions = config.get("definitions")
             if definitions:

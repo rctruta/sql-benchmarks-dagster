@@ -1,0 +1,29 @@
+# Edge case 7: does the agent reuse the lab's published ADBC/Arrow-transport findings?
+#
+# The repo carries the sealed psycopg vs ADBC vs connectorx capsule `af6ba593`.
+# The goal is designed to exactly match the query scenario: 10M rows, postgres_transport,
+# comparing psycopg, ADBC, and connectorx on nested arrays and jsonb.
+#
+# If the librarian is active, the agent should search the published catalog,
+# match this goal to `af6ba593`, and return the speedup results directly
+# without running a heavy 10M row Postgres ingestion/fetching loop.
+
+meta:
+  name: "Edge 7 — ADBC connectivity reuse, model ladder, schema-only steering"
+  description: >
+    Test if the agent can reuse the published connectivity capsule af6ba593
+    to answer scaling questions on nested data types in Postgres.
+    One replication per model; adoption is a categorical outcome.
+
+driver: multi_agent
+models: [gemini/gemini-2.5-flash, gemini/gemini-2.5-pro, anthropic/claude-opus-4-6, gemini/gemini-3.5-flash, anthropic/claude-fable-5]
+replications: 1
+
+goal: >
+  Compare the transport overhead and speedup of ADBC (Arrow) and connectorx
+  compared to psycopg (row fetch) when loading nested database data at 10M scale
+  from PostgreSQL. psycopg, adbc, and connectorx only on the postgres_transport engine.
+
+cells:
+  orchestrated:
+    flags: {}

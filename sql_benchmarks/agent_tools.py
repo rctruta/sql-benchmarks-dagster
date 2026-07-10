@@ -13,6 +13,27 @@ import httpx
 
 
 API_BASE = os.getenv("SB_API_BASE", "http://localhost:8000")
+_client = None
+
+
+def _get_client() -> httpx.Client:
+    global _client
+    if _client is not None:
+        return _client
+
+    if "localhost" in API_BASE or "127.0.0.1" in API_BASE:
+        try:
+            from sql_benchmarks.api.app import create_app
+            app = create_app()
+            
+            from fastapi.testclient import TestClient
+            _client = TestClient(app)
+            return _client
+        except Exception:
+            pass
+
+    _client = httpx.Client(base_url=API_BASE)
+    return _client
 
 
 TOOLS = [
@@ -228,21 +249,22 @@ def execute_tool(name: str, args: dict) -> str:
     """Dispatches the tool call to the REST API. Same code path as
     autonomous_agent.py used to have; extracted here so specialists
     reuse it without importing from a script."""
+    client = _get_client()
     try:
         if name == "list_lab_docs":
-            res = httpx.get(f"{API_BASE}/v1/catalog/docs", timeout=30)
+            res = client.get("/v1/catalog/docs", timeout=30)
             return json.dumps(res.json(), indent=2)
         elif name == "get_lab_doc":
-            res = httpx.get(f"{API_BASE}/v1/catalog/docs/{args['name']}", timeout=30)
+            res = client.get(f"/v1/catalog/docs/{args['name']}", timeout=30)
             return json.dumps(res.json(), indent=2)
         elif name == "search_published_capsules":
             params = {}
             if args.get("category"):
                 params["category"] = args["category"]
-            res = httpx.get(f"{API_BASE}/v1/catalog/published", params=params, timeout=30)
+            res = client.get("/v1/catalog/published", params=params, timeout=30)
             return json.dumps(res.json(), indent=2)
         elif name == "list_categories":
-            res = httpx.get(f"{API_BASE}/v1/catalog/categories", timeout=30)
+            res = client.get("/v1/catalog/categories", timeout=30)
             return json.dumps(res.json(), indent=2)
         elif name == "list_suites":
             params = {}
@@ -250,44 +272,44 @@ def execute_tool(name: str, args: dict) -> str:
                 params["category"] = args["category"]
             if args.get("include_sql"):
                 params["include_sql"] = "true"
-            res = httpx.get(f"{API_BASE}/v1/catalog/suites", params=params, timeout=30)
+            res = client.get("/v1/catalog/suites", params=params, timeout=30)
             return json.dumps(res.json(), indent=2)
         elif name == "list_templates":
-            res = httpx.get(f"{API_BASE}/v1/catalog/templates", timeout=30)
+            res = client.get("/v1/catalog/templates", timeout=30)
             return json.dumps(res.json(), indent=2)
         elif name == "get_template":
-            res = httpx.get(f"{API_BASE}/v1/catalog/templates/{args['name']}", timeout=30)
+            res = client.get(f"/v1/catalog/templates/{args['name']}", timeout=30)
             return json.dumps(res.json(), indent=2)
         elif name == "submit_experiment":
-            res = httpx.post(f"{API_BASE}/v1/experiments",
-                             json={"config_yaml": args["config_yaml"]}, timeout=30)
+            res = client.post("/v1/experiments",
+                              json={"config_yaml": args["config_yaml"]}, timeout=30)
             return json.dumps(res.json(), indent=2)
         elif name == "get_experiment_status":
-            res = httpx.get(f"{API_BASE}/v1/experiments/{args['experiment_id']}/status", timeout=30)
+            res = client.get(f"/v1/experiments/{args['experiment_id']}/status", timeout=30)
             return json.dumps(res.json(), indent=2)
         elif name == "compare_engines":
-            res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}/compare", timeout=30)
+            res = client.get(f"/v1/results/{args['experiment_id']}/compare", timeout=30)
             return json.dumps(res.json(), indent=2)
         elif name == "compare_engines_by_partition":
-            res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}/compare/by-partition", timeout=30)
+            res = client.get(f"/v1/results/{args['experiment_id']}/compare/by-partition", timeout=30)
             return json.dumps(res.json(), indent=2)
         elif name == "get_experiment_result":
-            res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}", timeout=30)
+            res = client.get(f"/v1/results/{args['experiment_id']}", timeout=30)
             return json.dumps(res.json(), indent=2)
         elif name == "get_experiment_summary":
-            res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}/projections/summary", timeout=30)
+            res = client.get(f"/v1/results/{args['experiment_id']}/projections/summary", timeout=30)
             return json.dumps(res.json(), indent=2)
         elif name == "get_means_by_partition":
-            res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}/projections/means", timeout=30)
+            res = client.get(f"/v1/results/{args['experiment_id']}/projections/means", timeout=30)
             return json.dumps(res.json(), indent=2)
         elif name == "get_scaling_factor":
-            res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}/projections/scaling", timeout=30)
+            res = client.get(f"/v1/results/{args['experiment_id']}/projections/scaling", timeout=30)
             return json.dumps(res.json(), indent=2)
         elif name == "get_means_by_benchmark":
-            res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}/projections/benchmarks", timeout=30)
+            res = client.get(f"/v1/results/{args['experiment_id']}/projections/benchmarks", timeout=30)
             return json.dumps(res.json(), indent=2)
         elif name == "get_replication_stability":
-            res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}/projections/stability", timeout=30)
+            res = client.get(f"/v1/results/{args['experiment_id']}/projections/stability", timeout=30)
             return json.dumps(res.json(), indent=2)
         else:
             return json.dumps({"error": f"Tool '{name}' is not registered. Known: {sorted(KNOWN_TOOLS)}"})
@@ -295,3 +317,4 @@ def execute_tool(name: str, args: dict) -> str:
         return json.dumps({"error": f"Cannot reach API at {API_BASE}: {e}"})
     except Exception as e:
         return json.dumps({"error": f"Tool call failed: {type(e).__name__}: {e}"})
+

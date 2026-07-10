@@ -101,6 +101,19 @@ def main():
     args = parser.parse_args()
 
     study_id, contract = load_contract(args.contract)
+    
+    from datetime import datetime
+    import shutil
+    from sql_benchmarks.agent_trace import AGENT_RUNS_DIR, slugify
+    
+    study_name = os.path.splitext(os.path.basename(args.contract))[0]
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    study_dir = os.path.join(AGENT_RUNS_DIR, f"{study_name}_{timestamp}")
+    os.makedirs(study_dir, exist_ok=True)
+    shutil.copy(args.contract, os.path.join(study_dir, "contract.yaml"))
+    
+    os.environ["AGENT_STUDY_DIR"] = study_dir
+    
     cells = list(contract["cells"])
     if args.cell:
         if args.cell not in cells:
@@ -126,6 +139,8 @@ def main():
         for cell in cells:
             for rep in range(1, reps + 1):
                 print(f"\n=== study={study_id} model={model} cell={cell} rep={rep} ===")
+                model_slug = slugify(model)
+                os.environ["AGENT_TRACE_PREFIX"] = f"trace_{model_slug}_{cell}_r{rep}"
                 # Per-run isolation: a transient API error in one run must
                 # not kill the rest of the matrix.
                 try:
