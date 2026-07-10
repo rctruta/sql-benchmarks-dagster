@@ -325,31 +325,25 @@ def load_agents_md() -> str:
 
 
 def load_skills() -> str:
-    """Concatenate every SKILL.md file in skills/ subdirectories, and
-    fallback to any legacy .md files in the skills/ root. Returns "" if the
-    dir is missing or empty."""
-    skills_dir = os.path.join(_REPO_ROOT, "skills")
-    if not os.path.isdir(skills_dir):
+    """DISCOVERY stage of the Agent Skills spec (agentskills.io): return
+    only each skill's frontmatter name + description — tens of tokens per
+    skill — plus the activation hint. Full instructions load on demand
+    via the `get_skill` tool (activation stage).
+
+    History: the original loader concatenated FULL skill bodies into the
+    system prompt — always-loaded prose, re-read every turn. That both
+    violated the spec and confounded the guidance ablations: "+skills"
+    measured a non-compliant loader's bloat, not spec-compliant skills.
+    File format was fixed in PR #160; this completes the loading side."""
+    from sql_benchmarks.api.logic.skills_library import list_skills
+    skills = list_skills()
+    if not skills:
         return ""
-    parts = []
-    
-    # 1. Look for new spec-compliant SKILL.md files in subdirectories
-    for item in sorted(os.listdir(skills_dir)):
-        item_path = os.path.join(skills_dir, item)
-        if os.path.isdir(item_path):
-            skill_md_path = os.path.join(item_path, "SKILL.md")
-            if os.path.isfile(skill_md_path):
-                with open(skill_md_path, encoding="utf-8") as f:
-                    parts.append(f.read())
-                    
-    # 2. Legacy fallback: check for any .md files directly in skills/ root
-    for fn in sorted(os.listdir(skills_dir)):
-        file_path = os.path.join(skills_dir, fn)
-        if fn.endswith(".md") and os.path.isfile(file_path):
-            with open(file_path, encoding="utf-8") as f:
-                parts.append(f.read())
-                
-    return "\n\n---\n\n".join(parts)
+    lines = [f"- {s['name']}: {s['description']}" for s in skills]
+    return (
+        "Available skills (load one with `get_skill(name)` when the task "
+        "matches its description):\n" + "\n".join(lines)
+    )
 
 
 def execute_tool(name: str, args: dict) -> str:
@@ -531,7 +525,7 @@ def build_system_prompt(include_agents_md: bool = True,
 
     skills = load_skills() if include_skills else ""
     skills_block = (
-        "\n\n---\n\n# Skills (precise procedures for specific operations)\n\n"
+        "\n\n---\n\n# Skills\n\n"
         + skills
         if skills
         else ""

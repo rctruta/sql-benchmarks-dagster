@@ -55,3 +55,38 @@ def test_read_experiment_results_names_every_projection():
     assert "partitions_order" in text
     # And the provenance concept
     assert "provenance" in text.lower()
+
+
+# ---------------------------------------------------------------------------
+# Progressive disclosure (agentskills.io spec) — discovery vs activation.
+# The original loader inlined full bodies (confounding the guidance
+# ablations); discovery must now be metadata-only, bodies on demand.
+# ---------------------------------------------------------------------------
+
+from sql_benchmarks.api.logic.skills_library import get_skill, list_skills
+
+
+def test_discovery_returns_metadata_only():
+    skills = list_skills()
+    names = {s["name"] for s in skills}
+    assert {"build-scaling-experiment", "read-experiment-results"} <= names
+    for s in skills:
+        assert s["description"], f"skill {s['name']} missing description (spec-required)"
+        # Discovery payload must be small: no instruction bodies leaking
+        assert "Recipe" not in s["description"]
+        assert len(s["description"]) < 400
+
+
+def test_activation_returns_full_body_without_frontmatter():
+    skill = get_skill("build-scaling-experiment")
+    assert skill is not None
+    assert "get_template" in skill["instructions"]       # real body content
+    assert not skill["instructions"].startswith("---")   # frontmatter stripped
+    assert get_skill("no-such-skill") is None
+
+
+def test_discovery_block_is_orders_of_magnitude_smaller_than_bodies():
+    """The point of the fix, asserted: metadata footprint << body footprint."""
+    meta_chars = sum(len(s["name"]) + len(s["description"]) for s in list_skills())
+    body_chars = sum(len(get_skill(s["name"])["instructions"]) for s in list_skills())
+    assert meta_chars * 5 < body_chars  # bodies at least 5x the metadata
