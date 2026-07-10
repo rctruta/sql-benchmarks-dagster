@@ -6,6 +6,19 @@
 # Installed by setup.sh via: git config core.hooksPath .githooks
 set -e
 
+# Refuse direct commits to main branch to prevent squash-merge git divergence.
+CURRENT_BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --abbrev-ref HEAD)"
+if [ "$CURRENT_BRANCH" = "main" ]; then
+    echo "" >&2
+    echo "  [pre-commit] REFUSING COMMIT: Committing directly to 'main' is not allowed." >&2
+    echo "  Please commit your changes to a feature branch instead:" >&2
+    echo "       git switch -c feature/your-topic" >&2
+    echo "  (To bypass in an emergency, use: git commit --no-verify)" >&2
+    echo "" >&2
+    exit 1
+fi
+
+
 ROOT="$(git rev-parse --show-toplevel)"
 
 # Only enforce when something that affects the catalog is staged, so unrelated
