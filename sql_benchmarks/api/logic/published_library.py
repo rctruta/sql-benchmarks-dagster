@@ -45,7 +45,7 @@ def _sealed(exp_id: str) -> bool:
 
 
 def _capsule_meta(exp_id: str) -> dict:
-    """suite / description / engines, derived from the capsule's own
+    """suite / description / engines / replication / partitions, derived from the capsule's own
     archived config (results copy first, archive fallback)."""
     for path in (
         os.path.join(RESULTS_DIR, exp_id, "experiment_config.yaml"),
@@ -57,20 +57,26 @@ def _capsule_meta(exp_id: str) -> dict:
                     cfg = yaml.safe_load(f) or {}
                 execution = cfg.get("execution") or {}
                 meta = cfg.get("meta") or {}
+                matrix = execution.get("matrix", {})
+                partitions = matrix.get("rows", [])
+                if not isinstance(partitions, list):
+                    partitions = [partitions]
                 return {
                     "suite": execution.get("test_suite"),
                     "engines": execution.get("engines") or [],
+                    "replication": execution.get("replication", 5),
+                    "partitions": partitions,
                     "description": (str(meta.get("description") or meta.get("name") or "")
                                     .strip()[:300]),
                 }
             except (yaml.YAMLError, OSError):
                 continue
-    return {"suite": None, "engines": [], "description": ""}
+    return {"suite": None, "engines": [], "replication": 5, "partitions": [], "description": ""}
 
 
 def search_published_capsules(category: Optional[str] = None) -> List[dict]:
     """List published (git-tracked + sealed) capsules, optionally filtered
-    by taxonomy category. Small payload: id, suite, engines, categories,
+    by taxonomy category. Small payload: id, suite, engines, replication, partitions, categories,
     one-line description. Read a hit with the existing projections
     (`get_experiment_summary <id>` etc.)."""
     out = []
@@ -85,6 +91,8 @@ def search_published_capsules(category: Optional[str] = None) -> List[dict]:
             "experiment_id": exp_id,
             "suite": meta["suite"],
             "engines": meta["engines"],
+            "replication": meta["replication"],
+            "partitions": meta["partitions"],
             "categories": cats,
             "description": meta["description"],
         })
