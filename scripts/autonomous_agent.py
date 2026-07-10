@@ -353,75 +353,10 @@ def load_skills() -> str:
 
 
 def execute_tool(name: str, args: dict) -> str:
-    """Dispatches the tool call to the REST API."""
-    try:
-        if name == "list_categories":
-            res = httpx.get(f"{API_BASE}/v1/catalog/categories", timeout=30)
-            return json.dumps(res.json(), indent=2)
-
-        elif name == "list_suites":
-            params = {}
-            if args.get("category"):
-                params["category"] = args["category"]
-            if args.get("include_sql"):
-                params["include_sql"] = "true"
-            res = httpx.get(f"{API_BASE}/v1/catalog/suites", params=params, timeout=30)
-            return json.dumps(res.json(), indent=2)
-
-        elif name == "list_templates":
-            res = httpx.get(f"{API_BASE}/v1/catalog/templates", timeout=30)
-            return json.dumps(res.json(), indent=2)
-
-        elif name == "get_template":
-            res = httpx.get(f"{API_BASE}/v1/catalog/templates/{args['name']}", timeout=30)
-            return json.dumps(res.json(), indent=2)
-
-        elif name == "submit_experiment":
-            res = httpx.post(
-                f"{API_BASE}/v1/experiments",
-                json={"config_yaml": args["config_yaml"]},
-                timeout=30
-            )
-            return json.dumps(res.json(), indent=2)
-
-        elif name == "get_experiment_status":
-            res = httpx.get(f"{API_BASE}/v1/experiments/{args['experiment_id']}/status", timeout=30)
-            return json.dumps(res.json(), indent=2)
-
-        elif name == "compare_engines":
-            res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}/compare", timeout=30)
-            return json.dumps(res.json(), indent=2)
-
-        elif name == "compare_engines_by_partition":
-            res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}/compare/by-partition", timeout=30)
-            return json.dumps(res.json(), indent=2)
-
-        elif name == "get_experiment_result":
-            res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}", timeout=30)
-            return json.dumps(res.json(), indent=2)
-
-        elif name == "get_experiment_summary":
-            res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}/projections/summary", timeout=30)
-            return json.dumps(res.json(), indent=2)
-
-        elif name == "get_means_by_partition":
-            res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}/projections/means", timeout=30)
-            return json.dumps(res.json(), indent=2)
-
-        elif name == "get_scaling_factor":
-            res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}/projections/scaling", timeout=30)
-            return json.dumps(res.json(), indent=2)
-
-        elif name == "get_replication_stability":
-            res = httpx.get(f"{API_BASE}/v1/results/{args['experiment_id']}/projections/stability", timeout=30)
-            return json.dumps(res.json(), indent=2)
-
-        else:
-            return json.dumps({"error": f"Tool '{name}' is not registered. Known tools: {sorted(KNOWN_TOOLS)}"})
-    except httpx.ConnectError as e:
-        return json.dumps({"error": f"Cannot reach the API at {API_BASE}. Is the sqlbenchdag server running? Details: {e}"})
-    except Exception as e:
-        return json.dumps({"error": f"Tool call failed: {type(e).__name__}: {e}"})
+    """Dispatches the tool call to the REST API via the shared in-process
+    API client helper to ensure offline runs work seamlessly."""
+    from sql_benchmarks.agent_tools import execute_tool as shared_execute_tool
+    return shared_execute_tool(name, args)
 
 
 class FakeFunction:
