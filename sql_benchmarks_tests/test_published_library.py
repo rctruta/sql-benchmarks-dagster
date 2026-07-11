@@ -33,15 +33,15 @@ def library(tmp_path, monkeypatch):
     monkeypatch.setattr(published_library, "RESULTS_DIR", str(results))
     monkeypatch.setattr(published_library, "CONFIG_ARCHIVE_DIR", str(tmp_path / "cfg"))
     monkeypatch.setattr(published_library, "_git_tracked_capsule_ids",
-                        lambda: {"aaaa1111", "bbbb2222"})
+                        lambda: {"aaaa1111", "bbbb2222", "cccc3333"})
     return results
 
 
 def test_published_means_tracked_and_sealed(library):
     got = search_published_capsules()
-    ids = [c["experiment_id"] for c in got]
-    assert ids == ["aaaa1111"]          # unsealed tracked: out; local sealed: out
-    c = got[0]
+    ids = sorted(c["experiment_id"] for c in got)
+    assert ids == ["aaaa1111", "cccc3333"]  # both git-tracked and local sealed are returned
+    c = next(x for x in got if x["experiment_id"] == "aaaa1111")
     assert c["suite"] == "quack_transport"
     assert c["engines"] == ["duckdb", "quack"]
     assert "ADBC" in c["description"]   # derived from the capsule's own config
@@ -52,6 +52,25 @@ def test_category_filter_uses_taxonomy(library):
     assert [c["experiment_id"] for c in search_published_capsules(category="transport")] \
         == ["aaaa1111"]
     assert search_published_capsules(category="security") == []
+
+
+def test_git_tracked_capsule_ids_includes_local_sealed(tmp_path, monkeypatch):
+    """Test that the real unmocked function scans RESULTS_DIR for local sealed capsules."""
+    results = tmp_path / "results"
+    monkeypatch.setattr(published_library, "RESULTS_DIR", str(results))
+    
+    # Create one local sealed, one local unsealed
+    (results / "local1111").mkdir(parents=True)
+    (results / "local1111" / "integrity.seal").write_text("seal")
+    
+    (results / "local2222").mkdir(parents=True) # no seal
+    
+    # We stub ROOT_DIR to a dummy path so git returns nothing, testing only the local scanner
+    monkeypatch.setattr(published_library, "ROOT_DIR", str(tmp_path))
+    
+    ids = published_library._git_tracked_capsule_ids()
+    assert "local1111" in ids
+    assert "local2222" not in ids
 
 
 def test_config_builder_sees_the_library_tool():

@@ -1,0 +1,39 @@
+meta:
+  name: transport smoke (throwaway)
+  tier: exploratory
+  experiment_id: eb757d00
+dataset:
+  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  seed: 42
+  tables:
+    wide:
+      rows: rows
+      columns:
+      - name: id
+        provider: sequence
+        primary_key: true
+      - name: n
+        provider: random_int
+        min_value: 0
+        max_value: 1000
+      - name: payload
+        provider: json_blob
+        type: jsonb
+      - name: tags
+        provider: int_array
+        length: 3
+        type: integer[]
+definitions:
+  rows:
+    nano: 2000
+execution:
+  test_suite: transport
+  engines:
+  - postgres_transport
+  replication: 1
+  matrix:
+    rows:
+    - nano
+    postgres_transport.client:
+    - psycopg
+    - adbc

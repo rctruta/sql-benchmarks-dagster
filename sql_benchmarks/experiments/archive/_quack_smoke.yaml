@@ -1,0 +1,42 @@
+meta:
+  name: quack adbc smoke (throwaway)
+  tier: exploratory
+  experiment_id: eab1a885
+dataset:
+  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  seed: 42
+  tables:
+    wide:
+      rows: rows
+      columns:
+      - name: id
+        provider: sequence
+        primary_key: true
+      - name: a
+        provider: random_int
+        min_value: 0
+        max_value: 1000
+      - name: b
+        provider: random_float
+        min_value: 0.0
+        max_value: 1.0
+      - name: c
+        provider: random_int
+        min_value: 0
+        max_value: 1000000
+      - name: d
+        provider: random_float
+        min_value: 0.0
+        max_value: 1000.0
+definitions:
+  rows:
+    nano: 5000
+execution:
+  test_suite: quack_transport
+  engines:
+  - quack_pushdown
+  - quack_adbc
+  replication: 1
+  matrix:
+    rows:
+    - nano
