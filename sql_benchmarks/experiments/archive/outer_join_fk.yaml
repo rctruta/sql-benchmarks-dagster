@@ -1,0 +1,67 @@
+meta:
+  name: 'Outer joins & FK enforcement: is LEFT JOIN wasteful, and is LEFT == RIGHT?'
+  description: "Two pieces of SQL folklore, settled with capsules. (1) \"Avoid OUTER\
+    \ JOIN \u2014 it's wasteful; if foreign keys guarantee a match, use INNER.\" Tested\
+    \ by sweeping the orphan rate (fraction of child rows whose FK points to no parent).\
+    \ Prediction: at 0 orphans, LEFT \u2248 INNER \u2014 the join TYPE is nearly free;\
+    \ the cost is the rows you keep. The optimizer already neutralizes the \"waste,\"\
+    \ so the folklore is wrong. (2) LEFT/RIGHT symmetry: `child LEFT JOIN parent`\
+    \ vs the flipped `parent RIGHT JOIN child` preserve the same (child) side \u2014\
+    \ identical cardinality and cost. A tautology, but measured: a receipt for the\
+    \ symmetry people keep rejecting. (Full row-equality needs identical column projection,\
+    \ since SELECT * orders the two sides differently \u2014 demonstrated separately.)\n"
+  experiment_id: 330b7df3
+dataset:
+  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  seed: 42
+  tables:
+    parent:
+      rows: rows
+      columns:
+      - name: id
+        provider: sequence
+        primary_key: true
+      - name: label
+        provider: choice
+        options:
+        - a
+        - b
+        - c
+    child:
+      rows: rows
+      columns:
+      - name: id
+        provider: sequence
+        primary_key: true
+      - name: parent_fk
+        provider: foreign_key
+        target_table: parent
+        orphan_rate: orphan_rate
+      - name: amount
+        provider: random_int
+        min_value: 1
+        max_value: 100
+definitions:
+  rows:
+    small: 100000
+    medium: 1000000
+  orphan_rate:
+    none: 0.0
+    p1: 0.01
+    p10: 0.1
+    p50: 0.5
+execution:
+  test_suite: outer_join
+  engines:
+  - duckdb
+  - postgres
+  replication: 5
+  matrix:
+    rows:
+    - small
+    - medium
+    orphan_rate:
+    - none
+    - p1
+    - p10
+    - p50

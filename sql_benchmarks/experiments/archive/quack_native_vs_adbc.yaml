@@ -1,0 +1,53 @@
+meta:
+  name: 'Quack transport: native client vs GizmoData ADBC driver (isolated)'
+  tier: exploratory
+  description: "Isolates the result-transport CLIENT for DuckDB-over-Quack: identical\
+    \ seeded data, identical SQL, identical Quack server software; the only variable\
+    \ is whether the large result is pulled via the NATIVE Quack client (quack_pushdown)\
+    \ or GizmoData's alpha ADBC Quack driver (quack_adbc, adbc-driver-quack 0.1.0a8,\
+    \ Arrow). Both execute server-side; the delta is the client/transport. Large-result\
+    \ SELECTs (no aggregation) so transport, not execution, dominates. Neutral question\
+    \ \u2014 native could be faster, slower, or a wash; the numbers decide. Alpha\
+    \ snapshot, not a verdict on ADBC the standard.\n"
+  experiment_id: 07c16e50
+dataset:
+  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  seed: 42
+  tables:
+    wide:
+      rows: rows
+      columns:
+      - name: id
+        provider: sequence
+        primary_key: true
+      - name: a
+        provider: random_int
+        min_value: 0
+        max_value: 1000
+      - name: b
+        provider: random_float
+        min_value: 0.0
+        max_value: 1.0
+      - name: c
+        provider: random_int
+        min_value: 0
+        max_value: 1000000
+      - name: d
+        provider: random_float
+        min_value: 0.0
+        max_value: 1000.0
+definitions:
+  rows:
+    small: 100000
+    medium: 1000000
+execution:
+  test_suite: quack_transport
+  engines:
+  - quack_pushdown
+  - quack_arrow
+  - quack_adbc
+  replication: 3
+  matrix:
+    rows:
+    - small
+    - medium
