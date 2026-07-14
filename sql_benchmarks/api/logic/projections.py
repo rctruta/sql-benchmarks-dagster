@@ -24,6 +24,29 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _semantic_sort_key(part: str) -> tuple:
+    """Sort partitions semantically.
+    Numerical strings (e.g. '1000000') are sorted numerically.
+    Size words (e.g. 'small', 'medium', 'large') are mapped to relative weights.
+    Fallback to alphabetical string sort.
+    """
+    if not part:
+        return (3, part)
+        
+    try:
+        return (1, int(part))
+    except ValueError:
+        pass
+        
+    sizes = {"small": 1, "medium": 2, "large": 3, "xlarge": 4, "huge": 5}
+    part_lower = part.lower()
+    for size, weight in sizes.items():
+        if size in part_lower:
+            return (2, weight, part)
+            
+    return (3, part)
+
+
 def _fragment_key(f) -> str:
     """`<asset>__<partition>` — matches the on-disk filename convention."""
     return f"{f.meta.asset}__{f.meta.partition}"
@@ -71,11 +94,9 @@ def get_means_by_partition(exp_id: str, reader) -> dict:
 def get_scaling_factor(exp_id: str, reader) -> dict:
     """For each engine, pairwise scaling factors across partitions.
 
-    Partitions are sorted alphabetically — the existing lab convention
-    (matches `compare_experiment_by_partition`). The `partitions_order`
-    field is returned explicitly so the caller can spot a
-    wrong-direction ordering (e.g. "large","medium","small" vs the
-    semantic small→medium→large) and reinterpret at analysis time.
+    Partitions are sorted semantically using _semantic_sort_key, ensuring
+    numbers and size words (small/medium/large) are ordered correctly instead
+    of alphabetically. The `partitions_order` field makes the ordering explicit.
 
     Per engine, returns:
       - `partitions_order`: the ordering used
@@ -89,7 +110,7 @@ def get_scaling_factor(exp_id: str, reader) -> dict:
         grouped.setdefault(f.meta.engine, {}).setdefault(f.meta.partition, []).append(
             f.metrics.duration_seconds
         )
-    all_partitions = sorted({f.meta.partition for f in fragments if f.meta.partition})
+    all_partitions = sorted({f.meta.partition for f in fragments if f.meta.partition}, key=_semantic_sort_key)
 
     engines_out: dict[str, dict] = {}
     for eng in sorted(grouped.keys()):
@@ -112,11 +133,7 @@ def get_scaling_factor(exp_id: str, reader) -> dict:
         }
     return {
         "experiment_id": exp_id,
-        "note": (
-            "Partitions ordered alphabetically — the existing lab convention. "
-            "If your semantic ordering differs (e.g. small→medium→large), "
-            "reorder at analysis time."
-        ),
+        "note": "Partitions ordered semantically (e.g. small→medium→large or numerical scale).",
         "engines": engines_out,
         "provenance": _provenance(fragments),
     }
