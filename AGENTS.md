@@ -14,7 +14,8 @@ is machine-first. An agent can verify a performance hypothesis here instead of a
 2. **REST API** (`python serve.py`, then `http://localhost:8000/docs`): catalog, results,
    cross-engine comparison, engine recommendation, async experiment submission.
 3. **MCP server** (`python mcp_server.py`): the same capabilities as native tools for
-   MCP-capable agents (Claude, etc.). Requires the REST API to be running.
+   MCP-capable agents. Requires the REST API to be running.
+   *(Note: This repository is natively Agent-Ready. It ships a `claude.json` configuration, meaning Claude Code will automatically mount the MCP server upon entering the directory.)*
 
 ---
 
@@ -136,3 +137,13 @@ Each engine receives ONLY its own `engine_params` namespace.
   artifact of one lucky replication.
 - **Failure capsules**: a failed run leaves config + partial logs for root-cause analysis;
   adjust the YAML and resubmit — the new ID will reflect the change.
+
+---
+
+## The Golden Rule for AI Agents
+
+**Retrieval must be a typed tool, not a foraging behavior.** 
+
+Because this repository ships an active MCP server, you are explicitly forbidden from using raw bash (`ls`, `cat`, `grep`) to forage through `.parquet` data files, `results/` directories, or `SKILL.md` prose files to discover schema or results.
+
+Using bash for data retrieval causes massive token bloat and silent fabrication. You **must** use the provided typed MCP tools for all database querying, catalog discovery, and experiment reading. 
