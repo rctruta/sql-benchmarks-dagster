@@ -10,12 +10,12 @@ description: Build and submit a scaling benchmark experiment. Use when the goal 
 
 ## Recipe
 
-1. `list_categories` → the vocabulary is small. For scaling questions, `scaling` is the tag. For cross-engine investigations, also `cross-engine`. For selectivity/index behavior, `selectivity`.
-2. `list_suites` **with `category=<name>`** → returns only the suites tagged with that category, without SQL bloat. For "analytical aggregation scaling", `list_suites(category="scaling")` narrows to `analytical_wall` and any other scaling-tagged suite. NEVER call `list_suites` without a category unless you have no idea what you're looking for — an unfiltered call is expensive.
-3. `list_templates` → `get_template quickstart` (DuckDB-only, no Docker) OR `get_template scaling_depth` (multi-engine, needs Docker). Use `quickstart` unless the question requires Postgres.
+1. `python scripts/list_categories.py` → the vocabulary is small. For scaling questions, `scaling` is the tag. For cross-engine investigations, also `cross-engine`. For selectivity/index behavior, `selectivity`.
+2. `python scripts/list_suites.py --category <name>` → returns only the suites tagged with that category, without SQL bloat. For "analytical aggregation scaling", `python scripts/list_suites.py --category scaling` narrows to `analytical_wall` and any other scaling-tagged suite. NEVER call `list_suites.py` without a category unless you have no idea what you're looking for — an unfiltered call is expensive.
+3. `python scripts/list_templates.py` → `python scripts/get_template.py quickstart` (DuckDB-only, no Docker) OR `python scripts/get_template.py scaling_depth` (multi-engine, needs Docker). Use `quickstart` unless the question requires Postgres.
 4. Adapt the fetched YAML: keep `dataset.tables.*.rows` as the string alias `rows` (not a literal integer); add the scale points you want to `definitions.rows`; list them in `execution.matrix.rows`.
-5. `submit_experiment` with the adapted YAML.
-6. `get_experiment_status` until `complete` or `failed`.
+5. `python scripts/submit_experiment.py --yaml-file <path>` with the adapted YAML.
+6. `python scripts/get_experiment_status.py <exp_id>` until `complete` or `failed`.
 
 ## Adapt-template pattern
 
