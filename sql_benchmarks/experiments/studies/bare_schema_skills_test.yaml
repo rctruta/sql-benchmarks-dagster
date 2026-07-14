@@ -1,0 +1,77 @@
+# Study contract: Bare Schema × ±Skills.
+#
+# This contract directly tests "Caveat #2" from the harness-bench validation:
+# If the tool schemas are stripped of all steering instructions ("floor"), 
+# and the agent is forced to rely ENTIRELY on a lazy-loaded skill for 
+# procedural knowledge, does it actually call the skill and succeed? Or 
+# do skills fail even in their best-case scenario?
+#
+# This serves as the Phase 0 acceptance test for the new agent-metrology-harness.
+#
+# PRECONDITION (verify before running): Experiment 2 (b7a79622 et al.) showed
+# frontier models PASS this goal from the bare schema alone. For a fair
+# best-case test the skill body must contain at least one fact NOT derivable
+# from the bare schema (e.g. the category vocabulary, or the
+# adapt-a-template-before-submit rule with neutral_tool_descriptions hiding
+# it). If the skill only restates the workflow, this study measures the
+# stronger anti-pattern claim (skills ignored even when offered), not the
+# best case.
+#
+# The verdict therefore lives in markers + cost, not PASS/FAIL:
+#   - was get_skill called at all? (0-call replicates Sweep B; a call is new)
+#   - taxonomy-first discovery (dropped at the floor by gemini-2.5-flash)
+#   - template-first before submit
+#   - total tokens incl. thinking (does lazy prose cut the floor's
+#     reasoning tax? gemini-3.5-flash paid 138-177K at the floor)
+#
+# Behavioral markers extracted by scripts/tools/analyze_agent_traces.py.
+#
+# PRECONDITION NOTE: The skill body MUST carry at least one non-derivable fact 
+# (e.g. a completely unintuitive argument format or an obscure ID). Otherwise, 
+# if the model happens to guess the right tool syntax without reading the skill, 
+# this study measures "skills ignored even when offered" rather than Caveat #2's 
+# best-case scenario. Ensure the skill content is genuinely load-bearing before running.
+
+meta:
+  name: "Bare Schema × ±Skills (Caveat #2 Closure)"
+  description: >
+    Tests whether lazy-loaded skills can rescue behavior when tool schemas 
+    are entirely bare (neutral descriptions, no workflow prose). Answers 
+    whether skills are load-bearing or ignored when they are the only source 
+    of truth.
+
+driver: monolith
+models: 
+  - anthropic/claude-sonnet-5
+  - gemini/gemini-2.5-flash
+  - gemini/gemini-2.5-pro
+  # - gemini/gemini-3.5-flash  # Uncomment for the thinking-tax datapoint
+replications: 1
+
+markers:
+  - first_tool_choice
+  - wrong_tool_calls
+  - error_loops
+  - skill_read_count
+
+goal: >
+  Investigate how DuckDB performance scales on analytical aggregation
+  queries. Test at least three data scales — small, medium, and
+  something larger. Report the mean duration per scale, and whether the
+  scaling looks roughly linear (2x rows -> 2x time) or something
+  different. DuckDB only, no Docker.
+
+cells:
+  bare_with_skills:
+    flags: 
+      include_agents_md: false
+      include_workflow: false
+      neutral_tool_descriptions: true
+      include_skills: true
+
+  bare_no_skills:  # This is the "floor" baseline
+    flags: 
+      include_agents_md: false
+      include_workflow: false
+      neutral_tool_descriptions: true
+      include_skills: false

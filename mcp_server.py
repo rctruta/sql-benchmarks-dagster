@@ -36,13 +36,19 @@ def list_engines() -> dict:
 
 
 @mcp.tool()
-def list_suites() -> dict:
+def list_suites(category: str, include_sql: bool = False) -> dict:
     """
-    List all benchmark test suites with their SQL content per engine.
+    List benchmark test suites for a specific category.
     Suites include: analytical_wall, group_by, joins, null_logic, null_sentinel,
     recursion, selectivity, tpch, acid_test.
+    
+    Args:
+        category: Required filter by category (e.g. "scaling"). Use list_categories to find valid options.
+        include_sql: If true, include the raw SQL per engine (can be large).
     """
-    return httpx.get(f"{API_BASE}/v1/catalog/suites").json()
+    params = {"category": category}
+    if include_sql: params["include_sql"] = "true"
+    return httpx.get(f"{API_BASE}/v1/catalog/suites", params=params).json()
 
 
 @mcp.tool()
@@ -59,30 +65,41 @@ def list_results(suite: str = None, engine: str = None) -> dict:
 
 
 @mcp.tool()
-def get_result(experiment_id: str) -> dict:
+def analyze_experiment(experiment_id: str, intent: str, partition: str = None) -> dict:
     """
-    Get full benchmark results for a specific experiment ID, including all
-    fragment timings, parameters, and config.
-
-    Args:
-        experiment_id: 8-character experiment ID (e.g. "abc12345").
-    """
-    return httpx.get(f"{API_BASE}/v1/results/{experiment_id}").json()
-
-
-@mcp.tool()
-def compare_engines(experiment_id: str, partition: str = None) -> dict:
-    """
-    Get a ranked cross-engine performance comparison for an experiment.
-    Returns engines sorted fastest to slowest with mean/median/p95 durations.
-
+    Analyze a completed experiment. Choose the right intent for your question.
+    
+    Intents:
+    - "summary": Compact digest (means + scaling + narrative). Start here.
+    - "means": Mean duration per partition/engine.
+    - "scaling": Pairwise scaling factors across partitions.
+    - "stability": Std dev, min, max, CV for reliability questions.
+    - "compare": Ranked cross-engine comparison. (Can filter by `partition`).
+    - "compare_by_partition": Ranked comparison broken down per partition.
+    - "raw": The full raw JSON payload (use ONLY if projections aren't enough).
+    
     Args:
         experiment_id: 8-character experiment ID.
-        partition: Optional partition key to filter to a specific scenario
-                   (e.g. "large_ssd"). Omit to aggregate across all partitions.
+        intent: The type of analysis to perform.
+        partition: Optional partition key. Only used if intent is "compare".
     """
-    params = {"partition": partition} if partition else {}
-    return httpx.get(f"{API_BASE}/v1/results/{experiment_id}/compare", params=params).json()
+    if intent == "summary":
+        return httpx.get(f"{API_BASE}/v1/results/{experiment_id}/projections/summary").json()
+    elif intent == "means":
+        return httpx.get(f"{API_BASE}/v1/results/{experiment_id}/projections/means").json()
+    elif intent == "scaling":
+        return httpx.get(f"{API_BASE}/v1/results/{experiment_id}/projections/scaling").json()
+    elif intent == "stability":
+        return httpx.get(f"{API_BASE}/v1/results/{experiment_id}/projections/stability").json()
+    elif intent == "compare":
+        params = {"partition": partition} if partition else {}
+        return httpx.get(f"{API_BASE}/v1/results/{experiment_id}/compare", params=params).json()
+    elif intent == "compare_by_partition":
+        return httpx.get(f"{API_BASE}/v1/results/{experiment_id}/compare/by-partition").json()
+    elif intent == "raw":
+        return httpx.get(f"{API_BASE}/v1/results/{experiment_id}").json()
+    else:
+        return {"error": f"Unknown intent: {intent}"}
 
 
 @mcp.tool()
@@ -111,6 +128,9 @@ def submit_experiment(config_yaml: str) -> dict:
     If this exact experiment has been run before (same config + SQL + code),
     it returns status "duplicate" and you can immediately call get_result().
 
+    CRITICAL: For dataset.tables.*.rows, you MUST use a string alias that maps 
+    to definitions.rows, NOT a literal integer. Literal integers will be rejected.
+
     Args:
         config_yaml: YAML string defining the experiment (dataset, engines, matrix).
     """
@@ -131,6 +151,38 @@ def get_experiment_status(experiment_id: str) -> dict:
         experiment_id: 8-character experiment ID returned by submit_experiment().
     """
     return httpx.get(f"{API_BASE}/v1/experiments/{experiment_id}/status").json()
+
+
+@mcp.tool()
+def list_categories() -> dict:
+    """
+    List the category taxonomy to narrow down test suites.
+    Small payload — call this FIRST to narrow the suite search.
+    """
+    return httpx.get(f"{API_BASE}/v1/catalog/categories").json()
+
+
+@mcp.tool()
+def list_templates() -> dict:
+    """
+    List curated experiment templates. Each is a valid, human-authored
+    config you can get_template(name) and adapt.
+    """
+    return httpx.get(f"{API_BASE}/v1/catalog/templates").json()
+
+
+@mcp.tool()
+def get_template(name: str) -> dict:
+    """
+    Return the raw YAML content of a template by name.
+    
+    Args:
+        name: Name of the template from list_templates().
+    """
+    return httpx.get(f"{API_BASE}/v1/catalog/templates/{name}").json()
+
+
+
 
 
 if __name__ == "__main__":
