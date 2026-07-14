@@ -115,19 +115,18 @@ def test_get_means_provenance_names_every_fragment(three_scale_lab):
     assert "computed_at" in prov
 
 
-def test_get_scaling_factor_computes_ratios_in_alpha_order(three_scale_lab):
-    """The synthetic data has partitions large=1.0, medium=0.1, small=0.01
-    for duckdb — in alphabetic order (large,medium,small) that's a
-    DECREASING series with ratios 0.1, 0.1. Overall ratio: 0.01."""
+def test_get_scaling_factor_computes_ratios_in_semantic_order(three_scale_lab):
+    """The synthetic data has partitions small=0.01, medium=0.1, large=1.0
+    for duckdb — in semantic order (small,medium,large) that's an
+    INCREASING series with ratios 10.0, 10.0. Overall ratio: 100.0."""
     result = get_scaling_factor(EXP, ResultReader())
     duckdb = result["engines"]["duckdb"]
-    assert duckdb["partitions_order"] == ["large", "medium", "small"]
-    assert duckdb["mean_durations"] == [1.0, 0.1, 0.01]
-    assert duckdb["adjacent_ratios"] == [0.1, 0.1]
-    assert duckdb["overall_ratio"] == 0.01
-    # And the tool must emit the ordering caveat so the caller can
-    # reinterpret when semantic order differs
-    assert "alphabetically" in result["note"].lower()
+    assert duckdb["partitions_order"] == ["small", "medium", "large"]
+    assert duckdb["mean_durations"] == [0.01, 0.1, 1.0]
+    assert duckdb["adjacent_ratios"] == [10.0, 10.0]
+    assert duckdb["overall_ratio"] == 100.0
+    # And the tool must emit the ordering note
+    assert "semantically" in result["note"].lower()
 
 
 def test_get_replication_stability_uses_durations_raw(three_scale_lab):
