@@ -1,0 +1,18 @@
+{
+    "experiment_id": "2f5c74e2",
+    "timestamp": 1784151488.3607,
+    "config_id": "config_2f5c74e2",
+    "environment": {
+        "python": "3.11.14",
+        "duckdb": "1.5.1",
+        "dagster": "1.12.22",
+        "os": "Darwin 24.4.0",
+        "machine": "arm64",
+        "cpu_count_logical": 8,
+        "cpu_count_physical": 8,
+        "ram_total_gb": 16.0,
+        "polars": "1.39.3"
+    },
+    "dataset_seed": 42,
+    "generator": "sqlbenchdag@85b5b79"
+}

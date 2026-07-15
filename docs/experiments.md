@@ -56,6 +56,7 @@ python scripts/tools/gen_experiment_catalog.py
 | Capsule | Name | Tier | Engines | Suite | Sealed |
 |---|---|---|---|---|---|
 | [`af6ba593`](../sql_benchmarks/experiments/results/af6ba593/) | Connectivity cost at scale: psycopg vs ADBC vs connectorx to 10M (cross-over) | exploratory | postgres_transport | transport | ✓ |
+| [`2f5c74e2`](../sql_benchmarks/experiments/results/2f5c74e2/) | Malloy Semantic Layer Tax | exploratory | duckdb, malloy | analytical_wall | ✓ |
 | [`fd3fa6a4`](../sql_benchmarks/experiments/results/fd3fa6a4/) | Malloy Semantic Layer Tax | — | duckdb, malloy | analytical_wall | ✓ |
 | [`b8e2bfaf`](../sql_benchmarks/experiments/results/b8e2bfaf/) | Quack Execution Modes: Attach vs Pushdown vs In-Process | — | duckdb, quack, quack_pushdown | analytical_wall | ✓ |
 | [`25b0e134`](../sql_benchmarks/experiments/results/25b0e134/) | Quack Pushdown Residual: Thread-Scaling Probe | — | duckdb, quack_pushdown | analytical_wall | ✓ |
@@ -65,5 +66,5 @@ python scripts/tools/gen_experiment_catalog.py
 | [`902d1277`](../sql_benchmarks/experiments/results/902d1277/) | Quack vs Postgres: Client-Server Head-to-Head | — | duckdb, quack_pushdown, postgres | analytical_wall | ✓ |
 | [`b198363e`](../sql_benchmarks/experiments/results/b198363e/) | TPC-H Q3 Quack Validation | — | duckdb, quack, quack_pushdown | tpch | ✓ |
 
-*9 capsules. Generated from the sealed configs — regenerate with `python scripts/tools/gen_experiment_catalog.py`.*
+*10 capsules. Generated from the sealed configs — regenerate with `python scripts/tools/gen_experiment_catalog.py`.*
 <!-- CATALOG:END -->

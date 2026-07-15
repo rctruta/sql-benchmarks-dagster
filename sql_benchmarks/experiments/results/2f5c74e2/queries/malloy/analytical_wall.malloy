@@ -1,0 +1,14 @@
+// analytical_wall (Malloy) — semantic equivalent of duckdb/analytical_wall.sql.
+// Equivalence enforced by scripts/verify_malloy_equivalence.py (row-for-row
+// against the duckdb dialect on identical seeded data).
+run: {{ analytical_data_table }} -> {
+  group_by: region, category
+  aggregate:
+    transaction_count is count()
+    net_revenue is round(sum(price * quantity * (1 - discount)), 2)
+    avg_transaction_value is round(avg(price * quantity * (1 - discount)), 2)
+    high_discount_impact_pct is round(
+      sum(pick price * quantity when discount > 0.15 else 0)
+      / sum(price * quantity + 0.00001) * 100, 2)
+  order_by: net_revenue desc
+}

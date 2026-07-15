@@ -1,0 +1,59 @@
+meta:
+  tier: exploratory
+  name: Malloy Semantic Layer Tax
+  description: "What does the Malloy Publisher semantic layer cost over raw DuckDB?\
+    \ Identical seeded data and semantically equivalent queries (equivalence enforced\
+    \ by scripts/verify_malloy_equivalence.py) on analytical_wall across three scales.\
+    \ duckdb vs malloy isolates compile + REST + server execution \u2014 the semantic-layer\
+    \ tax, in the same experimental shape as the Quack protocol-tax study (2ed50e23)."
+  experiment_id: 2f5c74e2
+dataset:
+  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  tables:
+    analytical_data:
+      rows: rows
+      columns:
+      - name: id
+        provider: sequence
+        primary_key: true
+      - name: region
+        provider: choice
+        options:
+        - North
+        - South
+        - East
+        - West
+      - name: category
+        provider: choice
+        options:
+        - A
+        - B
+        - C
+      - name: price
+        provider: random_float
+        min: 10.0
+        max: 500.0
+      - name: quantity
+        provider: random_int
+        min: 1
+        max: 100
+      - name: discount
+        provider: random_float
+        min: 0.0
+        max: 0.3
+definitions:
+  rows:
+    small: 100000
+    medium: 1000000
+    large: 5000000
+execution:
+  test_suite: analytical_wall
+  engines:
+  - duckdb
+  - malloy
+  replication: 3
+  matrix:
+    rows:
+    - large
+    - medium
+    - small
