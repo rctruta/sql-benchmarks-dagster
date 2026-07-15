@@ -102,13 +102,14 @@ defs = Definitions(
         # semantic layer (compile + REST). duckdb vs malloy isolates the
         # semantic-layer cost, as duckdb vs quack isolates the protocol cost.
         # Requires: docker compose -f infrastructure/malloy/docker-compose.yml up -d
-        # package_dir is ROOT-anchored, NOT DATA_DIR-derived: the runner
-        # sandboxes DATA_DIR into a temp workspace per experiment, but the
-        # Publisher container's bind mount is fixed at the repo path — the
-        # engine must write where the server can see.
+        # The engine declares its mount contract (host_dir <-> container_dir)
+        # and MountedVolumeStore verifies delivery end-to-end through the
+        # container (probe file + docker exec) before any data lands.
+        # host_dir matches the bind mount in the compose file and is
+        # ROOT-anchored on purpose: the per-experiment DATA_DIR sandbox is
+        # invisible to the long-lived Publisher container.
         "malloy": MalloyEngine(
-            package_dir=os.getenv("SB_MALLOY_PACKAGE_DIR",
-                                  os.path.join(ROOT_DIR, "data", "malloy", "bench")),
+            host_dir=os.path.join(ROOT_DIR, "data", "malloy", "bench"),
             port=int(os.getenv("SB_MALLOY_PORT", "4001")),
         ),
         "quack": QuackEngine(

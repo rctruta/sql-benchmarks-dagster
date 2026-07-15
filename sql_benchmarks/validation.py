@@ -23,12 +23,16 @@ def validate_experiment_config(config: dict, source_label: str = "config") -> No
       3. Alias resolvability: matrix string values must resolve through
          `definitions.<dim>` when a definition block exists (was ConfigLoader-only).
       4. Table rows must be aliases, not literals. See _check_table_rows_are_aliases.
+      5. Memory limits must fit the host. See _check_memory_limits_fit_host.
+      6. Query files must bind to the dataset via Jinja table placeholders —
+         the placeholder is the DAG edge. See _check_query_placeholders_bind.
     """
     ExperimentValidator.validate(config, source_label)
     _check_matrix_present(config, source_label)
     _check_matrix_aliases_resolvable(config, source_label)
     _check_table_rows_are_aliases(config, source_label)
     _check_memory_limits_fit_host(config, source_label)
+    _check_query_placeholders_bind(config, source_label)
 
 
 def _check_matrix_present(config: dict, source_label: str) -> None:
@@ -94,6 +98,95 @@ def _check_table_rows_are_aliases(config: dict, source_label: str) -> None:
                 f"Literals are rejected because they don't feed the SQL "
                 f"template substitution pipeline correctly."
             )
+
+
+# --- Query/pipeline binding guard (fail-closed) -------------------------------
+#
+# Observed live 2026-07-15 (malloy engine bring-up): a dialect file that
+# hardcoded the table name instead of using {{ <table>_table }} didn't just
+# render wrong — the Jinja placeholder IS the dependency edge
+# (get_tables_used_in_sql derives asset deps from it), so the benchmark asset
+# silently detached from ingestion, ran first, and aborted the job. The DAG
+# was structurally wrong and nothing said so until runtime. Placeholder
+# binding is a compile-time property; enforce it at the validation choke
+# point instead of relying on the implicit convention.
+
+
+def _check_query_placeholders_bind(config: dict, source_label: str) -> None:
+    """Every query file of every configured engine's dialect must bind to the
+    dataset through Jinja table placeholders. Three failure modes, all
+    rejected before anything runs:
+
+      1. Engine dialect directory missing or empty → the factory would
+         silently drop the engine from the benchmark (`continue`).
+      2. Query file with NO `{{ <table>_table }}` placeholder → the asset
+         would have no dependency edge on ingestion (the live failure).
+      3. Placeholder referencing a table not in `dataset.tables` → would
+         render empty/undefined at runtime.
+    """
+    import glob
+    import os
+
+    import jinja2
+    import jinja2.meta
+
+    from .utils.common import get_engine_sql_dialect, get_target_sql_dir
+
+    execution = config.get("execution") or {}
+    engines = execution.get("engines") or []
+    tables = set(((config.get("dataset") or {}).get("tables") or {}).keys())
+    # No suite declared = nothing to bind (loader-only configs in unit tests);
+    # a declared suite is validated strictly.
+    if not execution.get("test_suite") or not engines or not tables:
+        return
+
+    target_dir = get_target_sql_dir(config)
+    env = jinja2.Environment()
+
+    for engine in engines:
+        dialect_dir = os.path.join(target_dir, get_engine_sql_dialect(engine))
+        query_files = sorted(
+            glob.glob(os.path.join(dialect_dir, "*.sql"))
+            + glob.glob(os.path.join(dialect_dir, "*.malloy"))
+        )
+        query_files = [f for f in query_files if os.path.getsize(f) > 0]
+        if not query_files:
+            raise ValueError(
+                f"SEMANTIC ERROR in {source_label}: engine '{engine}' has no "
+                f"query files under '{dialect_dir}'. The benchmark factory "
+                f"would silently drop this engine from the run. Add the "
+                f"dialect's query files or remove the engine."
+            )
+        for path in query_files:
+            with open(path, "r") as fh:
+                raw = fh.read()
+            try:
+                ast = env.parse(raw)
+            except jinja2.TemplateSyntaxError as e:
+                raise ValueError(
+                    f"SEMANTIC ERROR in {source_label}: query file '{path}' "
+                    f"is not a valid Jinja template: {e}"
+                )
+            placeholders = jinja2.meta.find_undeclared_variables(ast)
+            table_refs = {v[: -len("_table")] for v in placeholders
+                          if v.endswith("_table")}
+            unknown = table_refs - tables
+            if unknown:
+                raise ValueError(
+                    f"SEMANTIC ERROR in {source_label}: query file '{path}' "
+                    f"references {sorted(unknown)} via '_table' placeholders, "
+                    f"but dataset.tables defines only {sorted(tables)}."
+                )
+            if not table_refs:
+                raise ValueError(
+                    f"SEMANTIC ERROR in {source_label}: query file '{path}' "
+                    f"uses no '{{{{ <table>_table }}}}' placeholder. The "
+                    f"placeholder is the dependency edge to ingestion — "
+                    f"without it the benchmark asset detaches from the data "
+                    f"pipeline and runs against nothing (observed live, "
+                    f"malloy 2026-07-15). Reference one of: "
+                    + ", ".join(f"{{{{ {t}_table }}}}" for t in sorted(tables))
+                )
 
 
 # --- Host-memory guard (fail-closed) -----------------------------------------

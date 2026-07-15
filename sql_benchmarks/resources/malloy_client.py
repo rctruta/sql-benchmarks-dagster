@@ -16,7 +16,6 @@ REST contract (verified against ms2data/malloy-publisher:latest, 2026-07-14):
 import json
 import os
 import re
-import shutil
 import subprocess
 import time
 import urllib.request
@@ -24,6 +23,7 @@ import urllib.request
 import logging
 
 from ..utils.system import thrash_os_cache
+from .storage import DataStore
 
 logger = logging.getLogger("dagster")
 
@@ -34,32 +34,34 @@ MODEL_TEMPLATE = "source: {table} is duckdb.table('{parquet}')\n"
 
 
 class MalloyClient:
-    def __init__(self, package_dir: str, port: int, environment: str,
+    def __init__(self, store: DataStore, port: int, environment: str,
                  package: str, container: str, ready_timeout_s: float = 60.0):
-        self.package_dir = package_dir
+        # All package writes go through the store — the store owns WHERE the
+        # data lives and (for MountedVolumeStore) verifies the container can
+        # actually see it. The client never joins its own data paths.
+        self.store = store
         self.port = port
         self.environment = environment
         self.package = package
         self.container = container
         self.ready_timeout_s = ready_timeout_s
-        os.makedirs(package_dir, exist_ok=True)
         self._ensure_manifests()
 
     def _ensure_manifests(self) -> None:
         """A Publisher package requires publisher.json; malloy-config.json
         declares the duckdb connection (shape copied from the faa sample)."""
-        manifest = os.path.join(self.package_dir, "publisher.json")
-        if not os.path.exists(manifest):
-            with open(manifest, "w") as f:
-                json.dump({"name": self.package, "version": "1.0.0",
-                           "description": "sqlbenchdag bench package "
-                                          "(generated; do not edit)"}, f, indent=2)
-        cfg = os.path.join(self.package_dir, "malloy-config.json")
-        if not os.path.exists(cfg):
-            with open(cfg, "w") as f:
-                json.dump({"connections": {"duckdb": {
+        if not os.path.exists(os.path.join(self.store.root, "publisher.json")):
+            self.store.put_text(
+                json.dumps({"name": self.package, "version": "1.0.0",
+                            "description": "sqlbenchdag bench package "
+                                           "(generated; do not edit)"}, indent=2),
+                "publisher.json")
+        if not os.path.exists(os.path.join(self.store.root, "malloy-config.json")):
+            self.store.put_text(
+                json.dumps({"connections": {"duckdb": {
                     "is": "duckdb", "workingDirectory": self.package,
-                    "securityPolicy": "none"}}}, f, indent=2)
+                    "securityPolicy": "none"}}}, indent=2),
+                "malloy-config.json")
 
     # --- data loading -----------------------------------------------------
 
@@ -75,20 +77,17 @@ class MalloyClient:
             raise ValueError(f"unsafe partition key: {partition_key!r}")
         filepath = os.path.realpath(filepath)
         parquet_name = f"{target_table_name}_{partition_key}.parquet"
-        dest = os.path.join(self.package_dir, parquet_name)
-        shutil.copy(filepath, dest)
-        model_path = os.path.join(self.package_dir,
-                                  self._model_name(partition_key))
+        dest = self.store.put_file(filepath, parquet_name)
+        model_name = self._model_name(partition_key)
         line = MODEL_TEMPLATE.format(table=target_table_name,
                                      parquet=parquet_name)
+        model_path = os.path.join(self.store.root, model_name)
         existing = open(model_path).read() if os.path.exists(model_path) else ""
         if line not in existing:
-            with open(model_path, "a") as f:
-                if not existing:
-                    f.write(MODEL_HEADER)
-                f.write(line)
-        logger.info("malloy bulk_load: %s -> %s (+%s)",
-                    filepath, dest, os.path.basename(model_path))
+            content = (existing or MODEL_HEADER) + line
+            self.store.put_text(content, model_name)
+        logger.info("malloy bulk_load via %s: %s -> %s (+%s)",
+                    self.store.describe(), filepath, dest, model_name)
 
     # --- cold start -------------------------------------------------------
 

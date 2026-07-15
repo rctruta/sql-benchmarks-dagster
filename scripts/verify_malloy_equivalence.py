@@ -38,8 +38,12 @@ def duckdb_rows(parquet: str):
 
 
 def malloy_rows(parquet: str, partition_key: str):
+    from sql_benchmarks.resources.storage import MountedVolumeStore
     client = MalloyClient(
-        package_dir=os.path.join(ROOT, "data", "malloy", "bench"),
+        store=MountedVolumeStore(
+            host_dir=os.path.join(ROOT, "data", "malloy", "bench"),
+            container_dir="/publisher/publisher_data/bench/bench",
+            container="sbd-malloy-publisher"),
         port=int(os.getenv("SB_MALLOY_PORT", "4001")),
         environment="bench", package="bench",
         container="sbd-malloy-publisher")

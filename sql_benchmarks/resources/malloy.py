@@ -5,6 +5,7 @@ from dagster import ConfigurableResource
 from pydantic import ConfigDict
 
 from .malloy_client import MalloyClient
+from .storage import MountedVolumeStore
 
 
 class MalloyEngine(ConfigurableResource):
@@ -19,7 +20,13 @@ class MalloyEngine(ConfigurableResource):
     duration includes Malloy compilation and the HTTP round trip by design.
     Cold start = docker restart of the Publisher container per query.
     """
-    package_dir: str
+    # The mount contract, declared explicitly: host_dir is where this process
+    # writes; container_dir is where the Publisher reads. MountedVolumeStore
+    # verifies (via a probe file + docker exec) that the two are the same
+    # place before any data is delivered. host_dir must be ROOT-anchored —
+    # the per-experiment DATA_DIR sandbox is invisible to the container.
+    host_dir: str
+    container_dir: str = "/publisher/publisher_data/bench/bench"
     port: int = 4001
     environment: str = "bench"
     package: str = "bench"
@@ -27,7 +34,10 @@ class MalloyEngine(ConfigurableResource):
     model_config = ConfigDict(extra='forbid')
 
     def _get_client(self) -> MalloyClient:
-        return MalloyClient(package_dir=self.package_dir, port=self.port,
+        store = MountedVolumeStore(host_dir=self.host_dir,
+                                   container_dir=self.container_dir,
+                                   container=self.container)
+        return MalloyClient(store=store, port=self.port,
                             environment=self.environment, package=self.package,
                             container=self.container)
 

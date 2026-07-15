@@ -20,7 +20,7 @@ def _minimal_valid_config():
         "dataset": {
             "source": "sql_benchmarks.plugins.data_sources.declarative_gen",
             "tables": {
-                "t1": {
+                "skewed_data": {
                     "rows": "rows",
                     "columns": [
                         {"name": "id", "provider": "sequence", "primary_key": True},
@@ -112,7 +112,7 @@ def test_literal_table_rows_rejected():
     (see validation._check_table_rows_are_aliases). Rejected at submission
     with a message naming the fix."""
     config = _minimal_valid_config()
-    config["dataset"]["tables"]["t1"]["rows"] = 100_000
+    config["dataset"]["tables"]["skewed_data"]["rows"] = 100_000
     with pytest.raises(ValueError, match=r"literal 'rows: 100000'"):
         validate_experiment_config(config, source_label="api_submission")
 
@@ -121,7 +121,7 @@ def test_literal_table_rows_error_names_the_fix():
     """The rejection message must be actionable — it tells the caller exactly
     what to change, so the agent's coaching path (PR #106) can route back."""
     config = _minimal_valid_config()
-    config["dataset"]["tables"]["t1"]["rows"] = 5000
+    config["dataset"]["tables"]["skewed_data"]["rows"] = 5000
     try:
         validate_experiment_config(config, source_label="test")
     except ValueError as e:
@@ -136,7 +136,7 @@ def test_table_rows_none_ok():
     """A table with `rows` omitted entirely is not covered by this rule.
     Some tables may be file-backed (paths:) or otherwise not size-driven."""
     config = _minimal_valid_config()
-    del config["dataset"]["tables"]["t1"]["rows"]
+    del config["dataset"]["tables"]["skewed_data"]["rows"]
     validate_experiment_config(config)
 
 
@@ -145,7 +145,7 @@ def test_boolean_rows_not_treated_as_int():
     semantically invalid but this specific check shouldn't be the one to
     catch them — that's the schema layer's job."""
     config = _minimal_valid_config()
-    config["dataset"]["tables"]["t1"]["rows"] = True
+    config["dataset"]["tables"]["skewed_data"]["rows"] = True
     # This might fail the schema check, but our literal-rejection message
     # about integers shouldn't fire on a bool (Python quirk: bool is a
     # subclass of int).
