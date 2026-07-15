@@ -1,12 +1,11 @@
+# experiment_id: fd3fa6a4  (run conditions: metadata_fd3fa6a4.json)
 meta:
-  tier: exploratory
   name: Malloy Semantic Layer Tax
-  description: "What does the Malloy Publisher semantic layer cost over raw DuckDB?\
-    \ Identical seeded data and semantically equivalent queries (equivalence enforced\
-    \ by scripts/verify_malloy_equivalence.py) on analytical_wall across three scales.\
-    \ duckdb vs malloy isolates compile + REST + server execution \u2014 the semantic-layer\
-    \ tax, in the same experimental shape as the Quack protocol-tax study (2ed50e23)."
-  experiment_id: 2f5c74e2
+  description: 'What does the Malloy Publisher semantic layer cost over raw DuckDB?
+    Identical seeded data and semantically equivalent queries (equivalence enforced
+    by scripts/verify_malloy_equivalence.py) on analytical_wall across three scales.
+    duckdb vs malloy isolates compile + REST + server execution — the semantic-layer
+    tax, in the same experimental shape as the Quack protocol-tax study (2ed50e23).'
 dataset:
   source: sql_benchmarks.plugins.data_sources.declarative_gen
   tables:

@@ -1,0 +1,22 @@
+{
+  "meta": {
+    "timestamp": "2026-07-15T13:52:34.348149",
+    "experiment_id": "fd3fa6a4",
+    "dagster_run_id": "2b967ae5-9d07-4a01-a91a-f52b94614340",
+    "engine": "malloy",
+    "asset": "e_fd3fa6a4__malloy_benchmark_analytical_wall",
+    "partition": "large"
+  },
+  "metrics": {
+    "duration_seconds": 0.8836767780012451,
+    "durations_raw": [
+      0.9708061250275932,
+      0.8192410419578664,
+      0.8609831670182757
+    ],
+    "replication_factor": 3
+  },
+  "parameters": {
+    "rows": 5000000
+  }
+}

@@ -1,4 +1,5 @@
 meta:
+  tier: exploratory
   name: Malloy Semantic Layer Tax
   description: 'What does the Malloy Publisher semantic layer cost over raw DuckDB?
     Identical seeded data and semantically equivalent queries (equivalence enforced

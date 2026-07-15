@@ -1,0 +1,7 @@
+Asset,Partition,Duration,Duration_Min,Duration_Max,DNF,Engine,Rows,Selectivity
+e_2f5c74e2__malloy_benchmark_analytical_wall,small,0.7228806943361027,0.6679763750289567,0.7788007499766536,false,malloy,100000,0.0
+e_2f5c74e2__duckdb_benchmark_analytical_wall,small,0.007800658543904622,0.007320880889892578,0.008514165878295898,false,duckdb,100000,0.0
+e_2f5c74e2__duckdb_benchmark_analytical_wall,medium,0.014713287353515625,0.013830184936523438,0.016177892684936523,false,duckdb,1000000,0.0
+e_2f5c74e2__malloy_benchmark_analytical_wall,medium,0.678325722013445,0.6535727920127101,0.723450291028712,false,malloy,1000000,0.0
+e_2f5c74e2__duckdb_benchmark_analytical_wall,large,0.045329014460245766,0.04089021682739258,0.05102896690368652,false,duckdb,5000000,0.0
+e_2f5c74e2__malloy_benchmark_analytical_wall,large,0.842554027660905,0.7803692079614848,0.9072342500439845,false,malloy,5000000,0.0
