@@ -1,0 +1,14 @@
+# Malloy Publisher for the sqlbenchdag 'malloy' engine.
+# The bench package dir (data/malloy/bench) is written by MalloyClient.bulk_load
+# and mounted read-only into the Publisher's package location.
+# Port 4001 to avoid colliding with any dev Publisher on 4000.
+services:
+  sbd-malloy-publisher:
+    container_name: sbd-malloy-publisher
+    image: ms2data/malloy-publisher:latest
+    ports:
+      - "4001:4000"
+    volumes:
+      - ./publisher.config.json:/publisher/publisher.config.json:ro
+      - ../../data/malloy/bench:/publisher/publisher_data/bench/bench
+    restart: unless-stopped

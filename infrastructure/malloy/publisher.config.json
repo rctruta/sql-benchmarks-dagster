@@ -1,0 +1,12 @@
+{
+  "frozenConfig": false,
+  "environments": [
+    {
+      "name": "bench",
+      "packages": [
+        { "name": "bench", "location": "/publisher/publisher_data/bench/bench" }
+      ],
+      "connections": []
+    }
+  ]
+}

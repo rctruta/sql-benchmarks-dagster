@@ -248,7 +248,8 @@ def copy_suite_queries(capsule_dir: str) -> int:
         dialect_dir = os.path.join(src, dialect)
         if not os.path.isdir(dialect_dir):
             continue
-        for sql_file in sorted(glob.glob(os.path.join(dialect_dir, "*.sql"))):
+        for sql_file in sorted(glob.glob(os.path.join(dialect_dir, "*.sql"))
+                               + glob.glob(os.path.join(dialect_dir, "*.malloy"))):
             out = os.path.join(dest, dialect, os.path.basename(sql_file))
             os.makedirs(os.path.dirname(out), exist_ok=True)
             shutil.copy2(sql_file, out)

@@ -207,12 +207,15 @@ def get_benchmark_assets():
         path = os.path.join(target_dir, get_engine_sql_dialect(engine))
         if not os.path.exists(path): continue
 
-        for f in glob.glob(os.path.join(path, "*.sql")):
+        # Query text is query text: SQL dialects use .sql, Malloy uses .malloy.
+        query_files = glob.glob(os.path.join(path, "*.sql")) + \
+            glob.glob(os.path.join(path, "*.malloy"))
+        for f in query_files:
             if os.path.getsize(f) == 0:
                 print(f"[WARN] Skipping empty benchmark file: {f}")
                 continue
 
-            base = os.path.basename(f).replace(".sql", "")
+            base = os.path.splitext(os.path.basename(f))[0]
             tables, raw = get_tables_used_in_sql(f, VALID_TABLES)
             static_meta = infer_metadata_from_sql(raw, dataset_cfg)
 
