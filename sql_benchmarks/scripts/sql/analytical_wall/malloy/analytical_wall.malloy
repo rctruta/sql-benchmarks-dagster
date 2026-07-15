@@ -1,7 +1,7 @@
 // analytical_wall (Malloy) — semantic equivalent of duckdb/analytical_wall.sql.
 // Equivalence enforced by scripts/verify_malloy_equivalence.py (row-for-row
 // against the duckdb dialect on identical seeded data).
-run: analytical_data -> {
+run: {{ analytical_data_table }} -> {
   group_by: region, category
   aggregate:
     transaction_count is count()

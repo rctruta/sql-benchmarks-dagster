@@ -25,7 +25,7 @@ from .resources.typedb_engine import TypeDBEngine
 from .resources.quack import QuackEngine, QuackAdbcEngine
 from .resources.malloy import MalloyEngine
 from .resources.postgres_transport import PostgresTransportEngine
-from .constants import DATA_DIR
+from .constants import DATA_DIR, ROOT_DIR
 from .jobs import benchmark_job
 # from .sensors import experiment_queue_sensor
 
@@ -102,8 +102,13 @@ defs = Definitions(
         # semantic layer (compile + REST). duckdb vs malloy isolates the
         # semantic-layer cost, as duckdb vs quack isolates the protocol cost.
         # Requires: docker compose -f infrastructure/malloy/docker-compose.yml up -d
+        # package_dir is ROOT-anchored, NOT DATA_DIR-derived: the runner
+        # sandboxes DATA_DIR into a temp workspace per experiment, but the
+        # Publisher container's bind mount is fixed at the repo path — the
+        # engine must write where the server can see.
         "malloy": MalloyEngine(
-            package_dir=os.path.join(DATA_DIR, "malloy", "bench"),
+            package_dir=os.getenv("SB_MALLOY_PACKAGE_DIR",
+                                  os.path.join(ROOT_DIR, "data", "malloy", "bench")),
             port=int(os.getenv("SB_MALLOY_PORT", "4001")),
         ),
         "quack": QuackEngine(

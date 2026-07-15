@@ -46,6 +46,9 @@ def malloy_rows(parquet: str, partition_key: str):
     client.bulk_load(parquet, TABLE, partition_key)
     client.restart_server()  # Publisher syncs package contents at startup
     query = open(os.path.join(SQL_DIR, "malloy", "analytical_wall.malloy")).read()
+    # The harness renders {{ analytical_data_table }} per partition; here the
+    # gate loaded the source under the bare table name.
+    query = query.replace("{{ analytical_data_table }}", TABLE)
     return client.fetch_rows(query, partition_key)
 
 
