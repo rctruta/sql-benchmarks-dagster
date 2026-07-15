@@ -1,0 +1,49 @@
+meta:
+  name: "Scaling depth: DuckDB analytical aggregation scalability"
+  description: "Analyzing how DuckDB scales performance on analytical aggregation queries across different partition sizes."
+
+dataset:
+  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  tables:
+    analytical_data:
+      rows: rows
+      columns:
+        - name: id
+          provider: sequence
+          primary_key: true
+        - name: region
+          provider: choice
+          options: ["North", "South", "East", "West"]
+        - name: category
+          provider: choice
+          options: ["A", "B", "C"]
+        - name: price
+          provider: random_float
+          min: 10.0
+          max: 500.0
+        - name: quantity
+          provider: random_int
+          min: 1
+          max: 100
+        - name: discount
+          provider: random_float
+          min: 0.0
+          max: 0.30
+
+definitions:
+  rows:
+    small:  100_000
+    medium: 1_000_000
+    large:  10_000_000
+
+execution:
+  test_suite: analytical_wall
+  engines:
+    - duckdb
+  replication: 5
+  matrix:
+    rows:
+      - small
+      - medium
+      - large
+

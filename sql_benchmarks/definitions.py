@@ -23,6 +23,7 @@ from .resources.duckdb import DuckDBEngine
 from .resources.actian import ActianEngine
 from .resources.typedb_engine import TypeDBEngine
 from .resources.quack import QuackEngine, QuackAdbcEngine
+from .resources.malloy import MalloyEngine
 from .resources.postgres_transport import PostgresTransportEngine
 from .constants import DATA_DIR
 from .jobs import benchmark_job
@@ -97,6 +98,14 @@ defs = Definitions(
         # `postgres_transport.client`. Measures connectivity cost, not execution.
         "postgres_transport": PostgresTransportEngine(connection_string=postgres_url),
         "duckdb": DuckDBEngine(data_folder=os.path.join(DATA_DIR, "duckdb")),
+        # DuckDB-over-Malloy-Publisher: same data, measured through the Malloy
+        # semantic layer (compile + REST). duckdb vs malloy isolates the
+        # semantic-layer cost, as duckdb vs quack isolates the protocol cost.
+        # Requires: docker compose -f infrastructure/malloy/docker-compose.yml up -d
+        "malloy": MalloyEngine(
+            package_dir=os.path.join(DATA_DIR, "malloy", "bench"),
+            port=int(os.getenv("SB_MALLOY_PORT", "4001")),
+        ),
         "quack": QuackEngine(
             data_folder=os.path.join(DATA_DIR, "quack"),
             port=int(os.getenv("SB_QUACK_PORT", "9494")),

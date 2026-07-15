@@ -21,16 +21,8 @@ def _get_client() -> httpx.Client:
     if _client is not None:
         return _client
 
-    if "localhost" in API_BASE or "127.0.0.1" in API_BASE:
-        try:
-            from sql_benchmarks.api.app import create_app
-            app = create_app()
-            
-            from fastapi.testclient import TestClient
-            _client = TestClient(app)
-            return _client
-        except Exception:
-            pass
+    # Force network call to the live backend rather than trying to instantiate the 
+    # FastAPI app inside the current process, which causes dependency issues.
 
     _client = httpx.Client(base_url=API_BASE)
     return _client
