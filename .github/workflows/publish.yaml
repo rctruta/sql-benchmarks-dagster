@@ -1,0 +1,35 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Triggers when you push a tag like v0.1.0
+
+jobs:
+  build-and-publish:
+    name: Build and publish Python distribution to PyPI
+    runs-on: ubuntu-latest
+    
+    # CRITICAL: These permissions are required for Trusted Publishing (OIDC) to work!
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          
+      - name: Install build tools
+        run: python -m pip install --upgrade pip build
+        
+      - name: Build a binary wheel and a source tarball
+        run: python -m build
+        
+      - name: Publish distribution to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
