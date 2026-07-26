@@ -78,10 +78,21 @@ scratch/*
 # still living in scratch/. Promote to docs/ when polished.
 # !scratch/reducing_agent_search_scope.md
 TODO.md
-ARTICLE_DRAFT.md                                   # article scaffold (local)
-architecture/                                      # unpublished red-team/AI-security WIP
-sql_benchmarks/experiments/reports/                # runtime-generated report output
-.pytest_cache/                                     # test cache
+
+# NOTE: a '#' only starts a comment at the START of a line. The four rules
+# below previously carried trailing inline comments, which git treats as
+# part of the pattern — so each matched a filename that does not exist and
+# silently ignored nothing. ARTICLE_DRAFT.md and architecture/ were public
+# on this repo for weeks as a result. Keep comments on their own line.
+
+# article scaffold (local)
+ARTICLE_DRAFT.md
+# unpublished red-team/AI-security WIP
+architecture/
+# runtime-generated report output
+sql_benchmarks/experiments/reports/
+# test cache
+.pytest_cache/
 audit.lock
 
 # --- PUBLISHED CAPSULES ---------------------------------------------------
