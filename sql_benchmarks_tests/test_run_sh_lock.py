@@ -1,4 +1,5 @@
 
+import re
 import subprocess
 import time
 import os
@@ -16,16 +17,34 @@ def mock_run_sh():
     with open(RUN_SH_PATH, "r") as f:
         content = f.read()
     
-    # Replace the actual workload with a sleep command to simulate work
-    # We purposefully comment out the real python execution and daemon logic for speed/safety
-    # But KEEL the lock logic intact (lines 1-17 approx)
-    
-    # A simple but robust way: Replace the last line
-    mock_content = content.replace('python run_experiment.py "$@"', 'sleep 3')
-    
+    # Replace the actual workload with a sleep command to simulate work,
+    # keeping the lock logic intact — the lock is what's under test.
+    #
+    # Match the invocation by pattern, not by an exact literal. This fixture
+    # used to hard-code the string 'python run_experiment.py "$@"'; when
+    # run.sh changed the interpreter to "$PY", str.replace found nothing,
+    # returned the content unchanged, and the tests silently executed the
+    # REAL runner instead of sleeping. The failure surfaced as an argparse
+    # usage error, which points nowhere near the actual cause.
+    #
+    # Both the pattern and the assertion below matter: a substitution that
+    # can silently no-op is the bug, so a miss is now a loud error.
+    mock_content, n = re.subn(
+        r'^\s*(?:"?\$\{?PY\}?"?|python3?)\s+run_experiment\.py\s+"\$@"\s*$',
+        "sleep 3",
+        content,
+        flags=re.MULTILINE,
+    )
+    assert n == 1, (
+        f"mock fixture matched {n} run_experiment.py invocations in run.sh, expected 1. "
+        "The workload line changed shape — update the pattern above, or this test "
+        "would run the real experiment runner instead of a sleep."
+    )
+
     # Disable daemon for the test to avoid starting real daemons
-    mock_content = mock_content.replace("dagster-daemon run", "echo 'Mock Daemon'")
-    
+    mock_content, n_daemon = re.subn("dagster-daemon run", "echo 'Mock Daemon'", mock_content)
+    assert n_daemon >= 1, "mock fixture found no dagster-daemon invocation to stub out"
+
     with open(TEST_RUN_SH, "w") as f:
         f.write(mock_content)
     
