@@ -38,7 +38,20 @@ dependencies = [
     "polars",
     "pyarrow",
     # Imported directly by the package (were only present transitively via dagster).
-    "duckdb",
+    # litellm: imported by agent_specialist.py and scripts/autonomous_agent.py but
+    # declared nowhere until 2026-07-28 — it survived only as an ad-hoc install, so
+    # `uv sync` (which prunes to the lock) took the agent test suite red. An
+    # undeclared runtime import is a latent break in any clean environment.
+    "litellm",
+    # PINNED 2026-07-27: DuckDB extensions are built per DuckDB version, and the
+    # local quack extension exists only for 1.5.3. Unpinned, the lock froze
+    # 1.5.1, which silently broke every quack lane with
+    #   IOException: Extension ".../v1.5.1/osx_arm64/quack.duckdb_extension" not found
+    # All 8 capsules that ever ran a quack lane recorded duckdb 1.5.3
+    # (b8e2bfaf, 25b0e134, 902d1277, b198363e, 461beee8, 28f7aa1c, 07c16e50,
+    # ac715d9d), so 1.5.3 is also the version the published quack results were
+    # produced under. Pinning restores reproducibility rather than changing it.
+    "duckdb==1.5.3",
     "jinja2",
     "pydantic",
     "psycopg2-binary",
@@ -61,6 +74,7 @@ dependencies = [
     "adbc-driver-postgresql==1.11.0",
     "connectorx==0.4.5",
     "adbc-driver-quack==0.1.0a8",
+    "modal>=1.5.3",
 ]
 
 [project.optional-dependencies]
