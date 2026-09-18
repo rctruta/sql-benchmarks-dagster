@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e  # Exit immediately if any command fails
 
+# Directory this script lives in, so the interpreter below resolves against
+# the repo rather than the caller's CWD.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # --- STEP 1: SINGLETON LOCK (Prevent Multiple Instances) ---
 LOCKFILE="experiment.lock"
 
@@ -65,4 +69,20 @@ echo "[INFO] Launching Experiment Runner..."
 
 # Pass all arguments provided to this script ($@) to the python script
 # Example: ./run.sh queue --auto -> python run_experiment.py queue --auto
-python run_experiment.py "$@"
+#
+# Resolve the interpreter explicitly rather than calling a bare `python`.
+# A bare `python` only resolves when a venv happens to be activated in the
+# calling shell; macOS ships python3 only. Any caller that spawns this script
+# without activation — including test_golden_capsule.py — got
+# "python: command not found" and exit 127. Prefer the repo venv so the run
+# uses the project's pinned deps regardless of how the shell was set up.
+if [ -x "$SCRIPT_DIR/.venv/bin/python" ]; then
+    PY="$SCRIPT_DIR/.venv/bin/python"
+elif command -v python3 > /dev/null 2>&1; then
+    PY="$(command -v python3)"
+else
+    echo "[ERROR] No usable interpreter: no $SCRIPT_DIR/.venv/bin/python and no python3 on PATH." >&2
+    exit 1
+fi
+
+"$PY" run_experiment.py "$@"

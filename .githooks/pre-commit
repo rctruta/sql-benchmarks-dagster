@@ -53,3 +53,13 @@ if git diff --cached --name-only | grep -qE '^(README\.md|AGENTS\.md|docs/|sql_b
         exit 1
     fi
 fi
+
+# --- committer identity gate -------------------------------------------
+# Commits must use the masked GitHub address, never a real one.
+MASKED="17259677+rctruta@users.noreply.github.com"
+actual=$(git config user.email)
+if [ "$actual" != "$MASKED" ]; then
+  echo "BLOCKED: commit email is '$actual', expected '$MASKED'" >&2
+  echo "  fix: git config user.email \"$MASKED\"" >&2
+  exit 1
+fi
