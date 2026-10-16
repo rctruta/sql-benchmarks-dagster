@@ -1,0 +1,43 @@
+name: Published MCP smoke
+
+# Deliberately NOT on push or pull_request.
+#
+# This job installs sqlbenchdag from PyPI and speaks MCP to it, so it tests an
+# artifact rather than the commit that would have triggered it. On a push it
+# would report on a release made weeks earlier and say nothing about the code
+# under review, which is how a green check comes to mean nothing.
+#
+# It can therefore go red with nobody having changed anything -- a bad release,
+# a yanked version, a dependency that stopped resolving. That is the point. It
+# answers "can a stranger install this today", which no test of the working
+# tree can answer.
+on:
+  schedule:
+    - cron: "0 7 * * 1"          # Mondays, 07:00 UTC
+  workflow_dispatch:
+  release:
+    types: [published]            # a release is exactly when this can break
+
+jobs:
+  cold-install:
+    name: cold install answers MCP with no REST API
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      # Nothing starts serve.py here, on purpose. The published entry point
+      # reads the committed capsules directly; the repo-root mcp_server.py is a
+      # different program that does need the REST API. If this step ever starts
+      # needing one, the two have been confused and the smoke test is the thing
+      # that should say so.
+      - name: Published MCP server, cold install
+        run: python3 scripts/dev/smoke_published_mcp.py
+
+      - name: Server stderr on failure
+        if: failure()
+        run: tail -200 /tmp/smoke_mcp_stderr.log || true
