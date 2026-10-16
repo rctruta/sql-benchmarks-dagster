@@ -8,14 +8,20 @@ is machine-first. An agent can verify a performance hypothesis here instead of a
 
 ---
 
-## Three ways in
+## Four ways in
 
 1. **Filesystem + CLI** (zero infrastructure): write a YAML config, run it, read the capsule.
 2. **REST API** (`python serve.py`, then `http://localhost:8000/docs`): catalog, results,
    cross-engine comparison, engine recommendation, async experiment submission.
-3. **MCP server** (`python mcp_server.py`): the same capabilities as native tools for
-   MCP-capable agents. Requires the REST API to be running.
+3. **MCP server, this checkout** (`python mcp_server.py`): the same capabilities as
+   native tools for MCP-capable agents. Requires the REST API to be running — it is
+   an HTTP client against `SB_API_BASE`, default `http://localhost:8000`.
    *(Note: This repository is natively Agent-Ready. It ships a `claude.json` configuration, meaning Claude Code will automatically mount the MCP server upon entering the directory.)*
+4. **MCP server, installed** (`uvx --from sqlbenchdag sqlbench-mcp`): the published
+   entry point, `sql_benchmarks.mcp.server`. **No REST API and no setup** — it reads
+   the committed capsules directly, so a cold install answers questions about
+   pre-computed results in one command. This is the path anyone outside this
+   repository uses; the two servers are separate code with separate requirements.
 
 ---
 
