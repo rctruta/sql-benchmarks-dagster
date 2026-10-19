@@ -65,6 +65,8 @@ dependencies = [
     "fastapi>=0.111.0",
     "uvicorn[standard]>=0.29.0",
     "fastmcp>=0.1.0",
+    # Provides the `fastmcp` import name since the 4.x split; see requirements.txt.
+    "fastmcp-slim>=4.1.0",
     "httpx>=0.27.0",
     "typedb-driver",
     # Result-transport drivers — postgres_transport (psycopg/adbc/connectorx) and
