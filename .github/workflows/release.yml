@@ -31,5 +31,12 @@ jobs:
       - name: Build a binary wheel and a source tarball
         run: python -m build
         
+      # Between building and publishing, because 0.1.2 went to PyPI with 881
+      # files that are not this package -- scratch/, venv/, build/ nested six
+      # deep -- and `python -m build` exited 0 the whole time. The rule was
+      # already written down; this is the rule as a step.
+      - name: Refuse a wheel containing anything but the package
+        run: python scripts/dev/check_wheel.py
+
       - name: Publish distribution to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
