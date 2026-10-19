@@ -10,6 +10,7 @@ Marked e2e (slow: spins the Dagster daemon). Runs in the full suite; for a fast
 local loop use `pytest -m "not e2e and not integration"`.
 """
 import glob
+import json
 import os
 import subprocess
 
@@ -64,6 +65,12 @@ def test_golden_capsule_end_to_end(tmp_path):
         assert glob.glob(os.path.join(cap, "*.csv")), "no results CSV"
         assert os.path.exists(os.path.join(cap, f"metadata_{exp_id}.json")), "no metadata"
         assert os.path.exists(os.path.join(cap, "integrity.seal")), "no integrity seal"
+
+        # the bench record names the extension builds, not just the wheel
+        with open(os.path.join(cap, f"metadata_{exp_id}.json")) as f:
+            env = json.load(f)["environment"]
+        assert isinstance(env.get("duckdb_extensions"), dict), \
+            "metadata does not record duckdb extension builds"
 
         # the seal must actually verify — reuse the REAL seal function (not a
         # re-impl) with the explicit capsule path
