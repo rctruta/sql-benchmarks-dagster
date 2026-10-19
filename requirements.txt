@@ -23,6 +23,11 @@ scp>=0.14.0
 fastapi>=0.111.0
 uvicorn[standard]>=0.29.0
 fastmcp>=0.1.0
+# fastmcp 4.x split: the `fastmcp` import name is provided by a distribution
+# named fastmcp-slim, so check_deps.py's import->distribution mapping resolves
+# to fastmcp-slim and fails on `fastmcp` alone. Declared explicitly rather than
+# exempted -- the code does depend on it, and that is what the gate is asking.
+fastmcp-slim>=4.1.0
 httpx>=0.27.0
 typedb-driver
 # Result-transport drivers — the postgres_transport (psycopg/adbc/connectorx)
