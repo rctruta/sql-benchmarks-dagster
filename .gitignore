@@ -155,3 +155,9 @@ venv.old*
 
 # OpenTimestamps upgrade backups — never commit
 *.ots.bak
+
+# Untracked by intent: a local experiment in remembering failed experiment
+# configurations (NegativeConstraint). Nothing in the package imports it, and
+# it reached PyPI in 0.1.2 only because include-package-data swept the working
+# directory. Ignored so that cannot recur silently.
+sql_benchmarks/memory/
