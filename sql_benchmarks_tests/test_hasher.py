@@ -130,3 +130,20 @@ def test_capture_environment_records_conditions():
         assert key in env, f"environment block missing '{key}'"
     assert env["cpu_count_logical"] >= 1
     assert env["ram_total_gb"] > 0
+
+
+def test_capture_environment_records_extension_builds():
+    """The duckdb wheel version does not pin extension builds: on 2.0 dev
+    builds Quack's build changes independently, so a capsule that records
+    only `duckdb` cannot say which Quack it measured. Every installed
+    extension's build must be recorded, exactly as DuckDB reports it."""
+    import duckdb
+    from sql_benchmarks.utils.system import capture_environment
+    env = capture_environment()
+    assert "duckdb_extensions" in env, "environment block missing 'duckdb_extensions'"
+    expected = dict(duckdb.connect().execute(
+        "SELECT extension_name, extension_version FROM duckdb_extensions() "
+        "WHERE installed AND extension_version <> ''"
+    ).fetchall())
+    assert env["duckdb_extensions"] == expected
+    assert all(isinstance(v, str) and v for v in env["duckdb_extensions"].values())

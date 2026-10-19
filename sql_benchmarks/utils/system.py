@@ -29,6 +29,15 @@ def capture_environment() -> dict:
         "cpu_count_logical": psutil.cpu_count(logical=True),
         "cpu_count_physical": psutil.cpu_count(logical=False),
         "ram_total_gb": round(psutil.virtual_memory().total / (1024 ** 3), 1),
+        # The wheel version does not pin extension builds (on 2.0 dev builds
+        # Quack's build moves independently), so record each installed one.
+        # Extensions install per duckdb version, so these are the files a
+        # LOAD in this run resolves to. No try/except: an unreadable catalog
+        # must fail the capsule, not silently omit the field.
+        "duckdb_extensions": dict(duckdb.connect().execute(
+            "SELECT extension_name, extension_version FROM duckdb_extensions() "
+            "WHERE installed AND extension_version <> ''"
+        ).fetchall()),
     }
     try:
         import polars
