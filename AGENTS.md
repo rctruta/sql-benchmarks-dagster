@@ -146,6 +146,66 @@ Each engine receives ONLY its own `engine_params` namespace.
 
 ---
 
+## Releasing — what 0.1.2 cost, and the rules that follow from it
+
+Version 0.1.2 was uploaded to PyPI by hand from an uncommitted working tree.
+There is no `v0.1.2` tag, `main` still said `0.1.1`, and it has one file on
+PyPI where every other release has two. Three things existed only in that
+tree: `sql_benchmarks/mcp/`, the `sqlbench-mcp` console script, and the
+`experiments/taxonomy.yaml` line in the manifest. The MCP server that
+strangers were installing had no source in version control for two months.
+
+And because `include-package-data` defaults to true with no `MANIFEST.in`,
+setuptools swept the working directory. The wheel shipped **881 files that are
+not this package**: a `build/` tree nested six deep, `venv/`, `tests/`,
+`skills/`, `infrastructure/`, and `scratch/` — twelve unrelated local scripts
+carrying `/Users/ramona` paths and the names of two unpublished projects. 82%
+of the download. No credentials; every secret read is `os.getenv` with a local
+default. It had been getting worse: 0.1.0 shipped 2 stray files, 0.1.1 shipped
+14, 0.1.2 shipped 881.
+
+So:
+
+1. **A release is a tag, never a local upload.** `release.yml` fires on
+   `v*.*.*` and builds from the tagged commit. If you find yourself running
+   `twine upload`, stop: whatever is in your working directory is about to
+   become public.
+2. **If it ships, it is committed.** Before tagging, confirm that every module
+   and data file the package needs is on `main` — not merely present on your
+   disk. `git ls-files <path>` answers this; `ls` does not.
+3. **`include-package-data` stays false.** Package data is whatever
+   `[tool.setuptools.package-data]` names and nothing else. Adding a file to
+   the distribution is a deliberate line in that table.
+4. **`scratch/` is never packaged, never published, never committed.** It is
+   where one-off scripts land regardless of which project they operate on, so
+   its contents are routinely about other work entirely.
+5. **Inspect the artifact, not the build.** List what is actually inside the
+   wheel and assert that nothing sits outside the package directory:
+
+   ```sh
+   python3 -c "import zipfile,glob,collections; \
+     n=zipfile.ZipFile(glob.glob('dist/*.whl')[0]).namelist(); \
+     print(collections.Counter(x.split('/')[0] for x in n))"
+   ```
+
+   Anything other than `sql_benchmarks` and `*.dist-info` is a defect.
+6. **Then install it and drive it.** A wheel that imports is not a wheel that
+   works. `list_categories` returned an empty array on every clean install for
+   two months because one data file was missing from the manifest, and the call
+   succeeded while returning nothing. Empty-but-successful is the worst failure
+   shape: it reads as "no data" rather than "missing file".
+
+## Verifying, and two ways an agent fools itself
+
+- **An empty grep against a file that does not exist is not a negative
+  result.** `git show origin/main:some/file.py | grep X` prints nothing both
+  when there are no matches and when the file is absent. Check existence
+  first; otherwise "no HTTP client found" means "no such file".
+- **A check that cannot run has not passed.** A claim registered as verified
+  against a URL that answers 403 is not verified by anything. Either make it
+  checkable or record it as testimony, and never leave a green status standing
+  for a check that never executed.
+
 ## The Golden Rule for AI Agents
 
 **Retrieval must be a typed tool, not a foraging behavior.** 
