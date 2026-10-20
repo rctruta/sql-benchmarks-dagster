@@ -78,6 +78,8 @@ ROOT="$(git rev-parse --show-toplevel)"
 if [ -d "$ROOT/.gates" ]; then
   PY="$(command -v python3 || true)"
   if [ -n "$PY" ]; then
+    "$PY" "$ROOT/.gates/no_private_marker.py" --check || {
+      echo "  -> A tracked file declares itself private." >&2; exit 1; }
     "$PY" "$ROOT/.gates/scratch_external.py" --check || {
       echo "  -> A local notes folder is reachable by git, or a note is tracked." >&2; exit 1; }
     "$PY" "$ROOT/.gates/no_orphans.py" --check || {
