@@ -83,7 +83,29 @@ NAME_MARKER = re.compile(
     r"(^|[/_.\-])" + r"private($|[/_.\-])" + r"|(^|/)" + r"private_docs?(/|$)"
     r"|(^|[/_.\-])confidential($|[/_.\-])", re.I)
 
-HEAD_BYTES = 800        # a declaration is a header, not a mention on page nine
+# A declaration is a header, not a mention on page nine -- so there has to be
+# some notion of "near the top". The first version used 800 bytes, inherited
+# from check_private.py. Two things were wrong with that.
+#
+# A byte count is not the unit anyone writes in. MEASURED across every real
+# declaration in this author's corpus: employment.yaml at byte 2, line 1;
+# contact_private.yaml byte 28, line 1; reducing_agent_search_scope.md byte 63,
+# line 3; research-backlog.md byte 105, line 4. Lines are what a header is
+# counted in, and 20 of them is five times the deepest case.
+#
+# The worse problem was silence. At byte 801 the gate printed "clean", which
+# reads exactly like "this file is safe". A threshold that happens not to bite
+# today is still a threshold nobody can see. So the window decides what
+# BLOCKS, and the rest of the file is scanned anyway and REPORTED: a
+# declaration below the window is never silently dropped, it is just not
+# treated as a header. Prose discussing the marker stays non-blocking, which
+# is what the window is for, but it is visible rather than invisible.
+HEADER_LINES = 20
+
+# The tail scan is bounded, because a tracked file can be a 200 MB CSV. When
+# the bound is hit the report says so -- a partial scan that claims to be a
+# full one is the same defect as the cliff above, one layer down.
+MAX_READ = 1_000_000
 
 SKIP_DIRS = {".git", ".gates", "node_modules", "venv", ".venv", "__pycache__",
              "dist", "build", "site-packages", ".pytest_cache", "scratch"}
@@ -127,7 +149,7 @@ def main():
 
     if "--list" in sys.argv:
         print(f"{GATE}: a tracked file is refused when its name, or its first "
-              f"{HEAD_BYTES} bytes,\ncontains one of these:\n")
+              f"{HEADER_LINES} lines,\ncontain one of these:\n")
         for _, label in _DECL:
             print(f"  header  {label}")
         print("  name    PRIVATE / CONFIDENTIAL as a word, or a private_docs/ "
@@ -142,7 +164,7 @@ def main():
               file=sys.stderr)
         sys.exit(1)
 
-    findings = []
+    findings, below = [], []
     for rel in files:
         if rel in ALLOW or os.path.basename(rel) in SKIP_BASENAMES:
             continue
@@ -161,15 +183,45 @@ def main():
             continue
         try:
             with open(path, "rb") as f:
-                head = f.read(HEAD_BYTES).decode("utf-8", "ignore")
+                raw = f.read(MAX_READ)
+                truncated = len(f.read(1)) > 0
         except Exception:
             continue
-        d = DECLARATION.search(head)
+        text = raw.decode("utf-8", "ignore")
+        lines = text.splitlines()
+        header = "\n".join(lines[:HEADER_LINES])
+
+        d = DECLARATION.search(header)
         if d:
-            findings.append((rel, "its own header", d.group(0).strip()))
+            findings.append((rel, f"its own header (line "
+                                 f"{header[:d.start()].count(chr(10)) + 1})",
+                             d.group(0).strip()))
+            continue
+
+        # Below the header: reported, not blocking. The point is that it is
+        # never silent.
+        rest = "\n".join(lines[HEADER_LINES:])
+        d2 = DECLARATION.search(rest)
+        if d2:
+            ln = HEADER_LINES + rest[:d2.start()].count("\n") + 1
+            below.append((rel, ln, d2.group(0).strip(), truncated))
+
+    if not findings and not below:
+        print(f"{GATE}: clean "
+              f"(headers = first {HEADER_LINES} lines; whole file scanned).")
+        return
+
+    if below:
+        print(f"\n{GATE}: {len(below)} marker(s) BELOW the first "
+              f"{HEADER_LINES} lines — reported, not blocking.")
+        for rel, ln, hit, trunc in below:
+            print(f"    {rel}:{ln}  {hit!r}"
+                  + ("  [file truncated at scan limit]" if trunc else ""))
+        print("  A declaration is a header, so these do not block. If one of "
+              "them IS a\n  declaration, move it to the top of the file and "
+              "this gate will enforce it.")
 
     if not findings:
-        print(f"{GATE}: clean.")
         return
 
     print(f"\n{GATE.upper().replace('_', ' ')}:\n")
