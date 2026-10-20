@@ -78,8 +78,11 @@ ROOT="$(git rev-parse --show-toplevel)"
 if [ -d "$ROOT/.gates" ]; then
   PY="$(command -v python3 || true)"
   if [ -n "$PY" ]; then
-    "$PY" "$ROOT/scripts/dev/check_server_manifest.py" --check || {
-      echo "  -> server.json disagrees with pyproject.toml or the README." >&2; exit 1; }
+    # One entry point for every publishing surface. check_server_manifest is
+    # called from the contract rather than separately, so there is a single
+    # place that knows what publishing requires.
+    "$PY" "$ROOT/scripts/dev/check_publish_contract.py" --check || {
+      echo "  -> A publishing surface is missing required information." >&2; exit 1; }
     "$PY" "$ROOT/.gates/no_private_marker.py" --check || {
       echo "  -> A tracked file declares itself private." >&2; exit 1; }
     "$PY" "$ROOT/.gates/scratch_external.py" --check || {
