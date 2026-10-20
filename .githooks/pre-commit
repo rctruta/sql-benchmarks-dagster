@@ -81,6 +81,11 @@ if [ -d "$ROOT/.gates" ]; then
     # One entry point for every publishing surface. check_server_manifest is
     # called from the contract rather than separately, so there is a single
     # place that knows what publishing requires.
+    # The taxonomy is hand-authored; the suites are discovered from disk.
+    # Nothing connected the two, so adding a suite silently left it out of
+    # every category query while still appearing in list_suites.
+    "$PY" "$ROOT/scripts/dev/check_taxonomy.py" --check || {
+      echo "  -> taxonomy.yaml has drifted from the suites on disk." >&2; exit 1; }
     "$PY" "$ROOT/scripts/dev/check_publish_contract.py" --check || {
       echo "  -> A publishing surface is missing required information." >&2; exit 1; }
     "$PY" "$ROOT/.gates/no_private_marker.py" --check || {

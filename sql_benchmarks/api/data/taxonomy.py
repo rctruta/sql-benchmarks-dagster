@@ -39,8 +39,25 @@ def list_categories() -> Dict[str, str]:
     return _load()["categories"]
 
 
+#: Bucket for suites present on disk but absent from taxonomy.yaml. Returning
+#: this rather than [] is what keeps a newly added suite DISCOVERABLE: with an
+#: empty list it appeared in list_suites (which reads the filesystem) but was
+#: invisible to suites_in_category() and category_counts() for every category,
+#: so category-first browsing could never reach it. The module docstring had
+#: long claimed this bucket existed; until 2026-08-10 it did not.
+UNCATEGORIZED = "uncategorized"
+
+
 def suite_categories(suite_name: str) -> List[str]:
-    return list(_load()["suites"].get(suite_name) or [])
+    """Categories for a suite, or [UNCATEGORIZED] if it has no entry.
+
+    Never returns an empty list for a real suite: silence would drop it out of
+    every category query with no signal that it had been missed. Drift is
+    caught earlier by scripts/dev/check_taxonomy.py, but this makes the
+    degraded state visible rather than absent.
+    """
+    cats = _load()["suites"].get(suite_name)
+    return list(cats) if cats else [UNCATEGORIZED]
 
 
 def capsule_categories(exp_id: str, suite_name: str | None) -> List[str]:
@@ -55,7 +72,20 @@ def capsule_categories(exp_id: str, suite_name: str | None) -> List[str]:
 
 
 def suites_in_category(category: str) -> List[str]:
+    """Suites tagged with `category`.
+
+    Querying UNCATEGORIZED lists suites on disk that the taxonomy does not
+    cover — the drift, surfaced through the same API an agent already uses
+    instead of requiring a separate tool.
+    """
     tax = _load()
+    if category == UNCATEGORIZED:
+        from ...constants import SQL_DIR
+        if not os.path.isdir(SQL_DIR):
+            return []
+        disk = {d for d in os.listdir(SQL_DIR)
+                if os.path.isdir(os.path.join(SQL_DIR, d))}
+        return sorted(disk - set(tax["suites"]))
     return sorted(name for name, cats in tax["suites"].items() if category in (cats or []))
 
 
