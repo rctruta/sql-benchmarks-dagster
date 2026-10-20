@@ -1,0 +1,138 @@
+# What this project publishes, and what each surface requires.
+#
+# Read by scripts/dev/check_publish_contract.py, which runs in the pre-commit
+# hook and in the release workflow. The point is that a publishing surface
+# cannot appear here without its rules, and cannot disappear without saying so.
+#
+# WHY IT EXISTS, measured 2026-10-20. Three failures in one afternoon, all of
+# the same shape -- information that was required, was missing, and nothing
+# asked for it:
+#
+#   server.json declared 0.1.2 while pyproject said 0.1.3, and the MCP
+#   registry's own validator does not compare them, so it published happily.
+#
+#   server.json and the README's mcp-name token existed only on a local,
+#   unpushed branch. origin/main had neither, so the file defining a live
+#   public listing was on one laptop.
+#
+#   A test that would have caught both -- test_mcp_registry_manifest.py, ten
+#   assertions -- was written in August, never pushed and never run by
+#   anything. The check existed. Nothing gated it.
+#
+# HOW A SURFACE IS EVALUATED. `trigger` is the file whose presence means this
+# surface is in play. Four cases, and the two that fail are the point:
+#
+#   status: live      + trigger present  -> run `requires` and `checks`
+#   status: live      + trigger MISSING  -> FAIL. A live surface whose defining
+#                                           file is gone is the server.json
+#                                           incident, caught this time.
+#   status: planned   + trigger present  -> FAIL. The artifact arrived and its
+#                                           rules were never written. This is
+#                                           the trigger demanding its own
+#                                           requirements, which is the whole
+#                                           idea: future work that does not
+#                                           need to be remembered, because its
+#                                           absence becomes loud the moment it
+#                                           starts to matter.
+#   status: planned   + trigger MISSING  -> silent. Nothing to do yet.
+#
+# Adding a planned surface costs one block and no code. Writing its rules is
+# forced at the moment it becomes real, not by anyone's memory.
+
+surfaces:
+
+  - id: pypi
+    status: live
+    trigger: pyproject.toml
+    why: "sqlbenchdag on PyPI. The wheel is what every other surface installs."
+    requires:
+      - kind: file_exists
+        path: README.md
+        because: "PyPI renders it as the project description"
+    checks:
+      # Needs a built wheel in dist/, so it is a release-stage check. Running
+      # it in pre-commit would fail on every commit for the wrong reason, and
+      # a gate that always fails gets switched off.
+      - path: scripts/dev/check_wheel.py
+        when: release
+
+  - id: mcp-registry
+    status: live
+    trigger: server.json
+    why: >
+      io.github.rctruta/sqlbenchdag in the official MCP registry. mcprush found
+      the server here and graded it; the listing is public and the manifest is
+      what defines it.
+    requires:
+      - kind: json_version_matches_pyproject
+        path: server.json
+        field: version
+        because: >
+          The registry's PyPI validator requires a version that EXISTS on PyPI
+          and never compares it to anything, so a stale manifest validates
+          cleanly and describes the wrong release.
+      - kind: json_version_matches_pyproject
+        path: server.json
+        field: packages[].version
+        because: "same check, for the version the client actually installs"
+      - kind: file_contains_json_field
+        path: README.md
+        from: server.json
+        field: name
+        template: "mcp-name: {}"
+        because: >
+          The registry matches this token against the server name to confirm
+          the publisher. A release whose README lacks it is rejected outright.
+          0.1.3 shipped without it because main never had it.
+    checks:
+      - sql_benchmarks_tests/test_mcp_registry_manifest.py
+      - scripts/dev/check_server_manifest.py
+
+  # ---- planned surfaces -------------------------------------------------
+  # None of these exist. Each one fails loudly the day its trigger appears,
+  # which is the only time anyone should have to think about it.
+
+  - id: npm
+    status: planned
+    trigger: package.json
+    why: "if any part of this is ever published as a Node package"
+    requires: []
+    checks: []
+
+  - id: docker
+    status: planned
+    trigger: Dockerfile
+    why: "a published image needs a tag that agrees with the package version"
+    requires: []
+    checks: []
+
+  - id: conda
+    status: planned
+    trigger: meta.yaml
+    why: "conda-forge recipes carry their own version and sha256"
+    requires: []
+    checks: []
+
+  - id: citation
+    status: live
+    trigger: CITATION.cff
+    why: >
+      CITATION.cff is what a reader copies into a bibliography. It carries its
+      own version, so it drifts exactly the way server.json did. Found by this
+      contract on its first run, 2026-10-20: it said 0.1.0 released
+      2026-06-22 while PyPI was at 0.1.3, so every citation named a version
+      three releases old. The Zenodo DOI is still pending; add a `doi`
+      requirement here when it exists.
+    requires:
+      - kind: yaml_version_matches_pyproject
+        path: CITATION.cff
+        field: version
+        because: "a citation must name the release it describes"
+    checks: []
+
+  - id: github-action
+    status: planned
+    trigger: action.yml
+    why: "a published action's declared version must match the release tag"
+    requires: []
+    checks: []

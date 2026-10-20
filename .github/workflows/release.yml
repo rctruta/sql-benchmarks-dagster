@@ -33,7 +33,7 @@ jobs:
       # release the MCP registry will describe wrongly or refuse outright.
       # 0.1.3 shipped without that token because main never had it.
       - name: Refuse a release whose server.json or README disagrees
-        run: python scripts/dev/check_server_manifest.py --check
+        run: python scripts/dev/check_publish_contract.py --check
 
 
       - name: Build a binary wheel and a source tarball
@@ -44,7 +44,7 @@ jobs:
       # deep -- and `python -m build` exited 0 the whole time. The rule was
       # already written down; this is the rule as a step.
       - name: Refuse a wheel containing anything but the package
-        run: python scripts/dev/check_wheel.py
+        run: python scripts/dev/check_publish_contract.py --check --release
 
       - name: Publish distribution to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
