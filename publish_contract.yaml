@@ -85,8 +85,22 @@ surfaces:
           the publisher. A release whose README lacks it is rejected outright.
           0.1.3 shipped without it because main never had it.
     checks:
-      - sql_benchmarks_tests/test_mcp_registry_manifest.py
-      - scripts/dev/check_server_manifest.py
+      # Stages, because the release job is deliberately minimal -- it builds
+      # and publishes, and does not install the project's dependencies. The
+      # 0.1.4 release failed twice on this: first no pyyaml, then no pytest.
+      # Installing each missing library as it surfaced was patching symptoms.
+      #
+      # The ten-assertion manifest test runs under pytest, and CI already runs
+      # the whole suite on every PR to main. A tag points at a commit that
+      # passed that, so running it again at release needs pytest to learn
+      # nothing new.
+      - path: sql_benchmarks_tests/test_mcp_registry_manifest.py
+        when: commit
+      # Standard library only, so it runs at both stages. This is the one that
+      # must hold at the moment of publishing: versions agreeing and the
+      # README carrying the ownership token.
+      - path: scripts/dev/check_server_manifest.py
+        when: any
 
   # ---- planned surfaces -------------------------------------------------
   # None of these exist. Each one fails loudly the day its trigger appears,

@@ -55,7 +55,7 @@ KNOWN_KINDS = (
 # Checks that need a built artifact cannot run in a pre-commit hook. A gate
 # that fails on every commit for a reason unrelated to the commit gets
 # switched off, so a check declares its stage and the runner honours it.
-STAGES = ("commit", "release")
+STAGES = ("commit", "release", "any")
 KNOWN_STATUS = ("live", "planned")
 
 
@@ -170,12 +170,12 @@ def run_checks(surface_id, checks, stage):
                 out.append(f"{surface_id}: check {script} declares stage "
                            f"{when!r}, not one of {', '.join(STAGES)}")
                 continue
-            if when != stage:
+            if when != "any" and when != stage:
                 continue
         else:
-            script, when = entry, "commit"
-            if when != stage:
-                continue
+            # A bare path means every stage, which is only safe for a check
+            # with no dependencies beyond the standard library.
+            script = entry
         target = ROOT / script
         if not target.exists():
             out.append(f"{surface_id}: declared check {script} does not exist")
