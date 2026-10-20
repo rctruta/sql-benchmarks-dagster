@@ -9,12 +9,12 @@ jobs:
   build-and-publish:
     name: Build and publish Python distribution to PyPI
     runs-on: ubuntu-latest
-    
+
     # CRITICAL: These permissions are required for Trusted Publishing (OIDC) to work!
     permissions:
       id-token: write
       contents: read
-    
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -24,13 +24,21 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          
+
       - name: Install build tools
         run: python -m pip install --upgrade pip build
-        
+
+      # Before building, not after: a release whose manifest names the
+      # previous version, or whose README has lost the mcp-name token, is a
+      # release the MCP registry will describe wrongly or refuse outright.
+      # 0.1.3 shipped without that token because main never had it.
+      - name: Refuse a release whose server.json or README disagrees
+        run: python scripts/dev/check_server_manifest.py --check
+
+
       - name: Build a binary wheel and a source tarball
         run: python -m build
-        
+
       # Between building and publishing, because 0.1.2 went to PyPI with 881
       # files that are not this package -- scratch/, venv/, build/ nested six
       # deep -- and `python -m build` exited 0 the whole time. The rule was
