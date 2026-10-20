@@ -1,3 +1,9 @@
+<!-- The MCP registry matches this string against the server name in
+     server.json to confirm the repo owner is the one publishing.
+     Do not remove: a release whose README lacks it is rejected.
+     scripts/dev/check_server_manifest.py enforces it. -->
+<!-- mcp-name: io.github.rctruta/sqlbenchdag -->
+
 # SQL Benchmarking Laboratory
 
 > **A deterministic, orchestrated harness for verifying database performance at scale.**

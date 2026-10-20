@@ -1,0 +1,36 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.rctruta/sqlbenchdag",
+  "title": "SQL Benchmarks Lab",
+  "description": "Query pre-computed SQL engine benchmarks. Runs standalone, no server setup required.",
+  "version": "0.1.3",
+  "websiteUrl": "https://github.com/rctruta/sql-benchmarks-dagster",
+  "repository": {
+    "url": "https://github.com/rctruta/sql-benchmarks-dagster",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "sqlbenchdag",
+      "version": "0.1.3",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "SB_RESULTS_DIR",
+          "description": "Directory of experiment result capsules. The package ships the SQL suites, taxonomy and templates but NOT capsules, which are run output — so on a fresh install the catalog tools work and list_results is empty until this points at a results directory.",
+          "isRequired": false
+        },
+        {
+          "name": "SB_API_BASE",
+          "description": "Optional. Base URL of a running SQL Benchmarks REST API. Leave unset and the read tools mount the API in-process — no server needed. Set it only when the API runs elsewhere, or to use submit_experiment, which needs a process that outlives the request.",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}
