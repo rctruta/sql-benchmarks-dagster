@@ -500,16 +500,45 @@ if have no_private_marker.py; then
   #    probe file both quote these phrases, and neither is private.
   python3 - "$MP/docs/essay.md" <<'PYEOF'
 import sys
-pad = "Ordinary prose about publishing workflows. " * 40
+pad = "Ordinary prose about publishing workflows.\n" * 60
 open(sys.argv[1], "w").write(
     "# An essay about publication rules\n\n" + pad +
-    "\n\nSome authors write PRIVATE: do not commit at the top of a draft.\n")
+    "\nSome authors write PRIVATE: do not commit at the top of a draft.\n")
 PYEOF
   (cd "$MP" && git add -A) >/dev/null 2>&1
   if (cd "$MP" && python3 .gates/no_private_marker.py --check) >/dev/null 2>&1; then
-    ok "no_private_marker ignores the phrase far below the header"
+    ok "no_private_marker does not block on the phrase below the header"
   else
-    bad "no_private_marker flagged prose that merely mentions the marker"
+    bad "no_private_marker blocked on prose that merely mentions the marker"
+  fi
+
+  # 8. ...but it must SAY SO. The first version read only the first 800 bytes,
+  #    so a declaration at byte 801 produced the word "clean" -- which reads
+  #    exactly like "this file is safe". Not blocking is a judgement; being
+  #    silent is a defect. The window decides what blocks; the whole file is
+  #    still scanned and anything below the window is reported.
+  if (cd "$MP" && python3 .gates/no_private_marker.py) 2>&1 \
+       | grep -q "BELOW the first"; then
+    ok "no_private_marker reports a marker found below the header window"
+  else
+    bad "no_private_marker was SILENT about a marker below the header window"
+  fi
+  if (cd "$MP" && python3 .gates/no_private_marker.py) 2>&1 | grep -q "clean"; then
+    bad "no_private_marker said 'clean' while a marker sat below the window"
+  else
+    ok "no_private_marker does not claim clean when it found a marker below"
+  fi
+  rm -f "$MP/docs/essay.md"
+  (cd "$MP" && git add -A) >/dev/null 2>&1
+
+  # 9. A declaration moved INTO the window must start blocking -- the window
+  #    is the rule, so it has to be the thing that decides.
+  printf 'PRIVATE: do not commit\n\n# Draft\n' > "$MP/docs/moved.md"
+  (cd "$MP" && git add -A) >/dev/null 2>&1
+  if (cd "$MP" && python3 .gates/no_private_marker.py --check) >/dev/null 2>&1; then
+    bad "no_private_marker MISSED a declaration on line 1"
+  else
+    ok "no_private_marker blocks once the declaration is in the header"
   fi
   rm -rf "$MP"
 fi
