@@ -411,6 +411,109 @@ if have scratch_external.py; then
   rm -rf "$SP" "$SX"
 fi
 
+# ------------------------------------------------------- private marker -----
+# Born 2026-10-19 from the audit that followed scratch_external. The specimen:
+# sql-benchmarks-dagster/scratch/reducing_agent_search_scope.md, whose third
+# line reads "Local draft. Not for the public repo.", was on origin/main of a
+# PUBLIC repository from 2026-07-04 to 2026-07-06, across thirteen commits.
+# rctruta.github.io already had this check in tools/check_private.py, but it
+# lived in one repository and nothing carried it anywhere else.
+if have no_private_marker.py; then
+  MP="$(mktemp -d)"
+  mkdir -p "$MP/.gates" "$MP/docs"
+  cp "$G/no_private_marker.py" "$MP/.gates/"
+  (cd "$MP" && git init -q && git commit -q --allow-empty -m init) >/dev/null 2>&1
+
+  # 1. Clean tree.
+  printf '# Readme\n\nOrdinary content.\n' > "$MP/docs/readme.md"
+  (cd "$MP" && git add -A) >/dev/null 2>&1
+  if (cd "$MP" && python3 .gates/no_private_marker.py --check) >/dev/null 2>&1; then
+    ok "no_private_marker quiet on an ordinary tracked file"
+  else
+    bad "no_private_marker fired on an ordinary tracked file"
+  fi
+
+  # 2. The real specimen's own words, in a file outside any notes folder --
+  #    which is the point: scratch_external covers notes by location, this
+  #    covers a declaration anywhere in the tree.
+  printf '# Methodology note\n\n*2026-07-04. Local draft. Not for the public repo.*\n' \
+    > "$MP/docs/draft.md"
+  (cd "$MP" && git add -A) >/dev/null 2>&1
+  if (cd "$MP" && python3 .gates/no_private_marker.py --check) >/dev/null 2>&1; then
+    bad "no_private_marker MISSED a header declaring the file private"
+  else
+    ok "no_private_marker refuses a file whose header declares it private"
+  fi
+  (cd "$MP" && git rm -q --cached docs/draft.md) >/dev/null 2>&1
+  rm -f "$MP/docs/draft.md"
+
+  # 3. A declaration in the NAME, with nothing in the header. This is how
+  #    convergence_notes_PRIVATE.md declares itself.
+  printf 'Nothing in here says anything about publication.\n' \
+    > "$MP/docs/convergence_notes_PRIVATE.md"
+  (cd "$MP" && git add -A) >/dev/null 2>&1
+  if (cd "$MP" && python3 .gates/no_private_marker.py --check) >/dev/null 2>&1; then
+    bad "no_private_marker MISSED a filename declaring the file private"
+  else
+    ok "no_private_marker refuses a file whose NAME declares it private"
+  fi
+  (cd "$MP" && git rm -q --cached docs/convergence_notes_PRIVATE.md) >/dev/null 2>&1
+  rm -f "$MP/docs/convergence_notes_PRIVATE.md"
+
+  # 4. The difference from check_private.py, which reads `git diff --cached`
+  #    and so sees a file once, on the way in. A file COMMITTED before this
+  #    gate existed is never staged again, and a staged-only check can never
+  #    tell you what is already out. Same shape as a .gitignore rule.
+  printf '# Old note\n\nPRIVATE: do not commit\n' > "$MP/docs/old.md"
+  (cd "$MP" && git add -A && git commit -q -m "committed before the gate") >/dev/null 2>&1
+  if (cd "$MP" && python3 .gates/no_private_marker.py --check) >/dev/null 2>&1; then
+    bad "no_private_marker MISSED an ALREADY-COMMITTED private file"
+  else
+    ok "no_private_marker refuses a private file committed before it existed"
+  fi
+
+  # 5. No baseline, and it must say so rather than quietly reporting -- every
+  #    sibling gate takes --baseline, so a caller will reach for it here.
+  if (cd "$MP" && python3 .gates/no_private_marker.py --baseline) >/dev/null 2>&1; then
+    bad "no_private_marker accepted --baseline; this gate must refuse it"
+  else
+    ok "no_private_marker refuses --baseline"
+  fi
+  [ -f "$MP/.gates/baseline/no_private_marker.txt" ] \
+    && bad "no_private_marker wrote a baseline file" \
+    || ok "no_private_marker wrote no baseline file"
+  (cd "$MP" && git rm -q --cached docs/old.md && git commit -q -m untrack) >/dev/null 2>&1
+  rm -f "$MP/docs/old.md"
+
+  # 6. UNTRACKED is fine. The notes this protects are meant to exist -- just
+  #    not in the index. A gate that fired on them would be unusable.
+  printf 'PRIVATE: do not commit\n' > "$MP/docs/local_note.md"
+  if (cd "$MP" && python3 .gates/no_private_marker.py --check) >/dev/null 2>&1; then
+    ok "no_private_marker ignores an untracked private file"
+  else
+    bad "no_private_marker fired on an UNTRACKED file, which is allowed"
+  fi
+  rm -f "$MP/docs/local_note.md"
+
+  # 7. The false-positive guard. A declaration is a header; prose discussing
+  #    the marker on page nine is not a declaration. GATES.md and this very
+  #    probe file both quote these phrases, and neither is private.
+  python3 - "$MP/docs/essay.md" <<'PYEOF'
+import sys
+pad = "Ordinary prose about publishing workflows. " * 40
+open(sys.argv[1], "w").write(
+    "# An essay about publication rules\n\n" + pad +
+    "\n\nSome authors write PRIVATE: do not commit at the top of a draft.\n")
+PYEOF
+  (cd "$MP" && git add -A) >/dev/null 2>&1
+  if (cd "$MP" && python3 .gates/no_private_marker.py --check) >/dev/null 2>&1; then
+    ok "no_private_marker ignores the phrase far below the header"
+  else
+    bad "no_private_marker flagged prose that merely mentions the marker"
+  fi
+  rm -rf "$MP"
+fi
+
 echo
 echo "gates proven: $PASS passed, $FAIL failed, $SKIP not installed"
 [ "$FAIL" -eq 0 ] || exit 1
