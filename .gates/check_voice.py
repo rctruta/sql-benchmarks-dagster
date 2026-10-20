@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Refuse source files that write about the site's author in the third person.
 
-    python3 tools/check_voice.py          report
-    python3 tools/check_voice.py --check  exit 1 on any hit
+    python3 .gates/check_voice.py          report
+    python3 .gates/check_voice.py --check  exit 1 on any hit
 
 The failure this exists for. The rule "never write about her in the third
 person inside her own project files" was given more than once, and written into
