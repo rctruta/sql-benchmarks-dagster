@@ -5,7 +5,8 @@ check_publish_contract — every publishing surface must carry its own rules.
     python3 scripts/dev/check_publish_contract.py            report
     python3 scripts/dev/check_publish_contract.py --check     exit 1 on a finding
     python3 scripts/dev/check_publish_contract.py --surfaces  list what is declared
-    python3 scripts/dev/check_publish_contract.py --release    also run release-stage checks
+    python3 scripts/dev/check_publish_contract.py --stage prepublish
+    python3 scripts/dev/check_publish_contract.py --stage postbuild
 
 Reads publish_contract.yaml, which declares each surface this project publishes
 to, the file whose presence means that surface is in play, and what must be
@@ -46,16 +47,25 @@ ROOT = Path(__file__).resolve().parents[2]
 CONTRACT = ROOT / "publish_contract.yaml"
 PYPROJECT = ROOT / "pyproject.toml"
 
+# A check names the moments it runs at. Three, because that is how many
+# distinct moments exist and the earlier two-stage model hid one of them:
+#
+#   commit      the pre-commit hook, where the project's dependencies exist
+#   prepublish  the release job BEFORE the build -- no project dependencies,
+#               no wheel yet. The 0.1.4 release failed three times here,
+#               because this moment was being treated as "commit" and so ran
+#               a pytest check in a job that has no pytest.
+#   postbuild   the release job AFTER the build, where dist/ exists
+#
+STAGE_COMMIT, STAGE_PREPUBLISH, STAGE_POSTBUILD = "commit", "prepublish", "postbuild"
+STAGES = (STAGE_COMMIT, STAGE_PREPUBLISH, STAGE_POSTBUILD)
+
 KNOWN_KINDS = (
     "file_exists",
     "json_version_matches_pyproject",
     "yaml_version_matches_pyproject",
     "file_contains_json_field",
 )
-# Checks that need a built artifact cannot run in a pre-commit hook. A gate
-# that fails on every commit for a reason unrelated to the commit gets
-# switched off, so a check declares its stage and the runner honours it.
-STAGES = ("commit", "release", "any")
 KNOWN_STATUS = ("live", "planned")
 
 
@@ -158,24 +168,31 @@ def check_requirement(surface_id, req):
 
 
 def run_checks(surface_id, checks, stage):
-    """Run the surface's checks that belong to this stage.
+    """Run the surface's checks whose `stages` include this stage.
 
-    A check is either a bare path (every stage) or a mapping with `when`.
+    `stages` is required and must be explicit. A default would be a guess
+    about where a check can run, and guessing that is what made the 0.1.4
+    release fail three times.
     """
     out = []
     for entry in checks:
-        if isinstance(entry, dict):
-            script, when = entry.get("path", ""), entry.get("when", "commit")
-            if when not in STAGES:
-                out.append(f"{surface_id}: check {script} declares stage "
-                           f"{when!r}, not one of {', '.join(STAGES)}")
-                continue
-            if when != "any" and when != stage:
-                continue
-        else:
-            # A bare path means every stage, which is only safe for a check
-            # with no dependencies beyond the standard library.
-            script = entry
+        if not isinstance(entry, dict) or "path" not in entry:
+            out.append(f"{surface_id}: each check needs a mapping with `path` "
+                       f"and `stages`, got {entry!r}")
+            continue
+        script = entry["path"]
+        declared = entry.get("stages")
+        if not declared:
+            out.append(f"{surface_id}: check {script} declares no `stages`. "
+                       f"Name them explicitly: {', '.join(STAGES)}")
+            continue
+        unknown = [d for d in declared if d not in STAGES]
+        if unknown:
+            out.append(f"{surface_id}: check {script} declares unknown "
+                       f"stage(s) {unknown}; known: {', '.join(STAGES)}")
+            continue
+        if stage not in declared:
+            continue
         target = ROOT / script
         if not target.exists():
             out.append(f"{surface_id}: declared check {script} does not exist")
@@ -202,7 +219,13 @@ def run_checks(surface_id, checks, stage):
 
 
 def main():
-    stage = "release" if "--release" in sys.argv else "commit"
+    stage = STAGE_COMMIT
+    if "--stage" in sys.argv:
+        stage = sys.argv[sys.argv.index("--stage") + 1]
+        if stage not in STAGES:
+            print(f"check_publish_contract: unknown stage {stage!r}; "
+                  f"expected one of {', '.join(STAGES)}", file=sys.stderr)
+            return 2
     if not CONTRACT.is_file():
         print(f"check_publish_contract: {CONTRACT.name} is missing. Every "
               f"publishing surface is declared there.", file=sys.stderr)

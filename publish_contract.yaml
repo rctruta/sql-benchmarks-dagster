@@ -50,11 +50,9 @@ surfaces:
         path: README.md
         because: "PyPI renders it as the project description"
     checks:
-      # Needs a built wheel in dist/, so it is a release-stage check. Running
-      # it in pre-commit would fail on every commit for the wrong reason, and
-      # a gate that always fails gets switched off.
+      # Needs a built wheel in dist/, so it runs only after the build.
       - path: scripts/dev/check_wheel.py
-        when: release
+        stages: [postbuild]
 
   - id: mcp-registry
     status: live
@@ -85,22 +83,24 @@ surfaces:
           the publisher. A release whose README lacks it is rejected outright.
           0.1.3 shipped without it because main never had it.
     checks:
-      # Stages, because the release job is deliberately minimal -- it builds
-      # and publishes, and does not install the project's dependencies. The
-      # 0.1.4 release failed twice on this: first no pyyaml, then no pytest.
-      # Installing each missing library as it surfaced was patching symptoms.
+      # Every check names the moments it runs at. The release job is
+      # deliberately minimal -- it builds and publishes and does not install
+      # the project's dependencies -- so `commit` and `prepublish` are not the
+      # same place. The 0.1.4 release failed three times before that was
+      # written down: no pyyaml, then no pytest, then no pytest again because
+      # the pre-build gate was still running commit-stage checks.
       #
       # The ten-assertion manifest test runs under pytest, and CI already runs
       # the whole suite on every PR to main. A tag points at a commit that
-      # passed that, so running it again at release needs pytest to learn
+      # passed that, so running it again at release would need pytest to learn
       # nothing new.
       - path: sql_benchmarks_tests/test_mcp_registry_manifest.py
-        when: commit
+        stages: [commit]
       # Standard library only, so it runs at both stages. This is the one that
       # must hold at the moment of publishing: versions agreeing and the
       # README carrying the ownership token.
       - path: scripts/dev/check_server_manifest.py
-        when: any
+        stages: [commit, prepublish]
 
   # ---- planned surfaces -------------------------------------------------
   # None of these exist. Each one fails loudly the day its trigger appears,
