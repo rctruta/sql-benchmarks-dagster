@@ -1,0 +1,29 @@
+# Gates this repository does NOT carry, and why.
+# update_gates.sh honours this file and removes stray copies, so a decision
+# recorded here survives the next distribution run. One basename per line.
+#
+# Recorded 2026-10-19.
+
+# This repository verifies its own documentation claims with
+# scripts/tools/verify_doc_claims.py, wired into its own hook. A second
+# registry would be two sources disagreeing about the same numbers.
+verify.py
+scan.py
+
+# check_wheel lives here as scripts/dev/check_wheel.py, where the release
+# workflow calls it. The .gates copy would be a duplicate of a gate this
+# repository already runs.
+check_wheel.py
+
+# NOT a decision against these -- not yet evaluated here. Adopting a gate
+# means running it, reading its findings and choosing a baseline, which is its
+# own piece of work. Measured 2026-10-19 so the choice is informed when it is
+# made:
+#   no_local_paths  2 findings: scripts/dev/check_wheel.py:13 and
+#                   sql_benchmarks/experiments/deprecated/bench_real_world_ingest.yaml:16
+#                   both carry /Users/ramona
+#   no_hardcoding   clean
+# Delete a line here to adopt that gate on the next update_gates.sh run.
+no_local_paths.py
+no_hardcoding.py
+checkpoint.sh

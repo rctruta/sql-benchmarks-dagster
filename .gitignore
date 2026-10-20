@@ -72,8 +72,9 @@ dagster_home/
 # Put any local notes/drafts in scratch/ — nothing there is committed except
 # its README. This replaces the old blanket '*.md' ignore, which silently hid
 # new docs (it once dropped FAQ.md).
-scratch/*
-!scratch/README.md
+# Local notes: a symlink to a directory OUTSIDE the worktree, so git cannot
+# stage anything written there. See .gates/scratch_external.py.
+scratch
 # Publication-track drafts that need to be durable (committed) even while
 # still living in scratch/. Promote to docs/ when polished.
 # !scratch/reducing_agent_search_scope.md
@@ -161,3 +162,5 @@ venv.old*
 # it reached PyPI in 0.1.2 only because include-package-data swept the working
 # directory. Ignored so that cannot recur silently.
 sql_benchmarks/memory/
+.gates/checkpoints/
+.gates/ledger.jsonl
