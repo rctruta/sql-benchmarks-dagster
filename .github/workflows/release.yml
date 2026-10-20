@@ -25,8 +25,15 @@ jobs:
         with:
           python-version: "3.11"
 
+      # pyyaml is for check_publish_contract, which reads
+      # publish_contract.yaml. This job deliberately does not install the
+      # project's dependencies -- it only builds and publishes -- so a gate
+      # that needs a library must say so here. The 0.1.4 release failed on
+      # exactly this: ModuleNotFoundError: No module named 'yaml'. It failed
+      # BEFORE the publish step, so nothing reached PyPI, which is the gate
+      # ordering working as intended.
       - name: Install build tools
-        run: python -m pip install --upgrade pip build
+        run: python -m pip install --upgrade pip build pyyaml
 
       # Before building, not after: a release whose manifest names the
       # previous version, or whose README has lost the mcp-name token, is a
