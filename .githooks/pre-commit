@@ -78,6 +78,8 @@ ROOT="$(git rev-parse --show-toplevel)"
 if [ -d "$ROOT/.gates" ]; then
   PY="$(command -v python3 || true)"
   if [ -n "$PY" ]; then
+    "$PY" "$ROOT/.gates/scratch_external.py" --check || {
+      echo "  -> A local notes folder is reachable by git, or a note is tracked." >&2; exit 1; }
     "$PY" "$ROOT/.gates/no_orphans.py" --check || {
       echo "  -> A module is imported only by its own test. A passing test" >&2
       echo "     there certifies a feature that never runs." >&2; exit 1; }

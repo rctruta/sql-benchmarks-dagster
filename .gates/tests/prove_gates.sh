@@ -301,6 +301,116 @@ if have no_orphans.py; then
   rm -rf "$OP"
 fi
 
+# -------------------------------------------------------------- scratch -----
+# Born 2026-10-19 from a survey of nine repositories: harness-bench carried
+# `scratch/` on line 25 of .gitignore AND scratch/skills-antipattern-final.md
+# tracked in HEAD since July, in a PUBLIC repository. An ignore rule is
+# consulted only for files git does not already track, so it had been silent
+# for three months. These probes assert the arrangement that makes the rule
+# unnecessary -- notes outside the worktree, where git refuses to stage them.
+if have scratch_external.py; then
+  SP="$(mktemp -d)"; SX="$(mktemp -d)"
+  mkdir -p "$SP/.gates"
+  cp "$G/scratch_external.py" "$G/_baseline.py" "$SP/.gates/"
+  (cd "$SP" && git init -q && git commit -q --allow-empty -m init) >/dev/null 2>&1
+
+  # 1. No notes folder at all. This gate refuses a leaky one; it does not
+  #    demand one exist, or every repository would fail on adoption.
+  if (cd "$SP" && python3 .gates/scratch_external.py --check) >/dev/null 2>&1; then
+    ok "scratch_external quiet when there is no notes folder"
+  else
+    bad "scratch_external fired on a repository with no notes folder"
+  fi
+
+  # 2. The arrangement it exists to enforce: outside the worktree, ignored.
+  mkdir -p "$SX/notes-store"
+  ln -s "$SX/notes-store" "$SP/scratch"
+  echo "a private draft" > "$SX/notes-store/draft.md"
+  printf 'scratch\n' > "$SP/.gitignore"
+  (cd "$SP" && git add -A) >/dev/null 2>&1
+  if (cd "$SP" && python3 .gates/scratch_external.py --check) >/dev/null 2>&1; then
+    ok "scratch_external quiet on an external, ignored notes folder"
+  else
+    bad "scratch_external fired on the arrangement it is meant to accept"
+  fi
+
+  # 3. git must refuse to stage through the link. This is the guarantee the
+  #    whole design rests on, so it is proven here and not assumed.
+  if (cd "$SP" && git add scratch/draft.md) >/dev/null 2>&1; then
+    bad "git staged a file through the symlink -- the design premise is wrong"
+  else
+    ok "git refuses to stage a file through the symlink"
+  fi
+
+  # 4. A real directory inside the worktree: nothing has leaked, but the
+  #    contents are one `git add -A` away from it.
+  rm "$SP/scratch"; mkdir -p "$SP/scratch"
+  echo "a private draft" > "$SP/scratch/draft.md"
+  if (cd "$SP" && python3 .gates/scratch_external.py --check) >/dev/null 2>&1; then
+    bad "scratch_external MISSED a real notes directory in the worktree"
+  else
+    ok "scratch_external refuses a real notes directory in the worktree"
+  fi
+
+  # 5. The symlink that points back inside the worktree -- the arrangement
+  #    that looks right and defeats itself.
+  rm -rf "$SP/scratch"; mkdir -p "$SP/inside"
+  ln -s ./inside "$SP/scratch"
+  if (cd "$SP" && python3 .gates/scratch_external.py --check) >/dev/null 2>&1; then
+    bad "scratch_external MISSED a symlink resolving inside the worktree"
+  else
+    ok "scratch_external refuses a symlink resolving inside the worktree"
+  fi
+  rm -rf "$SP/scratch" "$SP/inside"
+
+  # 6. The specimen itself, reproduced exactly: a note tracked in the index
+  #    while .gitignore names the folder. The rule is present and powerless.
+  mkdir -p "$SP/scratch"
+  echo "a private draft" > "$SP/scratch/draft.md"
+  (cd "$SP" && git add -f scratch/draft.md && git commit -q -m "the specimen") >/dev/null 2>&1
+  if (cd "$SP" && python3 .gates/scratch_external.py --check) >/dev/null 2>&1; then
+    bad "scratch_external MISSED a tracked note that .gitignore claims to cover"
+  else
+    ok "scratch_external refuses a tracked note despite the ignore rule"
+  fi
+
+  # 7. --baseline must REFUSE while that note is tracked. A baseline records a
+  #    backlog; an already-published private note is not a backlog, and
+  #    accepting it would launder the leak into a committed approval.
+  if (cd "$SP" && python3 .gates/scratch_external.py --baseline) >/dev/null 2>&1; then
+    bad "scratch_external baselined a TRACKED note -- it must refuse"
+  else
+    ok "scratch_external refuses to baseline a tracked note"
+  fi
+  [ -f "$SP/.gates/baseline/scratch_external.txt" ] \
+    && bad "scratch_external wrote a baseline file while refusing" \
+    || ok "scratch_external wrote no baseline file when it refused"
+
+  # 8. Untrack it, and the structural finding alone IS baselineable -- so a
+  #    repository can adopt the gate mid-migration without blocking commits.
+  (cd "$SP" && git rm -q --cached scratch/draft.md) >/dev/null 2>&1
+  if (cd "$SP" && python3 .gates/scratch_external.py --baseline) >/dev/null 2>&1; then
+    ok "scratch_external baselines a structural finding once nothing is tracked"
+  else
+    bad "scratch_external refused to baseline a purely structural finding"
+  fi
+  if (cd "$SP" && python3 .gates/scratch_external.py --check) >/dev/null 2>&1; then
+    ok "scratch_external passes once the structural finding is baselined"
+  else
+    bad "scratch_external still blocked after its finding was baselined"
+  fi
+
+  # 9. The baseline must not swallow a NEW tracked note afterwards.
+  echo "another private draft" > "$SP/scratch/second.md"
+  (cd "$SP" && git add -f scratch/second.md) >/dev/null 2>&1
+  if (cd "$SP" && python3 .gates/scratch_external.py --check) >/dev/null 2>&1; then
+    bad "the baseline swallowed a newly tracked note"
+  else
+    ok "scratch_external still blocks a newly tracked note after baselining"
+  fi
+  rm -rf "$SP" "$SX"
+fi
+
 echo
 echo "gates proven: $PASS passed, $FAIL failed, $SKIP not installed"
 [ "$FAIL" -eq 0 ] || exit 1
