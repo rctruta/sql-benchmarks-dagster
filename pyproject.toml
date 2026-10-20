@@ -142,6 +142,17 @@ sql_benchmarks = [
 ]
 
 [tool.pytest.ini_options]
+# A bare `pytest` must collect the same tests the hook and CI do, which both
+# name sql_benchmarks_tests/ explicitly. Without testpaths it walked the whole
+# tree -- including scratch/, which since 2026-10-20 is a symlink to a notes
+# directory outside the repository and happens to contain a file named
+# test_artifact_audit.py. Bare pytest then died during collection on a file
+# that is not part of this project.
+testpaths = ["sql_benchmarks_tests"]
+# Belt and braces: never descend into the notes folder even when a path is
+# given explicitly.
+norecursedirs = ["scratch", ".gates", "dist", "build", ".venv"]
+
 # Migrated from pytest.ini. Filters target deprecation warnings raised by
 # external dependencies (Dagster's Pydantic V1 usage; plotly's np.bool8).
 filterwarnings = [
