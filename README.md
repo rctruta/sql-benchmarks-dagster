@@ -3,6 +3,8 @@
 > **A deterministic, orchestrated harness for verifying database performance at scale.**
 > Developed by Ramona C. Truta
 
+[![SQL Benchmarks Lab MCP server](https://mcprush.com/badge/sql-benchmarks-lab-mcp/card.svg)](https://mcprush.com/to/sql-benchmarks-lab-mcp?ref=badge)
+
 ---
 
 ## The Mission: "Ground Truth" as Code
