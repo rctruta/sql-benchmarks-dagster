@@ -2,13 +2,13 @@
 """
 check_publish_contract — every publishing surface must carry its own rules.
 
-    python3 scripts/dev/check_publish_contract.py            report
-    python3 scripts/dev/check_publish_contract.py --check     exit 1 on a finding
-    python3 scripts/dev/check_publish_contract.py --surfaces  list what is declared
-    python3 scripts/dev/check_publish_contract.py --stage prepublish
-    python3 scripts/dev/check_publish_contract.py --stage postbuild
+    python3 .gates/check_publish_contract.py            report
+    python3 .gates/check_publish_contract.py --check     exit 1 on a finding
+    python3 .gates/check_publish_contract.py --surfaces  list what is declared
+    python3 .gates/check_publish_contract.py --stage prepublish
+    python3 .gates/check_publish_contract.py --stage postbuild
 
-Reads publish_contract.yaml, which declares each surface this project publishes
+Reads publish_contract.toml, which declares each surface this project publishes
 to, the file whose presence means that surface is in play, and what must be
 true when it is. The header of that file records why it exists; the short
 version is that three pieces of required information went missing in one
@@ -43,9 +43,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-CONTRACT = ROOT / "publish_contract.yaml"
-PYPROJECT = ROOT / "pyproject.toml"
+ROOT = Path(__file__).resolve().parents[1]
+CONTRACT = Path(__file__).resolve().parent / "publish_contract.toml"
 
 # A check names the moments it runs at. Three, because that is how many
 # distinct moments exist and the earlier two-stage model hid one of them:
@@ -62,29 +61,69 @@ STAGES = (STAGE_COMMIT, STAGE_PREPUBLISH, STAGE_POSTBUILD)
 
 KNOWN_KINDS = (
     "file_exists",
-    "json_version_matches_pyproject",
-    "yaml_version_matches_pyproject",
+    "json_version_matches_source",
+    "yaml_version_matches_source",
     "file_contains_json_field",
 )
+
+# Which file holds the version every other file must agree with. Declared in
+# the contract rather than assumed, because a Python project keeps it in
+# pyproject.toml, a Node one in package.json, a Rust one in Cargo.toml, and a
+# repository that publishes nothing has no version at all.
+DEFAULT_VERSION_SOURCE = {"path": "pyproject.toml", "kind": "toml_project_version"}
+
+#: Set from the contract by parse_contract(). A module global rather than a
+#: parameter threaded through every check, because every comparison in the
+#: file is against the same single source and passing it around would invite
+#: one call site using a different one.
+VERSION_SOURCE = dict(DEFAULT_VERSION_SOURCE)
 KNOWN_STATUS = ("live", "planned")
 
 
 def parse_contract(text):
-    """The contract, via PyYAML.
+    """The contract, via tomllib.
 
-    The first version hand-rolled a YAML subset parser to avoid a dependency
-    in a pre-commit hook. It silently dropped every requirement that followed
-    a multi-line `because:` -- mcp-registry reported one requirement where the
-    file declares three. A parser that loses rules without saying so is the
-    exact failure this tool exists to prevent, so it is gone. pyyaml is
-    already a declared dependency of this project and already used by four
-    scripts in scripts/.
+    Two earlier attempts, both wrong:
+
+    A hand-rolled YAML subset parser, to avoid a dependency in a pre-commit
+    hook. It silently dropped every requirement that followed a multi-line
+    value -- one surface reported a single requirement where the file declared
+    three. A parser that loses rules without saying so is the exact failure
+    this tool exists to prevent.
+
+    Then pyyaml, which is correct but is a dependency. In one project that was
+    fine. In this registry it is not: a gate here runs in a freshly
+    bootstrapped repository that has installed nothing, and it broke
+    init-agent-project outright -- the pre-commit hook crashed on
+    ModuleNotFoundError and the first commit never happened.
+
+    tomllib has been in the standard library since Python 3.11, parses a real
+    documented format, and keeps comments -- which matters, because most of
+    this contract's value is the reasons written beside the rules.
     """
-    import yaml
-    data = yaml.safe_load(text) or {}
+    import tomllib
+    try:
+        data = tomllib.loads(text) if text.strip() else {}
+    except tomllib.TOMLDecodeError as exc:
+        hint = ""
+        if "immutable namespace" in str(exc):
+            hint = ("\n\nAlmost certainly an inline `requires = []` or "
+                    "`checks = []` left in place.\nTOML makes an inline array "
+                    "immutable, so a later [[surfaces.requires]]\nblock cannot "
+                    "extend it. Delete the inline line and keep the blocks.")
+        raise SystemExit(f"check_publish_contract: {CONTRACT.name} is not "
+                         f"valid TOML: {exc}{hint}")
+    global VERSION_SOURCE
+    declared = data.get("version_source")
+    if declared:
+        missing = [k for k in ("path", "kind") if k not in declared]
+        if missing:
+            raise SystemExit(f"check_publish_contract: version_source is "
+                             f"missing {missing}")
+        VERSION_SOURCE = declared
     surfaces = data.get("surfaces")
     if not isinstance(surfaces, list) or not surfaces:
-        raise SystemExit("check_publish_contract: publish_contract.yaml has no "
+        raise SystemExit("check_publish_contract: publish_contract.toml has no "
                          "`surfaces:` list")
     for s in surfaces:
         s.setdefault("requires", [])
@@ -98,11 +137,39 @@ def parse_contract(text):
 
 # --- requirement kinds ------------------------------------------------------
 
-def pyproject_version():
-    m = re.search(r'^version\s*=\s*"([^"]+)"', PYPROJECT.read_text(encoding="utf-8"), re.M)
-    if not m:
-        raise SystemExit("check_publish_contract: no version in pyproject.toml")
-    return m.group(1)
+def source_version(spec):
+    """The one version everything else is compared against.
+
+    Fails loudly when the declared source is missing or has no version. A
+    checker that quietly treats "no source" as "nothing to compare" would
+    report clean on a repository whose versions all disagree.
+    """
+    path, kind = spec.get("path", ""), spec.get("kind", "")
+    target = ROOT / path
+    if not target.is_file():
+        raise SystemExit(f"check_publish_contract: version_source {path!r} "
+                         f"does not exist. Declare the file that holds this "
+                         f"project's version in {CONTRACT.name}.")
+    text = target.read_text(encoding="utf-8")
+    if kind == "toml_project_version":
+        m = re.search(r'^version\s*=\s*"([^"]+)"', text, re.M)
+    elif kind == "json_version":
+        import json as _json
+        v = _json.loads(text).get("version")
+        return str(v) if v else _fail(path)
+    elif kind == "yaml_version":
+        # Same reasoning as above: no pyyaml, and a miss is loud.
+        m = re.search(r'^version:\s*["\']?([^"\'\s#]+)', text, re.M)
+        return m.group(1) if m else _fail(path)
+    else:
+        raise SystemExit(f"check_publish_contract: version_source kind "
+                         f"{kind!r} is not implemented. Known: "
+                         f"toml_project_version, json_version, yaml_version.")
+    return m.group(1) if m else _fail(path)
+
+
+def _fail(path):
+    raise SystemExit(f"check_publish_contract: no version found in {path}")
 
 
 def _json_at(path, field):
@@ -128,29 +195,39 @@ def check_requirement(surface_id, req):
             out.append(f"{surface_id}: {path} is required but missing"
                        + (f" — {req['because']}" if req.get("because") else ""))
 
-    elif kind == "json_version_matches_pyproject":
+    elif kind == "json_version_matches_source":
         if not (ROOT / path).is_file():
             return [f"{surface_id}: {path} is missing, so its version cannot be checked"]
-        want = pyproject_version()
+        want = source_version(VERSION_SOURCE)
         for label, got in _json_at(path, req.get("field", "version")):
             if got != want:
                 out.append(f"{surface_id}: {path} {label} is {got!r} but "
-                           f"pyproject.toml says {want!r}"
+                           f"{VERSION_SOURCE['path']} says {want!r}"
                            + (f" — {req['because']}" if req.get("because") else ""))
 
-    elif kind == "yaml_version_matches_pyproject":
-        # CITATION.cff is YAML. Read with pyyaml rather than a regex, because
-        # a regex that misses the field reports "clean" instead of "unknown".
-        import yaml
+    elif kind == "yaml_version_matches_source":
+        # CITATION.cff is YAML, and a gate here must not import pyyaml: this
+        # runs in a release job and in freshly bootstrapped repositories that
+        # have installed nothing. A regex that MISSES the field would report
+        # "clean" instead of "unknown", which is the worse failure -- so the
+        # field is matched at line start and its absence is a finding, never a
+        # pass. That is the whole difference between a cheap parser being
+        # acceptable and being a liability.
         target = ROOT / path
         if not target.is_file():
             return [f"{surface_id}: {path} is missing, so its version cannot be checked"]
-        data = yaml.safe_load(target.read_text(encoding="utf-8")) or {}
-        got = str(data.get(req.get("field", "version"), ""))
-        want = pyproject_version()
+        field = req.get("field", "version")
+        m = re.search(rf'^{re.escape(field)}:\s*["\']?([^"\'\s#]+)',
+                      target.read_text(encoding="utf-8"), re.M)
+        if not m:
+            return [f"{surface_id}: {path} has no top-level {field!r} line. "
+                    f"It is required here, so its absence is a finding rather "
+                    f"than a pass."]
+        got = m.group(1)
+        want = source_version(VERSION_SOURCE)
         if got != want:
             out.append(f"{surface_id}: {path} {req.get('field','version')} is "
-                       f"{got!r} but pyproject.toml says {want!r}"
+                       f"{got!r} but {VERSION_SOURCE['path']} says {want!r}"
                        + (f" — {req['because']}" if req.get("because") else ""))
 
     elif kind == "file_contains_json_field":
