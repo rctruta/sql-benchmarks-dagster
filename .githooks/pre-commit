@@ -86,7 +86,9 @@ if [ -d "$ROOT/.gates" ]; then
     # every category query while still appearing in list_suites.
     "$PY" "$ROOT/scripts/dev/check_taxonomy.py" --check || {
       echo "  -> taxonomy.yaml has drifted from the suites on disk." >&2; exit 1; }
-    "$PY" "$ROOT/scripts/dev/check_publish_contract.py" --check || {
+    "$PY" "$ROOT/.gates/check_compiles.py" --check || {
+      echo "  -> A tracked python file does not parse." >&2; exit 1; }
+    "$PY" "$ROOT/.gates/check_publish_contract.py" --check || {
       echo "  -> A publishing surface is missing required information." >&2; exit 1; }
     "$PY" "$ROOT/.gates/no_private_marker.py" --check || {
       echo "  -> A tracked file declares itself private." >&2; exit 1; }
