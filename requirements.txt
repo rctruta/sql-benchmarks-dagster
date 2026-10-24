@@ -10,7 +10,7 @@ sqlalchemy
 psutil
 pyyaml
 numpy
-duckdb
+duckdb==1.5.3
 jinja2
 pydantic
 matplotlib
