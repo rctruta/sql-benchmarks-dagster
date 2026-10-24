@@ -8,6 +8,26 @@ is machine-first. An agent can verify a performance hypothesis here instead of a
 
 ---
 
+## Standard Engineering Practices (No One-Offs)
+
+- All code, scripts, linters, and configurations must adhere to standard engineering practices.
+- Do not create ad-hoc, brittle single-use scripts, custom regex parsers, or bespoke governance mechanisms where industry-standard tooling exists.
+- **Private material stays outside the repository.** Personal notes, summaries of chat conversations, local machine paths, and unpublished work are never copied in, referenced by absolute path, or quoted in code, comments, tests, commit messages or PR text. Code that needs private data reads its location from an environment variable.
+
+---
+
+## Documentation Triggers (When to Update README)
+
+Do NOT update the README for internal bug fixes, refactorings, or minor code edits.
+Review and update README and agent instructions ONLY when a change crosses an external boundary:
+1. **CLI / Entrypoints:** A command, CLI flag, or runner script is added, renamed, or removed.
+2. **Dependencies & Toolchain:** A dependency, interpreter version, or external tool requirement is changed in `pyproject.toml`.
+3. **Environment & Configuration:** A new environment variable, configuration table, or setup prerequisite is introduced.
+4. **Repository Layout:** A top-level directory or primary data pipeline is added, moved, or removed.
+If none of these boundaries was crossed, leave the README untouched.
+
+---
+
 ## Four ways in
 
 1. **Filesystem + CLI** (zero infrastructure): write a YAML config, run it, read the capsule.
@@ -146,25 +166,9 @@ Each engine receives ONLY its own `engine_params` namespace.
 
 ---
 
-## Releasing — what 0.1.2 cost, and the rules that follow from it
+## Releasing & Packaging Discipline
 
-Version 0.1.2 was uploaded to PyPI by hand from an uncommitted working tree.
-There is no `v0.1.2` tag, `main` still said `0.1.1`, and it has one file on
-PyPI where every other release has two. Three things existed only in that
-tree: `sql_benchmarks/mcp/`, the `sqlbench-mcp` console script, and the
-`experiments/taxonomy.yaml` line in the manifest. The MCP server that
-strangers were installing had no source in version control for two months.
-
-And because `include-package-data` defaults to true with no `MANIFEST.in`,
-setuptools swept the working directory. The wheel shipped **881 files that are
-not this package**: a `build/` tree nested six deep, `venv/`, `tests/`,
-`skills/`, `infrastructure/`, and `scratch/` — twelve unrelated local scripts
-carrying `/Users/ramona` paths and the names of two unpublished projects. 82%
-of the download. No credentials; every secret read is `os.getenv` with a local
-default. It had been getting worse: 0.1.0 shipped 2 stray files, 0.1.1 shipped
-14, 0.1.2 shipped 881.
-
-So:
+Package distributions and published wheels are strictly guarded:
 
 1. **A release is a tag, never a local upload.** `release.yml` fires on
    `v*.*.*` and builds from the tagged commit. If you find yourself running
