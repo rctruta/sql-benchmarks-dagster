@@ -15,15 +15,15 @@ from sql_benchmarks.resources.duckdb_client import (
 def test_threads_setting_is_applied():
     con = duckdb.connect()
     _apply_engine_params(con, {"threads": 2})
-    (value,) = con.sql("SELECT current_setting('threads')").fetchone()
+    (value,) = con.execute("SELECT current_setting('threads')").fetchone()
     assert int(value) == 2
 
 
 def test_memory_limit_setting_is_applied():
     con = duckdb.connect()
-    (before,) = con.sql("SELECT current_setting('memory_limit')").fetchone()
+    (before,) = con.execute("SELECT current_setting('memory_limit')").fetchone()
     _apply_engine_params(con, {"memory_limit": "1GB"})
-    (after,) = con.sql("SELECT current_setting('memory_limit')").fetchone()
+    (after,) = con.execute("SELECT current_setting('memory_limit')").fetchone()
     # DuckDB normalizes units (1GB -> '953.6 MiB'); assert the setting moved.
     assert after != before
 
