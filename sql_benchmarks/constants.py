@@ -40,12 +40,14 @@ ENGINE_SQL_DIALECTS = {
     "quack_adbc": "duckdb",             # DuckDB SQL, served over Quack, fetched via ADBC
     "quack_arrow": "duckdb",            # native Quack client, materialized to Arrow
     "postgres_transport": "postgres",   # same SQL as postgres; only the client differs
+    "duckdb_1_5": "duckdb",             # DuckDB 1.5.3 metrology engine
+    "duckdb_2_0": "duckdb",             # DuckDB 2.0.0 metrology engine
 }
 
 # Every engine the harness can run. A drift test asserts this matches the
 # resources actually registered in definitions.py — add an engine there
 # without updating this list and CI fails loudly.
-KNOWN_ENGINES = ["actian", "duckdb", "malloy", "postgres", "postgres_transport", "quack", "quack_adbc", "quack_arrow", "quack_pushdown", "typedb"]
+KNOWN_ENGINES = ["actian", "duckdb", "duckdb_1_5", "duckdb_2_0", "malloy", "postgres", "postgres_transport", "quack", "quack_adbc", "quack_arrow", "quack_pushdown", "typedb"]
 
 # The lab's maker's mark — carried in every capsule's `generator` field and on
 # every release tag (sqlbenchdag-<topic>-v<N>-<YYYYMMDD>). sql + bench + dag

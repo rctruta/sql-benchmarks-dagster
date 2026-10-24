@@ -65,6 +65,7 @@ python scripts/tools/gen_experiment_catalog.py
 | [`b82b4eae`](../sql_benchmarks/experiments/results/b82b4eae/) | Quack vs In-Process DuckDB | — | duckdb, quack | analytical_wall | ✓ |
 | [`902d1277`](../sql_benchmarks/experiments/results/902d1277/) | Quack vs Postgres: Client-Server Head-to-Head | — | duckdb, quack_pushdown, postgres | analytical_wall | ✓ |
 | [`b198363e`](../sql_benchmarks/experiments/results/b198363e/) | TPC-H Q3 Quack Validation | — | duckdb, quack, quack_pushdown | tpch | ✓ |
+| [`09ac7180`](../sql_benchmarks/experiments/results/09ac7180/) | — | — | duckdb_1_5, duckdb_2_0 | analytical_wall | ✓ |
 
-*10 capsules. Generated from the sealed configs — regenerate with `python scripts/tools/gen_experiment_catalog.py`.*
+*11 capsules. Generated from the sealed configs — regenerate with `python scripts/tools/gen_experiment_catalog.py`.*
 <!-- CATALOG:END -->

@@ -154,6 +154,8 @@ def test_list_engines(client):
     # Every engine mapped to one of those dialects gets that suite listed.
     assert engines == {
         "duckdb": ["selectivity"],
+        "duckdb_1_5": ["selectivity"],
+        "duckdb_2_0": ["selectivity"],
         "quack": ["selectivity"],
         "quack_pushdown": ["selectivity"],
         "quack_adbc": ["selectivity"],
