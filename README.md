@@ -42,7 +42,7 @@ The Heart of the system is the **Experiment ID**, an 8-character hash that gover
 ### 2. Multi-Layer Cold-Cache Isolation
 To ensure IO-bound performance is not masked by memory buffers, we implement a dual-layer cold start mechanism:
 *   **Out-of-Process (Postgres)**: Mandatory **Docker Container Restarts** before every query to clear engine-level shared buffers.
-*   **Global OS Flush (mmap)**: A specialized `thrash_os_cache` primitive that maps and dirties a file larger than physical RAM. This forces the OS to evict Page Cache entries, ensuring cold read performance for both containerized and in-process (DuckDB) engines.
+*   **Global OS Flush (mmap)**: A specialized `thrash_os_cache` primitive that maps and dirties an anonymous memory region sized at half of available RAM, capped at 4 GB. This evicts OS Page Cache entries before each measurement, for both containerized and in-process (DuckDB) engines.
 
 ### 3. Agentic AI Integration
 The platform is built for the future of **Autonomous Engineering**. The Experiment ID allows AI agents to treat the laboratory as a **Deterministic Performance API**.
