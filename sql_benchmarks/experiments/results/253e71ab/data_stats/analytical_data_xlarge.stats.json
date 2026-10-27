@@ -1,10 +1,10 @@
 {
-  "rows": 25000,
+  "rows": 50000000,
   "columns": {
     "id": {
       "null_count": 0,
       "null_percent": 0.0,
-      "cardinality": 25000,
+      "cardinality": 50000000,
       "dtype": "Int64"
     },
     "region": {
@@ -22,7 +22,7 @@
     "price": {
       "null_count": 0,
       "null_percent": 0.0,
-      "cardinality": 25000,
+      "cardinality": 50000000,
       "dtype": "Float64"
     },
     "quantity": {
@@ -34,7 +34,7 @@
     "discount": {
       "null_count": 0,
       "null_percent": 0.0,
-      "cardinality": 25000,
+      "cardinality": 50000000,
       "dtype": "Float64"
     }
   }

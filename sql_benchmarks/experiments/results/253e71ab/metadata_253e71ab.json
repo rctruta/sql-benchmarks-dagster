@@ -1,7 +1,7 @@
 {
-    "experiment_id": "09ac7180",
-    "timestamp": 1792861951.31969,
-    "config_id": "config_09ac7180",
+    "experiment_id": "253e71ab",
+    "timestamp": 1793139299.259375,
+    "config_id": "config_253e71ab",
     "environment": {
         "python": "3.11.14",
         "duckdb": "1.5.3",
@@ -24,5 +24,5 @@
         "polars": "1.39.3"
     },
     "dataset_seed": 42,
-    "generator": "sqlbenchdag@8992184"
+    "generator": "sqlbenchdag@f50db54"
 }

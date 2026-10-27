@@ -1,6 +1,6 @@
-# experiment_id: 09ac7180  (run conditions: metadata_09ac7180.json)
+# experiment_id: 253e71ab  (run conditions: metadata_253e71ab.json)
 meta:
-  description: "Cross-release metrology: DuckDB 1.5.3 vs 2.0.0 single-sweep performance comparison"
+  description: "Cross-release metrology: DuckDB 1.5.3 vs 2.0.0 scaling sweep from 1K to 10M rows"
 
 dataset:
   source: sql_benchmarks.plugins.data_sources.declarative_gen
@@ -33,7 +33,13 @@ dataset:
 definitions:
   rows:
     tiny: 1000
-    small: 25000
+    xs: 10000
+    small: 100000
+    medium: 1000000
+    large: 10000000
+    mlarge: 20000000
+    xlarge: 50000000
+    xxlarger: 100000000
 
 execution:
   test_suite: analytical_wall
@@ -44,4 +50,10 @@ execution:
   matrix:
     rows:
       - tiny
+      - xs
       - small
+      - medium
+      - large
+      - mlarge
+      - xlarge
+      - xxlarger

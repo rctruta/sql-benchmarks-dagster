@@ -1,5 +1,0 @@
-Asset,Partition,Duration,Duration_Min,Duration_Max,DNF,Engine,Rows,Selectivity
-e_09ac7180__duckdb_1_5_benchmark_analytical_wall,tiny,0.0025314300631483397,0.0024182498455047607,0.00271612498909235,false,duckdb_1_5,1000,0.0
-e_09ac7180__duckdb_2_0_benchmark_analytical_wall,tiny,0.006208027713000774,0.005996832624077797,0.006340875290334225,false,duckdb_2_0,1000,0.0
-e_09ac7180__duckdb_1_5_benchmark_analytical_wall,small,0.0056214164942502975,0.003319874405860901,0.009363749995827675,false,duckdb_1_5,25000,0.0
-e_09ac7180__duckdb_2_0_benchmark_analytical_wall,small,0.010640624600152174,0.006961832754313946,0.016916625201702118,false,duckdb_2_0,25000,0.0
