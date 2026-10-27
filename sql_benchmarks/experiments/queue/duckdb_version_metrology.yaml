@@ -1,0 +1,57 @@
+meta:
+  description: "Cross-release metrology: DuckDB 1.5.3 vs 2.0.0 scaling sweep from 1K to 10M rows"
+
+dataset:
+  source: sql_benchmarks.plugins.data_sources.declarative_gen
+  tables:
+    analytical_data:
+      rows: rows
+      columns:
+        - name: id
+          provider: sequence
+          primary_key: true
+        - name: region
+          provider: choice
+          options: ["North", "South", "East", "West"]
+        - name: category
+          provider: choice
+          options: ["A", "B", "C", "D"]
+        - name: price
+          provider: random_float
+          min: 10.0
+          max: 500.0
+        - name: quantity
+          provider: random_int
+          min: 1
+          max: 100
+        - name: discount
+          provider: random_float
+          min: 0.0
+          max: 0.30
+
+definitions:
+  rows:
+    tiny: 1000
+    xs: 10000
+    small: 100000
+    medium: 1000000
+    large: 10000000
+    mlarge: 20000000
+    xlarge: 50000000
+    xxlarger: 100000000
+
+execution:
+  test_suite: analytical_wall
+  engines:
+    - duckdb_1_5
+    - duckdb_2_0
+    - postgres
+
+  replication: 3
+  matrix:
+    rows:
+      - tiny
+      - xs
+      - small
+      - medium
+      - large

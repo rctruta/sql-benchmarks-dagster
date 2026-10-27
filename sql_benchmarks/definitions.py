@@ -98,6 +98,17 @@ defs = Definitions(
         # `postgres_transport.client`. Measures connectivity cost, not execution.
         "postgres_transport": PostgresTransportEngine(connection_string=postgres_url),
         "duckdb": DuckDBEngine(data_folder=os.path.join(DATA_DIR, "duckdb")),
+        # Version-isolated DuckDB engines for cross-release metrology benchmarking:
+        "duckdb_1_5": DuckDBEngine(
+            data_folder=os.path.join(DATA_DIR, "duckdb_1_5"),
+            version="1.5.3",
+            engine_name="duckdb_1_5",
+        ),
+        "duckdb_2_0": DuckDBEngine(
+            data_folder=os.path.join(DATA_DIR, "duckdb_2_0"),
+            version="2.0.0",
+            engine_name="duckdb_2_0",
+        ),
         # DuckDB-over-Malloy-Publisher: same data, measured through the Malloy
         # semantic layer (compile + REST). duckdb vs malloy isolates the
         # semantic-layer cost, as duckdb vs quack isolates the protocol cost.

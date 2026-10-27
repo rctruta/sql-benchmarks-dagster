@@ -1,0 +1,28 @@
+{
+    "experiment_id": "253e71ab",
+    "timestamp": 1793139299.259375,
+    "config_id": "config_253e71ab",
+    "environment": {
+        "python": "3.11.14",
+        "duckdb": "1.5.3",
+        "dagster": "1.12.22",
+        "os": "Darwin 24.4.0",
+        "machine": "arm64",
+        "cpu_count_logical": 8,
+        "cpu_count_physical": 8,
+        "ram_total_gb": 16.0,
+        "duckdb_extensions": {
+            "core_functions": "v1.5.3",
+            "delta": "2d76d40",
+            "httpfs": "52afb42",
+            "icu": "v1.5.3",
+            "json": "v1.5.3",
+            "parquet": "v1.5.3",
+            "quack": "1693647",
+            "tpch": "v1.5.3"
+        },
+        "polars": "1.39.3"
+    },
+    "dataset_seed": 42,
+    "generator": "sqlbenchdag@f50db54"
+}

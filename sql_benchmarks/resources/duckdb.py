@@ -9,17 +9,24 @@ from ..utils.system import thrash_os_cache
 # The Engine is the immutable facade that satisfies the contract.
 class DuckDBEngine(ConfigurableResource): 
     # --- CONFIGURATION (Immutable) ---
-    data_folder: str # This is the only configuration it holds
+    data_folder: str # This is the configuration it holds
+    version: Optional[str] = None # When set, delegates to isolated DuckDBVersionClient
+    engine_name: Optional[str] = None # Custom engine name when running multiple versions
     model_config = ConfigDict(extra='forbid')
     # --- FACTORY METHOD ---
     # This is the Factory Method: It creates the worker/client instance.
-    def _get_client(self) -> 'DuckDBClient':
+    def _get_client(self):
         """Instantiates the stateful client for execution."""
+        if self.version:
+            from .duckdb_version_client import DuckDBVersionClient
+            return DuckDBVersionClient(data_folder=self.data_folder, version=self.version)
         return DuckDBClient(data_folder=self.data_folder)
     
     # --- IBenchmarkEngine Implementation (Delegation) ---
 
     def get_engine_name(self) -> str:
+        if self.engine_name:
+            return self.engine_name
         return "duckdb"
 
     def bulk_load(self, filepath: str, table_name: str, partition_key: str, table_def: dict = None) -> None:

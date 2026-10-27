@@ -2,7 +2,7 @@
 
 > **Specification for AI agents and orchestrators interacting with the SQL Benchmarking Laboratory.**
 
-The lab is a **deterministic performance oracle**: every experiment is identified by a
+The lab is an **empirical benchmarking harness**: every experiment is identified by a
 content-addressed hash, every result is a verifiable capsule, and every interface below
 is machine-first. An agent can verify a performance hypothesis here instead of asserting it.
 
