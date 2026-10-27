@@ -44,3 +44,4 @@ python-dotenv
 # Also used by autonomous_agent.py; brings LLM tool-calling via a single API.
 litellm
 rich
+uv>=0.5.0

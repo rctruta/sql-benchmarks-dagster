@@ -73,6 +73,11 @@ def test_duckdb_worker_engine_params_validation():
 
 def test_duckdb_version_client_execution():
     """Verify both 1.5.3 and 2.0.0 can bulk load parquet data and run queries in isolated workers."""
+    import shutil
+    from sql_benchmarks.resources.duckdb_version_client import _find_uv_bin
+    if not shutil.which("uv") and _find_uv_bin() == "uv":
+        pytest.skip("uv binary not available on system PATH")
+
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create a small parquet file
         parquet_path = os.path.join(tmpdir, "sample.parquet")

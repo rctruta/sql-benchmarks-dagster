@@ -2,10 +2,23 @@
 specified DuckDB version via uv."""
 import json
 import os
+import shutil
 import subprocess
+import sys
 from typing import Dict, Any, Optional
 
 _INITIALIZED_DB_FILES: set = set()
+
+
+def _find_uv_bin() -> str:
+    """Locate the uv binary on PATH or within the active Python environment."""
+    bin_path = shutil.which("uv")
+    if bin_path:
+        return bin_path
+    venv_bin = os.path.join(os.path.dirname(sys.executable), "uv")
+    if os.path.isfile(venv_bin) and os.access(venv_bin, os.X_OK):
+        return venv_bin
+    return "uv"
 
 
 class DuckDBVersionClient:
@@ -42,7 +55,7 @@ class DuckDBVersionClient:
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
         cmd = [
-            "uv",
+            _find_uv_bin(),
             "run",
             "--quiet",
             "--no-project",
@@ -74,7 +87,7 @@ class DuckDBVersionClient:
         db_path = self._get_db_path(partition_key)
 
         cmd = [
-            "uv",
+            _find_uv_bin(),
             "run",
             "--quiet",
             "--no-project",
