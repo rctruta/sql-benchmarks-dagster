@@ -108,6 +108,7 @@ def test_duckdb_version_client_execution():
                 sql="SELECT count(*), avg(value) FROM sample_tbl",
                 partition_key="p1",
                 engine_params={"threads": 2, "memory_limit": "500MB"},
+                cold=False,
             )
 
             assert duration is not None

@@ -9,7 +9,7 @@
 Benchmarking database upgrades usually suffers from environmental confounding:
 1. **Temporal & Thermal Drift:** Running Version A on Monday and Version B on Tuesday confounds performance differences with CPU thermal throttling, OS scheduler noise, and background system load.
 2. **Virtualenv / ABI Collisions:** Python C-extensions cannot load two distinct versions of the same shared library into a single process address space (`sys.modules['duckdb']`).
-3. **Cache Residue:** Running tests in sequential batches allows the later engine to benefit from filesystem page cache warm-up unless OS cache thrashing is enforced between runs.
+3. **Cache Residue:** Running tests in sequential batches allows the later engine to benefit from filesystem page cache warm-up unless the OS page cache is cleared between runs.
 
 ---
 
@@ -49,8 +49,10 @@ To eliminate these confounding factors, we introduce a single-variable execution
    - Dynamic isolation is handled via `uv run --quiet --no-project --with duckdb==<VERSION>`.
    - Sub-millisecond process setup and complete C-ABI and process memory isolation.
 2. **Cold-State Guarantee:**
-   - Prior to each query replication, `thrash_os_cache()` evacuates filesystem buffer caches.
+   - Prior to each query replication, the engine calls `thrash_os_cache()`, which does not evict file pages on macOS, so the OS page cache is not cold. `cold=True` raises until a verified eviction step exists.
    - Every query trial runs in a dedicated worker process, guaranteeing a pristine DuckDB buffer manager state.
+   - Capsule `253e71ab` was measured this way: empty DuckDB buffer pool per query, OS page cache not evicted on macOS. Its `metadata` records the OS it ran on.
+   - A worker that fails to start (for example, `uv` cannot install the requested version) raises; only a query DuckDB itself rejects is recorded as DNF.
 3. **Partitioned Storage Independence:**
    - Each engine version operates on its own dedicated database folder (`duckdb_1_5` vs `duckdb_2_0`), preventing file format mutation or locking conflicts.
 
