@@ -37,7 +37,7 @@ def test_run_query_executes_and_returns_duration(mock_duckdb_connect):
     client = DuckDBClient(data_folder=TEST_DATA_FOLDER)
 
     with patch("time.time", side_effect=[0.0, 1.5]):
-        duration = client.run_query(sql="SELECT 1", partition_key="test_part")
+        duration = client.run_query(sql="SELECT 1", partition_key="test_part", cold=False)
 
     mock_conn = mock_duckdb_connect.return_value.__enter__.return_value
     mock_conn.sql.assert_called_once_with("SELECT 1")
@@ -51,7 +51,7 @@ def test_run_query_applies_allowlisted_engine_params(mock_duckdb_connect):
 
     with patch("time.time", side_effect=[0.0, 0.2]):
         duration = client.run_query(sql="SELECT 1", partition_key="test_part",
-                                    engine_params={"threads": 2})
+                                    engine_params={"threads": 2}, cold=False)
 
     mock_conn = mock_duckdb_connect.return_value.__enter__.return_value
     mock_conn.execute.assert_any_call("SET threads = '2'")
@@ -64,7 +64,7 @@ def test_run_query_rejects_foreign_namespace_keys(mock_duckdb_connect):
     client = DuckDBClient(data_folder=TEST_DATA_FOLDER)
     with pytest.raises(ValueError, match="Unknown duckdb engine_params key 'work_mem'"):
         client.run_query(sql="SELECT 1", partition_key="test_part",
-                         engine_params={"work_mem": "256MB"})
+                         engine_params={"work_mem": "256MB"}, cold=False)
 
 
 def test_run_query_propagates_duckdb_error(mock_duckdb_connect):
@@ -75,7 +75,7 @@ def test_run_query_propagates_duckdb_error(mock_duckdb_connect):
     mock_conn.sql.side_effect = Error("Table not found.")
 
     with pytest.raises(Error, match="Table not found."):
-        client.run_query(sql="SELECT * FROM missing", partition_key="test_part")
+        client.run_query(sql="SELECT * FROM missing", partition_key="test_part", cold=False)
 
 
 # ---------------------------------------------------------------------------

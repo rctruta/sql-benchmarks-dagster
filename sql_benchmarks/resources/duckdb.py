@@ -46,7 +46,8 @@ class DuckDBEngine(ConfigurableResource):
         # Delegate the call using the exact method signature
         return client.run_query(sql=sql,
                                 partition_key=partition_key,
-                                engine_params=engine_params
+                                engine_params=engine_params,
+                                cold=False  # OS page-cache eviction not implemented
                                 )
 
     # --- Utility Methods ---

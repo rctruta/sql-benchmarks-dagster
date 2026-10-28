@@ -39,6 +39,16 @@ def _apply_engine_params(con, engine_params: Dict[str, Any]) -> None:
             raise ValueError(f"Unsafe value for duckdb setting '{key}': {value!r}")
         con.execute(f"SET {key} = '{value}'")
 
+
+def refuse_cold(cold: bool) -> None:
+    """OS page-cache eviction is not implemented, so a cold request fails
+    instead of running warm."""
+    if cold:
+        raise NotImplementedError(
+            "cold=True requires OS page-cache eviction, which is not implemented; "
+            "pass cold=False"
+        )
+
 # Note: DuckDBClient does NOT inherit ConfigurableResource
 
 # ---------------------------------------------------------------------------
@@ -99,13 +109,20 @@ class DuckDBClient:
     def run_query(self,
                   sql: str,
                   partition_key: str,
-                  engine_params: Dict[str, Any] = None) -> Optional[float]:
+                  engine_params: Dict[str, Any] = None,
+                  *,
+                  cold: bool) -> Optional[float]:
         """Execute a benchmark query against the partition's DuckDB file.
 
         engine_params is the 'duckdb' namespace (threads, memory_limit),
         applied via SET before timing starts so the measurement reflects the
         configured execution, not the configuration itself.
+
+        cold has no default: every caller states whether the query must start
+        with the database file out of the OS page cache. Until eviction is
+        implemented, cold=True raises.
         """
+        refuse_cold(cold)
         db_path = self._get_db_path(partition_key)
 
         # Enable RW for Sentinel experiments (CREATE TABLE)

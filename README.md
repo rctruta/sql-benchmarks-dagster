@@ -40,9 +40,11 @@ The Heart of the system is the **Experiment ID**, an 8-character hash that gover
 *   **Python**: Orchestration scripts are parsed into an **Abstract Syntax Tree (AST)** to strip docstrings and formatting variations, ensuring the Experiment ID only changes when execution logic changes.
 
 ### 2. Multi-Layer Cold-Cache Isolation
-To ensure IO-bound performance is not masked by memory buffers, we implement a dual-layer cold start mechanism:
-*   **Out-of-Process (Postgres)**: Mandatory **Docker Container Restarts** before every query to clear engine-level shared buffers.
-*   **Global OS Flush (mmap)**: A specialized `thrash_os_cache` primitive that maps and dirties an anonymous memory region sized at half of available RAM, capped at 4 GB. This evicts OS Page Cache entries before each measurement, for both containerized and in-process (DuckDB) engines.
+To ensure IO-bound performance is not masked by memory buffers, engine-level buffers are cleared before every query:
+*   **Postgres**: Mandatory **Docker Container Restarts** clear shared buffers.
+*   **Versioned DuckDB** (`duckdb_1_5`, `duckdb_2_0`): every query runs in a fresh worker process, so DuckDB's buffer pool starts empty.
+
+**OS page cache: not evicted.** Engines call `thrash_os_cache`, which dirties an anonymous memory region (half of available RAM, capped at 4 GB). On macOS this was measured to leave a cached 1 GB file fully resident, so measurements should be read as warm at the OS level. DuckDB clients take a required `cold` argument, and `cold=True` raises until a verified eviction step exists.
 
 ### 3. Agentic AI Integration
 The platform is built for the future of **Autonomous Engineering**. The Experiment ID allows AI agents to treat the laboratory as a **Deterministic Performance API**.

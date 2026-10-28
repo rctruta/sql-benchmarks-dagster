@@ -69,7 +69,8 @@ def test_duckdb_engine_delegates_run_query(mock_duckdb_connect):
         mock_instance.run_query.assert_called_once_with(
             sql=TEST_SQL,
             partition_key="large_ssd",
-            engine_params=test_settings
+            engine_params=test_settings,
+            cold=False
         )
         
         # Assert the result came from the Client

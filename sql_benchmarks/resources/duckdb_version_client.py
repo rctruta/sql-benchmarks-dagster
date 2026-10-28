@@ -1,11 +1,16 @@
 """Stateful client that executes operations in an isolated subprocess under a
 specified DuckDB version via uv."""
 import json
+import logging
 import os
 import shutil
 import subprocess
 import sys
 from typing import Dict, Any, Optional
+
+from .duckdb_client import refuse_cold
+
+logger = logging.getLogger("dagster")
 
 _INITIALIZED_DB_FILES: set = set()
 
@@ -19,6 +24,25 @@ def _find_uv_bin() -> str:
     if os.path.isfile(venv_bin) and os.access(venv_bin, os.X_OK):
         return venv_bin
     return "uv"
+
+
+def _parse_worker_error(stderr: str) -> Optional[dict]:
+    """The worker's structured error, or None if the worker never reported one.
+
+    The worker prints {"status": "error", ...} as its last stderr line when
+    DuckDB itself rejects the query. Anything else (uv unable to install the
+    version, an import failure, a crash) means the worker did not run.
+    """
+    lines = [line for line in stderr.strip().splitlines() if line.strip()]
+    if not lines:
+        return None
+    try:
+        payload = json.loads(lines[-1])
+    except json.JSONDecodeError:
+        return None
+    if isinstance(payload, dict) and payload.get("status") == "error":
+        return payload
+    return None
 
 
 class DuckDBVersionClient:
@@ -83,7 +107,17 @@ class DuckDBVersionClient:
         sql: str,
         partition_key: str,
         engine_params: Dict[str, Any] = None,
+        *,
+        cold: bool,
     ) -> Optional[float]:
+        """Run one query in a fresh worker process, so DuckDB's buffer pool is
+        always empty. cold has no default; until OS page-cache eviction is
+        implemented, cold=True raises.
+
+        Returns None (recorded as DNF) only when DuckDB rejected the query;
+        a worker that never ran raises.
+        """
+        refuse_cold(cold)
         db_path = self._get_db_path(partition_key)
 
         cmd = [
@@ -105,8 +139,16 @@ class DuckDBVersionClient:
         # Pass SQL via stdin to support arbitrarily large queries without shell escaping issues
         result = subprocess.run(cmd, input=sql, capture_output=True, text=True)
         if result.returncode != 0:
-            err_msg = result.stderr.strip() or result.stdout.strip()
-            print(f"[ERROR] DuckDB {self.version} query execution failed: {err_msg}")
+            worker_error = _parse_worker_error(result.stderr)
+            if worker_error is None:
+                raise RuntimeError(
+                    f"DuckDB {self.version} worker did not run (code {result.returncode}): "
+                    f"{result.stderr.strip() or result.stdout.strip()}"
+                )
+            logger.warning(
+                f"DuckDB {self.version} rejected the query "
+                f"({worker_error.get('error_type')}): {worker_error.get('error')}"
+            )
             return None
 
         try:
