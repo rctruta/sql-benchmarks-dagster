@@ -1,28 +1,13 @@
 #!/usr/bin/env python3
 """
-check_compiles — every tracked Python file must at least parse.
+check_compiles — verify that every tracked Python file parses without syntax errors.
 
-    .gates/check_compiles.py            report
-    .gates/check_compiles.py --check    exit 1 on any syntax error
+Usage:
+    python3 .gates/check_compiles.py            report
+    python3 .gates/check_compiles.py --check    exit 1 on any syntax error
 
-The cheapest gate there is, and it was missing. On 2026-10-20 a commit in this
-repository introduced a SyntaxError -- an inline comment placed inside a
-function's parentheses -- and every installed gate passed it: no_local_paths,
-no_private_marker, scratch_external, no_orphans and check_voice all read the
-file as text and none of them ask Python whether it is valid Python.
-
-A repository with no tests has nothing else standing between a broken file and
-a commit. This does not check behaviour; it checks that the file is parseable,
-which is the floor.
-
-A PARSE RESULT IS RELATIVE TO THE INTERPRETER RUNNING IT, which this did not
-say at first and should have. Run against rctruta.github.io with Python 3.11
-it reported tools/build_nav.py as a SyntaxError; that file uses a backslash
-inside an f-string expression, which PEP 701 made legal in 3.12, and the site
-builds on 3.14. The file was fine and the gate was wrong to imply otherwise.
-So the version is always printed, and a finding says plainly that it may be a
-version mismatch rather than a defect -- compared against requires-python when
-the project declares one.
+Validates that all tracked Python files in the repository can be parsed into an
+Abstract Syntax Tree (AST) using Python's standard `ast` module.
 """
 import ast
 import os

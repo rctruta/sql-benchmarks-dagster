@@ -1,41 +1,17 @@
 #!/usr/bin/env python3
 """
-check_publish_contract — every publishing surface must carry its own rules.
+check_publish_contract — validate publishing surfaces and requirement rules.
 
+Usage:
     python3 .gates/check_publish_contract.py            report
-    python3 .gates/check_publish_contract.py --check     exit 1 on a finding
-    python3 .gates/check_publish_contract.py --surfaces  list what is declared
+    python3 .gates/check_publish_contract.py --check    exit 1 on a finding
+    python3 .gates/check_publish_contract.py --surfaces list what is declared
     python3 .gates/check_publish_contract.py --stage prepublish
     python3 .gates/check_publish_contract.py --stage postbuild
 
-Reads publish_contract.toml, which declares each surface this project publishes
-to, the file whose presence means that surface is in play, and what must be
-true when it is. The header of that file records why it exists; the short
-version is that three pieces of required information went missing in one
-afternoon and nothing asked for any of them.
-
-THE RULE THIS ENFORCES, and the part that is not standard practice:
-
-  a surface declared `live` whose trigger file is MISSING is a failure
-  a surface declared `planned` whose trigger file has APPEARED is a failure
-
-The second is the one that matters. Normally a new package.json arrives, nobody
-has written npm publishing rules, and nothing says so -- the gap is silent
-until it bites. Here the arrival of the artifact demands its own requirements,
-so a surface can be declared years before it exists and still be safe. Nobody
-has to remember; the contract becomes loud at exactly the moment it starts to
-matter.
-
-The first catches what happened to server.json: a live public listing whose
-defining manifest was not on main.
-
-Deliberately small. Three `requires` kinds, because those are the three that
-are actually needed. A fourth belongs here when a fourth is needed, not before
--- a rules engine nobody uses is the same mistake one layer up.
-
-Parsed with pyyaml, which this project already depends on. An earlier version
-hand-rolled a YAML subset to avoid the dependency and silently dropped three
-requirements down to one, which is worse than any dependency.
+Validates publish_contract.toml to verify that active publishing surfaces
+(e.g., PyPI, MCP registry, CITATION.cff) satisfy required files, version synchronization,
+and stage checks across commit, prepublish, and postbuild steps.
 """
 import json
 import re
@@ -46,16 +22,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = Path(__file__).resolve().parent / "publish_contract.toml"
 
-# A check names the moments it runs at. Three, because that is how many
-# distinct moments exist and the earlier two-stage model hid one of them:
-#
-#   commit      the pre-commit hook, where the project's dependencies exist
-#   prepublish  the release job BEFORE the build -- no project dependencies,
-#               no wheel yet. The 0.1.4 release failed three times here,
-#               because this moment was being treated as "commit" and so ran
-#               a pytest check in a job that has no pytest.
-#   postbuild   the release job AFTER the build, where dist/ exists
-#
+# Execution stages:
+#   commit      pre-commit hook (full project dependencies available)
+#   prepublish  release job before build (manifests and metadata check)
+#   postbuild   release job after build (dist/ wheel and sdist validation)
 STAGE_COMMIT, STAGE_PREPUBLISH, STAGE_POSTBUILD = "commit", "prepublish", "postbuild"
 STAGES = (STAGE_COMMIT, STAGE_PREPUBLISH, STAGE_POSTBUILD)
 

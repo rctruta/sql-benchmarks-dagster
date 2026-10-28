@@ -1,36 +1,5 @@
-# What this project publishes, and what each surface requires.
-#
-# Read by .gates/check_publish_contract.py, in the pre-commit hook and in the
-# release workflow. A publishing surface cannot exist without its rules, and
-# cannot lose its defining file without saying so.
-#
-# This replaces a repo-local publish_contract.yaml and a repo-local
-# scripts/dev/check_publish_contract.py, both written here on 2026-10-20 and
-# then generalised into ai-agent-utils. Keeping the local pair would have been
-# two implementations of one idea, drifting apart -- which is the failure this
-# gate exists to catch. The gate is the registry's now; only the contract is
-# this repository's.
-#
-# Why it exists, measured here: server.json declared version 0.1.2 while
-# pyproject said 0.1.3, and the MCP registry's own validator requires a version
-# that EXISTS on PyPI while never comparing it to anything, so the stale
-# manifest published cleanly and the public listing described the wrong
-# release. That manifest and the README's mcp-name token existed only on a
-# local, unpushed branch, so the file defining a live listing was on one
-# laptop and the 0.1.3 release built from main shipped without the token the
-# registry requires. CITATION.cff said 0.1.0 released in June while PyPI was
-# at 0.1.3, so every citation named a version three releases old -- found by
-# this gate on its first run.
-#
-# EDITING NOTE. Do not write `requires = []` or `checks = []`. TOML makes an
-# inline array immutable, so a later [[surfaces.requires]] block cannot extend
-# it. Omit them -- a missing list is empty -- and add blocks as needed.
-#
-# Stages, because the release job is deliberately minimal and installs none of
-# this project's dependencies:
-#   commit      the pre-commit hook; dependencies present
-#   prepublish  release job before the build; no dependencies, no wheel
-#   postbuild   release job after the build; dist/ exists
+# Publishing surface requirements for sqlbenchdag.
+# Read by .gates/check_publish_contract.py in pre-commit and release workflows.
 
 [version_source]
 path = "pyproject.toml"
@@ -40,16 +9,13 @@ kind = "toml_project_version"
 [[surfaces]]
 id = "pypi"
 status = "live"
-# Deliberately pyproject.toml here, not the release workflow the registry
-# starter uses. This project DOES publish, so the weak signal is the right one:
-# any commit that touches the package should be checked, not only a release.
 trigger = "pyproject.toml"
-why = "sqlbenchdag on PyPI. The wheel is what every other surface installs."
+why = "sqlbenchdag distribution package on PyPI."
 
 [[surfaces.requires]]
 kind = "file_exists"
 path = "README.md"
-because = "PyPI renders it as the project description"
+because = "PyPI renders README.md as the package long description"
 
 [[surfaces.checks]]
 path = "scripts/dev/check_wheel.py"
@@ -60,25 +26,19 @@ stages = ["postbuild"]
 id = "mcp-registry"
 status = "live"
 trigger = "server.json"
-why = """
-io.github.rctruta/sqlbenchdag in the official MCP registry. mcprush found the \
-server here and graded it security A; the listing is public and this manifest \
-is what defines it."""
+why = "io.github.rctruta/sqlbenchdag entry in the MCP registry."
 
 [[surfaces.requires]]
 kind = "json_version_matches_source"
 path = "server.json"
 field = "version"
-because = """
-The registry's PyPI validator requires a version that EXISTS on PyPI and never \
-compares it to anything, so a stale manifest validates cleanly and describes \
-the wrong release."""
+because = "Ensures server.json version aligns with pyproject.toml"
 
 [[surfaces.requires]]
 kind = "json_version_matches_source"
 path = "server.json"
 field = "packages[].version"
-because = "same check, for the version the client actually installs"
+because = "Ensures client install target package version aligns with pyproject.toml"
 
 [[surfaces.requires]]
 kind = "file_contains_json_field"
@@ -86,10 +46,7 @@ path = "README.md"
 from = "server.json"
 field = "name"
 template = "mcp-name: {}"
-because = """
-The registry matches this token against the server name to confirm the \
-publisher. A release whose README lacks it is rejected outright. 0.1.3 shipped \
-without it because main never had it."""
+because = "The MCP registry validates this token in README.md against the server name"
 
 [[surfaces.checks]]
 path = "sql_benchmarks_tests/test_mcp_registry_manifest.py"
@@ -104,35 +61,31 @@ stages = ["commit", "prepublish"]
 id = "citation"
 status = "live"
 trigger = "CITATION.cff"
-why = """
-CITATION.cff is what a reader copies into a bibliography. It carries its own \
-version, so it drifts exactly the way server.json did: found saying 0.1.0 \
-released 2026-06-22 while PyPI was at 0.1.3. The Zenodo DOI is still pending; \
-add a doi requirement here when it exists."""
+why = "Software citation metadata in CITATION.cff format."
 
 [[surfaces.requires]]
 kind = "yaml_version_matches_source"
 path = "CITATION.cff"
 field = "version"
-because = "a citation must name the release it describes"
+because = "Citation version must match current release version"
 
 
-# ---- not yet, but declared so the day they arrive is not a surprise --------
+# ---- Planned surfaces (fail if trigger file is added without defining rules) --------
 
 [[surfaces]]
 id = "npm"
 status = "planned"
 trigger = "package.json"
-why = "if any part of this is ever published as a Node package"
+why = "npm package distribution"
 
 [[surfaces]]
 id = "docker"
 status = "planned"
 trigger = "Dockerfile"
-why = "a published image's tag must agree with the release version"
+why = "Docker image container distribution"
 
 [[surfaces]]
 id = "github-action"
 status = "planned"
 trigger = "action.yml"
-why = "a published action's declared version must match the release tag"
+why = "GitHub Action marketplace distribution"
