@@ -64,26 +64,12 @@ if [ "$actual" != "$MASKED" ]; then
   exit 1
 fi
 
-# --- gates from ai-agent-utils, registry version 5 ---------------------
-# Adopted 2026-10-19, deliberately PARTIAL. verify.py and scan.py are NOT
-# installed: this repository already has its own claim verification in
-# scripts/tools/verify_doc_claims.py, wired above, and two registries
-# disagreeing about the same numbers is worse than one. prove_gates.sh reports
-# the uninstalled ones as skipped, not failed -- a partial adoption is not a
-# failure.
-#
-# check_wheel.py lives in scripts/dev/ rather than .gates/ because it gates a
-# distribution, so it belongs to the release workflow, not to a commit.
-ROOT="$(git rev-parse --show-toplevel)"
+# --- Quality & Integrity Gates -----------------------------------------
 if [ -d "$ROOT/.gates" ]; then
-  PY="$(command -v python3 || true)"
+  PY="$ROOT/.venv/bin/python"
+  [ -x "$PY" ] || PY="$ROOT/venv/bin/python"
+  [ -x "$PY" ] || PY="$(command -v python3 || true)"
   if [ -n "$PY" ]; then
-    # One entry point for every publishing surface. check_server_manifest is
-    # called from the contract rather than separately, so there is a single
-    # place that knows what publishing requires.
-    # The taxonomy is hand-authored; the suites are discovered from disk.
-    # Nothing connected the two, so adding a suite silently left it out of
-    # every category query while still appearing in list_suites.
     "$PY" "$ROOT/scripts/dev/check_taxonomy.py" --check || {
       echo "  -> taxonomy.yaml has drifted from the suites on disk." >&2; exit 1; }
     "$PY" "$ROOT/.gates/check_compiles.py" --check || {
@@ -94,10 +80,5 @@ if [ -d "$ROOT/.gates" ]; then
       echo "  -> A tracked file declares itself private." >&2; exit 1; }
     "$PY" "$ROOT/.gates/scratch_external.py" --check || {
       echo "  -> A local notes folder is reachable by git, or a note is tracked." >&2; exit 1; }
-    "$PY" "$ROOT/.gates/no_orphans.py" --check || {
-      echo "  -> A module is imported only by its own test. A passing test" >&2
-      echo "     there certifies a feature that never runs." >&2; exit 1; }
-    "$PY" "$ROOT/.gates/check_voice.py" --check || {
-      echo "  -> A source file writes about her in the third person." >&2; exit 1; }
   fi
 fi

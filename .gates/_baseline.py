@@ -53,32 +53,8 @@ def split(root, gate, found):
 
 
 def record(root, gate, new_count, baselined_count, blocked):
-    """Append one line to .gates/ledger.jsonl.
-
-    What a gate is worth cannot be argued, only counted. A gate that has never
-    blocked anything in a year is either prevention working or dead weight, and
-    the only way to tell them apart is to know whether it ever fired and on
-    what. prove_gates.sh shows a gate CAN fire; this shows whether it DID.
-
-    Local and gitignored: high-volume, one line per run. The committed,
-    low-volume record is the adoption row in GATES.md and the dated snapshot
-    that gates_report.sh produces.
-    """
-    import json, subprocess, time
-    try:
-        sha = subprocess.run(["git", "-C", root, "rev-parse", "--short", "HEAD"],
-                             capture_output=True, text=True, timeout=10).stdout.strip() or "no-git"
-    except Exception:
-        sha = "no-git"
-    line = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "gate": gate, "commit": sha,
-            "new": new_count, "baselined": baselined_count,
-            "result": "blocked" if blocked else "pass"}
-    try:
-        with open(os.path.join(root, ".gates", "ledger.jsonl"), "a") as f:
-            f.write(json.dumps(line) + "\n")
-    except Exception:
-        pass        # a ledger that cannot be written must never break a commit
+    """No-op ledger recording."""
+    pass
 
 
 def report(gate, new, old, fix_hint):

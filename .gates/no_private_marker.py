@@ -1,53 +1,15 @@
 #!/usr/bin/env python3
 """
-no_private_marker — refuse a tracked file that declares itself private.
+no_private_marker — scan tracked files to ensure no private markers are committed.
 
-  .gates/no_private_marker.py              report
-  .gates/no_private_marker.py --check      exit 1 on any finding
-  .gates/no_private_marker.py --list       show the patterns and exit
+Usage:
+    python3 .gates/no_private_marker.py              report
+    python3 .gates/no_private_marker.py --check      exit 1 on any finding
+    python3 .gates/no_private_marker.py --list       show the patterns and exit
 
-The cause: a file says, in its own first lines or its own name, that it must
-not be published -- and it is in version control anyway. The author already
-made the decision correctly. Nothing read it.
-
-The specimen, MEASURED 2026-10-19 while auditing nine repositories:
-sql_benchmarks's scratch/reducing_agent_search_scope.md has a third line
-reading "Local draft. Not for the public repo." It was added to a PUBLIC
-repository on 2026-07-04 and removed on 2026-07-06, present across thirteen
-commits on origin/main. Two more under the same roof: a
-convergence_notes_PRIVATE.md and a private_docs/ directory, both of which
-stayed local by luck rather than by mechanism.
-
-A check for this already existed -- rctruta.github.io's tools/check_private.py
-grew one on 2026-10-15, after data/employment.yaml was committed to a public
-repository and the contact-detail patterns passed it clean because the problem
-was the file's SUBJECT, not any string in it. But it lived in one repository
-and nothing carried it anywhere else, so the repository that actually leaked a
-self-declared-private draft never had it. This is that check, promoted.
-
-TWO DIFFERENCES FROM THE ORIGINAL, both learned from the failures above:
-
-  It scans the INDEX, not the staged set. check_private.py reads `git diff
-  --cached`, so it sees a file the moment it is added and never again. A file
-  already tracked when the gate arrives is invisible to it forever -- the same
-  shape as a .gitignore rule, which is consulted only for files git does not
-  already track, and which left a tracked draft public for three months.
-  A gate that can only catch a file on its way in cannot tell you what is
-  already out.
-
-  It reads names as well as headers. convergence_notes_PRIVATE.md declares
-  itself in its filename and says nothing in its first lines.
-
-NOT BASELINEABLE. Every other gate here accepts a backlog, because findings
-that predate a gate are not a regression. This one does not: the file itself
-says it must not be published, so there is no reading under which leaving it
-tracked is correct. The escape hatch is ALLOW below -- a named path with a
-reason, visible in a diff -- not a baseline file that accumulates silently.
-
-The patterns are derived from the phrasings that actually occur in this
-author's notes, not invented. `--list` prints them. Bare "private" is
-deliberately absent: it matches ordinary prose, and a gate that cries wolf
-gets switched off.
+Validates tracked files across the git index to ensure that no file contains
+explicit privacy declarations (e.g., 'not for public repo', 'internal draft')
+in its header lines or filename.
 """
 import os
 import re

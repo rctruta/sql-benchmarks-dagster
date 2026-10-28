@@ -1,55 +1,14 @@
 #!/usr/bin/env python3
 """
-scratch_external — keep the local notes folder physically outside the repository.
+scratch_external — verify that local scratch directories reside outside the worktree.
 
-  .gates/scratch_external.py              report
-  .gates/scratch_external.py --check      exit 1 on anything not baselined
-  .gates/scratch_external.py --baseline   accept today's STRUCTURAL findings
+Usage:
+    python3 .gates/scratch_external.py              report
+    python3 .gates/scratch_external.py --check      exit 1 on anything not baselined
+    python3 .gates/scratch_external.py --baseline   accept structural findings
 
-The cause: `scratch/` is where drafts, private notes, employment details and
-half-formed thinking go. Keeping it out of a commit was a .gitignore rule, and
-a .gitignore rule is advisory -- it is consulted only for files git does not
-already track. Once a file is tracked, the rule is silent forever.
-
-The specimen, measured 2026-10-19 across nine repositories: harness-bench had
-`scratch/` on line 25 of its .gitignore AND `scratch/skills-antipattern-final.md`
-tracked in HEAD since 2026-07-14, in a PUBLIC repository. The ignore rule was
-present the whole time and did nothing, because the file was added before it or
-with -f. Nothing reported a contradiction, because nothing was looking for one.
-
-So the fix is not a better rule. It is to put the notes somewhere git mechanically
-cannot reach, and have this gate assert that arrangement instead of policing
-content. `scratch` becomes a symlink to a directory outside the worktree:
-
-    ~/scratch/<repo>/           the real directory
-    <repo>/scratch -> ~/scratch/<repo>
-
-git then refuses to stage anything through it, by its own pathspec resolution:
-
-    $ git add scratch/note.md
-    fatal: pathspec 'scratch/note.md' is beyond a symbolic link
-
-`git add -A` stages mode 120000 -- the link, sixty bytes of target text -- and
-never the contents. Keeping `scratch` gitignored stops even that. The guarantee
-stops depending on anyone remembering, which is the whole point: it binds the
-human and the agent equally, and neither has to be trusted.
-
-WHAT IT REPORTS, and why the two kinds are not equally forgivable:
-
-  TRACKED (never baselineable)
-      A file under the notes folder is in the index. That note is already
-      published, or will be on the next push. There is no state of the world in
-      which accepting this is correct, so --baseline will not take it. Untrack
-      it and decide separately about history.
-
-  STRUCTURAL (baselineable)
-      The folder is a real directory, or the symlink points back inside the
-      worktree, or the link is not ignored. Nothing has leaked yet; the
-      arrangement merely permits it. Baselineable so adopting the gate in a
-      repository mid-migration does not block every commit.
-
-An absent `scratch` is clean. This gate refuses a leaky notes folder; it does
-not require one to exist. init-agent-project.sh is what creates it.
+Ensures any local scratch/ directory is either absent or externally symlinked and
+ignored by git, preventing accidental staging of local scratch notes.
 """
 import os
 import subprocess
